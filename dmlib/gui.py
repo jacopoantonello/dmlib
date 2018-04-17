@@ -556,6 +556,51 @@ class FakeDM():
     def close(self):
         pass
 
+    def preset(self, name, mag=0.7):
+        u = np.zeros((140,))
+        if name == 'centre':
+            u[63:65] = mag
+            u[75:77] = mag
+        elif name == 'cross':
+            u[58:82] = mag
+            u[4:6] = mag
+            u[134:136] = mag
+            for i in range(10):
+                off = 15 + 12*i
+                u[off:(off + 2)] = mag
+        elif name == 'x':
+            inds = np.array([
+                11, 24, 37, 50, 63, 76, 89, 102, 115, 128,
+                20, 31, 42, 53, 64, 75, 86, 97, 108, 119])
+            u[inds] = mag
+        elif name == 'rim':
+            u[0:10] = mag
+            u[130:140] = mag
+            for i in range(10):
+                u[10 + 12*i] = mag
+                u[21 + 12*i] = mag
+        elif name == 'checker':
+            c = 0
+            s = mag
+            for i in range(10):
+                u[c] = s
+                c += 1
+                s *= -1
+            for j in range(10):
+                for i in range(12):
+                    u[c] = s
+                    c += 1
+                    s *= -1
+                s *= -1
+            s *= -1
+            for i in range(10):
+                u[c] = s
+                c += 1
+                s *= -1
+        else:
+            raise NotImplementedError(name)
+        return u
+
 
 class VoltageTransform():
 
@@ -586,6 +631,9 @@ class VoltageTransform():
 
     def get_serial_number(self):
         return self.dm.get_serial_number()
+
+    def preset(self, name, mag):
+        return self.dm.preset(name, mag)
 
 
 class DMPlot():
