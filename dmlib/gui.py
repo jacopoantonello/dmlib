@@ -5,15 +5,17 @@ import platform
 import sys
 import argparse
 import numpy as np
+import matplotlib.pyplot as plt
+import h5py
 
+from datetime import datetime, timezone
 from time import sleep
 from numpy.linalg import norm
+from numpy.random import uniform
 
-import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 from matplotlib.figure import Figure
-from numpy.random import uniform
 
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import (  # noqa: F401
@@ -166,7 +168,7 @@ class Control(QMainWindow):
                     d = .8
                 else:
                     d = .0
-                self.write_dm(self.dmplot.preset(n, d))
+                self.write_dm(self.dm.preset(n, d))
             return f
 
         i = 4
@@ -300,7 +302,7 @@ class Control(QMainWindow):
                 a.set_xlabel(lab)
                 if satcheck:
                     # FIXME
-                    if t[0].max() == 255:
+                    if t[0].max() == self.cam.get_image_max():
                         a.set_title(txt + ' SAT')
                     else:
                         a.set_title('{} {: 3d} {: 3d}'.format(
@@ -422,7 +424,7 @@ class Control(QMainWindow):
         status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(status, 2, 0, 1, 2)
 
-        dataacq = DataAcq(self.dm.size(), self.cam)
+        dataacq = DataAcq(self.dm, self.cam, self.dmplot)
 
         def f1():
             def f():
@@ -445,7 +447,7 @@ class Control(QMainWindow):
                 a.set_xlabel(lab)
                 if satcheck:
                     # FIXME
-                    if t[0].max() == 255:
+                    if t[0].max() == self.cam.get_image_max():
                         a.set_title(txt + ' SAT')
                     else:
                         a.set_title('{} {: 3d} {: 3d}'.format(
@@ -465,7 +467,7 @@ class FakeCamera():
     fps = 4
 
     def grab_image(self):
-        img = plt.imread('data/int3.tif')
+        img = plt.imread('../test/data/int3.tif')
         img = np.roll(img, int(np.round(uniform(-200, 200))), axis=0)
         img = np.roll(img, int(np.round(uniform(-200, 200))), axis=1)
         return img
@@ -496,6 +498,21 @@ class FakeCamera():
         self.frate = f
         return f
 
+    def get_serial_number(self):
+        return 'cam0'
+
+    def get_camera_info(self):
+        return 'camera info'
+
+    def get_sensor_info(self):
+        return 'sensor info'
+
+    def get_image_dtype(self):
+        return 'uint8'
+
+    def get_image_max(self):
+        return 0xff
+
 
 class FakeDM():
 
@@ -504,6 +521,15 @@ class FakeDM():
 
     def write(self, v):
         print('FakeDM', v)
+
+    def preset(self, name):
+        return uniform(-1., 1., size=(140,))
+
+    def get_transform(self):
+        return None
+
+    def get_serial_number(self):
+        return 'dm0'
 
 
 class VoltageTransform():
@@ -529,6 +555,12 @@ class VoltageTransform():
         del u
 
         self.dm.write(v)
+
+    def get_transform(self):
+        return 'v = 2*np.sqrt((u + 1.0)/2.0) - 1.'
+
+    def get_serial_number(self):
+        return self.dm.get_serial_number()
 
 
 class DMPlot():
@@ -616,54 +648,6 @@ class DMPlot():
         self.index = np.sum(np.hstack(index), axis=1)
         self.patvis = np.hstack(patvis)
         self.mappatvis = np.invert(self.layout.astype(np.bool)).ravel()
-
-    def preset(self, name, mag=0.7):
-        u = np.zeros(self.A.shape[1])
-        if u.size == 140:
-            if name == 'centre':
-                u[63:65] = mag
-                u[75:77] = mag
-            elif name == 'cross':
-                u[58:82] = mag
-                u[4:6] = mag
-                u[134:136] = mag
-                for i in range(10):
-                    off = 15 + 12*i
-                    u[off:(off + 2)] = mag
-            elif name == 'x':
-                inds = np.array([
-                    11, 24, 37, 50, 63, 76, 89, 102, 115, 128,
-                    20, 31, 42, 53, 64, 75, 86, 97, 108, 119])
-                u[inds] = mag
-            elif name == 'rim':
-                u[0:10] = mag
-                u[130:140] = mag
-                for i in range(10):
-                    u[10 + 12*i] = mag
-                    u[21 + 12*i] = mag
-            elif name == 'checker':
-                c = 0
-                s = mag
-                for i in range(10):
-                    u[c] = s
-                    c += 1
-                    s *= -1
-                for j in range(10):
-                    for i in range(12):
-                        u[c] = s
-                        c += 1
-                        s *= -1
-                    s *= -1
-                s *= -1
-                for i in range(10):
-                    u[c] = s
-                    c += 1
-                    s *= -1
-            else:
-                raise NotImplementedError(name)
-            return u
-        else:
-            raise NotImplementedError(name)
 
     def size(self):
         return self.A.shape[1]
@@ -812,27 +796,41 @@ class Snapshot(QThread):
 
 class DataAcq(QThread):
 
+    sleep = .1
+    wavelength = 0
     fname = None
     stop = False
     sig_error = pyqtSignal(str)
     sig_cam = pyqtSignal(tuple)
     sig_h5 = pyqtSignal(str)
 
-    def __init__(self, dm, cam, wavelength, dmplot):
+    def __init__(self, dm, cam, dmplot):
         super().__init__()
         self.dm = dm
         self.cam = cam
+        self.dmplot = dmplot
+
         self.cam_grid = make_cam_grid(cam.shape(), cam.get_pixel_size())
-        self.wavelength = wavelength
-        self.Ualign = Ualign
+
+        Ualign = []
+        for name in ('centre', 'cross', 'x', 'rim', 'checker'):
+            try:
+                Ualign.append(dm.preset(name).reshape(-1, 1))
+            except Exception:
+                pass
+        if len(Ualign) > 0:
+            self.Ualign = np.hstack(Ualign)
+        else:
+            self.Ualign = np.zeros((self.dm.size(), 0))
 
     def run(self):
         libver = 'latest'
-        h5fn = datetime.now().strftime('%Y_%m_%d__%H_%M_%S.h5')
+        now = datetime.now(timezone.utc)
+        h5fn = now.astimezone().strftime('%Y%m%d_%H%M%S.h5')
         dmsn = self.dm.get_serial_number()
         if dmsn:
-            h5fn = dmsn + h5fn
-        self.h5fn = h5fn
+            h5fn = dmsn + '_' + h5fn
+        self.fname = h5fn
 
         U = np.hstack((
                 np.zeros((dm.size(), 1)),
@@ -841,7 +839,7 @@ class DataAcq(QThread):
                 ))
 
         with h5py.File(h5fn, 'w', libver=libver) as h5f:
-            h5f['datetime'] = datetime.now(timezone.utc).isoformat()
+            h5f['datetime'] = now.isoformat()
 
             # save HDF5 library info
             h5f['h5py/libver'] = libver
@@ -855,146 +853,65 @@ class DataAcq(QThread):
             h5f['dmlib/__version__'] = ''
             h5f['dmlib/__commit__'] = ''
 
-            h5f['dmplot/flips'] = ''
+            h5f['dmplot/txs'] = self.dmplot.txs
 
             h5f['cam/serial'] = self.cam.get_serial_number()
             h5f['cam/camera_info'] = str(self.cam.get_camera_info())
             h5f['cam/sensor_info'] = str(self.cam.get_sensor_info())
             h5f['cam/pixel_size'] = self.cam.get_pixel_size()
-            h5f['cam/pixel_size'].dims[0].label = 'um'
-            h5f['cam/pixel_size'].dims[1].label = 'um'
+            h5f['cam/pixel_size'].attrs['units'] = 'um'
             h5f['cam/exposure'] = self.cam.get_exposure()
-            h5f['cam/exposure'].dims[0].label = 'ms'
+            h5f['cam/exposure'].attrs['units'] = 'ms'
             h5f['cam/dtype'] = self.cam.get_image_dtype()
             h5f['cam/max'] = self.cam.get_image_max()
 
-            h5f['wavelength'] = self.cam.get_exposure()
-            h5f['wavelength'].dims[0].label = 'nm'
+            h5f['wavelength'] = self.wavelength
+            h5f['wavelength'].attrs['units'] = 'nm'
+            h5f['sleep'] = self.sleep
+            h5f['sleep'].attrs['units'] = 's'
 
             h5f['dm/serial'] = self.dm.get_serial_number()
             h5f['dm/transform'] = self.dm.get_transform()
 
             h5f['data/U'] = U
-            h5f['data/U'].dims[0] = 'actuators'
-            h5f['data/U'].dims[1] = 'step'
+            h5f['data/U'].dims[0].label = 'actuators'
+            h5f['data/U'].dims[1].label = 'step'
             h5f.create_dataset(
                 'data/images', (U.shape[1],) + cam.shape(),
                 dtype=self.cam.get_image_dtype())
-            h5f['data/images'].dims[0] = 'step'
-            h5f['data/images'].dims[1] = 'height'
-            h5f['data/images'].dims[1] = 'width'
+            h5f['data/images'].dims[0].label = 'step'
+            h5f['data/images'].dims[1].label = 'height'
+            h5f['data/images'].dims[1].label = 'width'
 
             h5f['align/U'] = self.Ualign
-            h5f['align/U'].dims[0] = 'actuators'
-            h5f['align/U'].dims[1] = 'step'
+            h5f['align/U'].dims[0].label = 'actuators'
+            h5f['align/U'].dims[1].label = 'step'
             h5f.create_dataset(
                 'align/images', (U.shape[1],) + cam.shape(),
                 dtype=self.cam.get_image_dtype())
-            h5f['align/images'].dims[0] = 'step'
-            h5f['align/images'].dims[1] = 'height'
-            h5f['align/images'].dims[1] = 'width'
+            h5f['align/images'].dims[0].label = 'step'
+            h5f['align/images'].dims[1].label = 'height'
+            h5f['align/images'].dims[1].label = 'width'
 
             for i in range(self.Ualign.shape[1]):
-                dm.
-
-
-        self.stop = False
-        self.fname =
-
-        camsn = self.cam.get_serial_number()
-        cam = self.cam.get_serial_number()
-
-
-
-
-        h5f['imspector/version'] = imspector.version()
-        h5f['imspector/__version__'] = version.__version__
-
-        h5f['batch/args'] = json.dumps(vars(self.args))
-        h5f['batch/datetime'] = datetime.now(timezone.utc).isoformat()
-        h5f['batch/stackshapefull'] = stackshapefull
-        h5f['batch/stackshape2d'] = stackshape2d
-        h5f['batch/settings'] = self.args.settings
-
-        while not self.stop:
-            if self.poke:
-                self.u[:] = 0.
-                self.u[self.last_poke] = .7
-                self.sig_dm.emit(self.u)
-                self.last_poke += 1
-                self.last_poke %= self.u.size
+                self.dm.write(self.Ualign[:, i])
                 sleep(self.sleep)
-
-            img = self.cam.grab_image()
-            self.sig_cam.emit((img, self.cam_grid[2]))
-
-            fimg = ft(img)
-            logf2 = np.log(np.abs(fimg))
-            self.sig_ft.emit((logf2, self.ft_grid[2]))
-
-            if self.use_last and self.f0f1:
-                f0, f1 = self.f0f1
-            else:
-                try:
-                    f0, f1 = find_orders(
-                        self.ft_grid[0], self.ft_grid[1], logf2)
-                except ValueError:
-                    self.sig_error.emit('Failed to find orders')
-                    if self.repeat:
-                        continue
-                    else:
-                        return
-                self.sig_f0f1.emit((f0, f1))
-                self.f0f1 = (f0, f1)
-
-            try:
-                f3, ext3 = extract_order(
-                    fimg, self.ft_grid[0], self.ft_grid[1], f0, f1,
-                    self.cam.get_pixel_size())
-            except Exception as ex:
-                self.sig_error.emit('Failed to extract order: ' + str(ex))
-                if self.repeat:
-                    continue
-                else:
-                    return
-                return
-            self.sig_1ord.emit((np.log(np.abs(f3)), ext3))
-
-            try:
-                f4, _, _, ext4 = repad_order(
-                    f3, self.ft_grid[0], self.ft_grid[1])
-            except Exception as ex:
-                self.sig_error.emit('Failed to repad order: ' + str(ex))
-                if self.repeat:
-                    continue
-                else:
+                img = self.cam.grab_image()
+                h5f['align/images'][i, ...] = img
+                self.sig_cam.emit((img, self.cam_grid[2]))
+                if self.stop:
                     return
 
-            try:
-                gp = ift(f4)
-                mag = np.abs(gp)
-                wrapped = np.arctan2(gp.imag, gp.real)
-            except Exception as ex:
-                self.sig_error.emit('Failed to extract phase: ' + str(ex))
-                if self.repeat:
-                    continue
-                else:
+            for i in range(U.shape[1]):
+                self.dm.write(U[:, i])
+                sleep(self.sleep)
+                img = self.cam.grab_image()
+                h5f['data/images'][i, ...] = img
+                self.sig_cam.emit((img, self.cam_grid[2]))
+                if self.stop:
                     return
-            self.sig_magwrapped.emit((mag, wrapped, ext4))
 
-            if self.unwrap:
-                try:
-                    unwrapped = call_unwrap(wrapped)
-                except Exception as ex:
-                    self.sig_error.emit('Failed to unwrap phase: ' + str(ex))
-                    if self.repeat:
-                        continue
-                    else:
-                        return
-                self.sig_unwrapped.emit((unwrapped, ext4))
-
-            if not self.repeat:
-                break
+        self.sig_h5.emit(self.fname)
 
 
 if __name__ == '__main__':
