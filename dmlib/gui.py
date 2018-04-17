@@ -8,6 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import h5py
 
+from multiprocessing import Process, Queue, Array
 from datetime import datetime, timezone
 from time import sleep
 from numpy.linalg import norm
@@ -36,14 +37,15 @@ from interf import (
 
 class Control(QMainWindow):
 
-    def __init__(self, cam, dm, settings={}, parent=None):
+    def __init__(self, worker, shared, settings={}, parent=None):
         super().__init__()
+
+        self.worker = worker
+        self.shared = shared
+        self.shared.make_u()
+
         self.setWindowTitle('DM control')
         QShortcut(QKeySequence("Ctrl+Q"), self, self.close)
-
-        self.cam = cam
-        self.dm = VoltageTransform(dm)
-        self.u = np.zeros((dm.size(),))
 
         central = QSplitter(Qt.Horizontal)
 
@@ -58,6 +60,10 @@ class Control(QMainWindow):
 
         self.setCentralWidget(central)
 
+    def closeEvent(self, event):
+        self.shared.iq.put('STOP')
+        event.accept()
+
     def make_toolbox(self):
         self.make_tool_cam()
         self.make_tool_dm()
@@ -66,6 +72,18 @@ class Control(QMainWindow):
         tool_cam = QFrame()
         layout = QVBoxLayout()
         tool_cam.setLayout(layout)
+
+        def cam_get(cmd):
+            def f():
+                self.shared.iq.put((cmd,))
+                return self.shared.oq.get()
+            return f
+
+        def cam_set(cmd):
+            def f(x):
+                self.shared.iq.put((cmd, x))
+                return self.shared.oq.get()
+            return f
 
         def up(l, s, txt, r, v):
             rg = r()
@@ -84,8 +102,8 @@ class Control(QMainWindow):
         s1.setDecimals(6)
         up(
             l1, s1, 'Exposure [ms]',
-            self.cam.get_exposure_range,
-            self.cam.get_exposure)
+            cam_get('get_exposure_range'),
+            cam_get('get_exposure'))
         gl1.addWidget(l1)
         gl1.addWidget(s1)
         g1.setLayout(gl1)
@@ -98,8 +116,8 @@ class Control(QMainWindow):
         s2.setDecimals(6)
         up(
             l2, s2, 'FPS',
-            self.cam.get_framerate_range,
-            self.cam.get_framerate)
+            cam_get('get_framerate_range'),
+            cam_get('get_framerate'))
         gl2.addWidget(l2)
         gl2.addWidget(s2)
         g2.setLayout(gl2)
@@ -119,21 +137,23 @@ class Control(QMainWindow):
             return f
 
         s1.editingFinished.connect(f1(
-            self.cam.set_exposure, s1, l2, s2, 'FPS',
-            self.cam.get_framerate_range,
-            self.cam.get_framerate))
+            cam_set('set_exposure'), s1, l2, s2, 'FPS',
+            cam_get('get_framerate_range'),
+            cam_get('get_framerate')))
         s2.editingFinished.connect(f1(
-            self.cam.set_framerate, s2, l1, s1, 'exposure',
-            self.cam.get_exposure_range,
-            self.cam.get_exposure))
+            cam_set('set_framerate'), s2, l1, s1, 'exposure',
+            cam_get('get_exposure_range'),
+            cam_get('get_exposure')))
 
         self.toolbox.addItem(tool_cam, 'camera')
 
-    def write_dm(self, u):
-        self.u[:] = u
-        self.dmplot.draw(self.dm_ax, u)
+    def write_dm(self, u=None):
+        if u is not None:
+            self.shared.u[:] = u[:]
+        self.dmplot.draw(self.dm_ax, self.shared.u)
         self.dm_ax.figure.canvas.draw()
-        self.dm.write(u)
+        self.shared.iq.put(('write',))
+        self.shared.oq.get()
 
     def make_tool_dm(self):
         tool_dm = QFrame()
@@ -145,7 +165,7 @@ class Control(QMainWindow):
         layout.addWidget(self.dm_fig, 0, 0, 1, 0)
         self.dmplot = DMPlot()
         self.dmplot.install_select_callback(
-            self.dm_ax, self.u, self, self.dm.write)
+            self.dm_ax, self.shared.u, self, self.write_dm)
         self.dm_fig.figure.subplots_adjust(
             left=.125, right=.9,
             bottom=.1, top=.9,
@@ -168,7 +188,9 @@ class Control(QMainWindow):
                     d = .8
                 else:
                     d = .0
-                self.write_dm(self.dm.preset(n, d))
+                self.shared.iq.put(('preset', n, d))
+                self.shared.oq.get()
+                self.write_dm(None)
             return f
 
         i = 4
@@ -186,8 +208,8 @@ class Control(QMainWindow):
 
         def f2():
             def f():
-                self.u[:] = 0
-                self.write_dm(self.u)
+                self.shared.u[:] = 0
+                self.write_update_dm()
             return f
 
         reset.clicked.connect(f2())
@@ -210,7 +232,7 @@ class Control(QMainWindow):
         rotate2.clicked.connect(f3(-1))
 
         self.dm_ax.axis('off')
-        self.write_dm(self.u)
+        self.write_dm(None)
 
         self.toolbox.addItem(tool_dm, 'dm')
 
@@ -247,7 +269,8 @@ class Control(QMainWindow):
         brepeat = QCheckBox('repeat')
         layout.addWidget(brepeat, 3, 1)
 
-        snapshot = Snapshot(self.dm.size(), self.cam)
+        return
+        snapshot = Snapshot(self.shared.u.size, self.cam)
 
         bpoke = QCheckBox('poke')
         bsleep = QPushButton('sleep')
@@ -367,7 +390,6 @@ class Control(QMainWindow):
 
         def f9():
             def f(u):
-                self.u[:] = u[:]
                 self.write_dm(u)
             return f
 
@@ -424,6 +446,7 @@ class Control(QMainWindow):
         status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(status, 2, 0, 1, 2)
 
+        return
         dataacq = DataAcq(self.dm, self.cam, self.dmplot)
 
         def f1():
@@ -511,6 +534,9 @@ class FakeCamera():
     def get_image_max(self):
         return 0xff
 
+    def close(self):
+        pass
+
 
 class FakeDM():
 
@@ -518,8 +544,7 @@ class FakeDM():
         return 140
 
     def write(self, v):
-        # print('FakeDM', v)
-        pass
+        print('FakeDM', v)
 
     def preset(self, name):
         return uniform(-1., 1., size=(140,))
@@ -529,6 +554,9 @@ class FakeDM():
 
     def get_serial_number(self):
         return 'dm0'
+
+    def close(self):
+        pass
 
 
 class VoltageTransform():
@@ -685,6 +713,8 @@ class DMPlot():
 
 
 # https://stackoverflow.com/questions/41794635/
+# https://stackoverflow.com/questions/38666078/
+
 class Snapshot(QThread):
 
     f0f1 = None
@@ -920,28 +950,7 @@ class DataAcq(QThread):
         self.sig_h5.emit(self.fname)
 
 
-if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    if platform.system() == 'Windows':
-        print(QStyleFactory.keys())
-        try:
-            app.setStyle(QStyleFactory.create('Fusion'))
-        except Exception:
-            pass
-
-    args = app.arguments()
-    parser = argparse.ArgumentParser(
-        description='DM calibration GUI',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument(
-        '--dm', choices=['sim', 'bmc', 'ciusb'], default='sim')
-    parser.add_argument(
-        '--cam', choices=['sim', 'thorcam'], default='sim')
-    parser.add_argument('--dm-name', type=str, default='C17W005#050')
-    parser.add_argument('--dm-index', type=int, default=0)
-    parser.add_argument('--cam-name', type=str, default=None)
-    args = parser.parse_args(args[1:])
-
+def open_hardware(args):
     if args.cam == 'sim':
         cam = FakeCamera()
     elif args.cam == 'thorcam':
@@ -964,7 +973,145 @@ if __name__ == '__main__':
     else:
         raise NotImplementedError(args.dm)
 
-    control = Control(cam, dm)
+    return cam, dm
+
+
+class Shared:
+
+    def __init__(self, cam, dm):
+        cam_dtsize = np.dtype(cam.get_image_dtype()).itemsize
+        cam_shape = cam.shape()
+        totpixs = cam_shape[0]*cam_shape[1]
+        dm_size = dm.size()
+
+        self.cam = Array('c', cam_dtsize*totpixs, lock=False)
+        self.camext = Array('d', 4, lock=False)
+
+        self.ft = Array('d', totpixs, lock=False)
+        self.ftext = Array('d', 4, lock=False)
+
+        self.f0f1 = Array('d', 2, lock=False)
+
+        self.fstord = Array('d', totpixs, lock=False)
+        self.fstordext = Array('d', 4, lock=False)
+
+        self.mag = Array('d', totpixs, lock=False)
+        self.magext = Array('d', 4, lock=False)
+
+        self.wrapped = Array('d', totpixs, lock=False)
+        self.wrappedext = Array('d', 4, lock=False)
+
+        self.unwrapped = Array('d', totpixs, lock=False)
+        self.unwrappedext = Array('d', 4, lock=False)
+
+        self.unwrapped = Array('d', totpixs, lock=False)
+        self.unwrappedext = Array('d', 4, lock=False)
+
+        self.cam_dtsize = cam_dtsize
+        self.cam_shape = cam_shape
+        self.dm_size = dm.size()
+
+        self.dm = Array('d', dm.size(), lock=False)
+        self.iq = Queue()
+        self.oq = Queue()
+
+    def make_u(self):
+        self.u = np.frombuffer(self.dm, np.float)
+
+
+class ArrayQueue:
+
+    def __init__(self, maxbytes, maxlen):
+        self.maxbytes = maxbytes
+        self.maxlen = maxlen
+
+        self.qfree = Queue(maxlen)
+        self.qbuzy = Queue(maxlen)
+        self.bufs = []
+        for i in range(maxlen):
+            self.bufs.append(Array('c', self.maxbytes, lock=False))
+            self.qfree.append(i)
+
+    def put(self, item, *args, **kwargs):
+        if type(item) is np.ndarray:
+            if item.nbytes > self.maxbytes:
+                raise ValueError('item.nbytes > self.maxbytes')
+            bufid = self.qfree.get()
+            self.bufs[bufid][:item.nbytes] = item.tobytes()
+            self.qbuzy.put(item.shape + (bufid, item.dtype.name))
+        else:
+            raise NotImplementedError()
+
+    def get(self, *args, **kwargs):
+        item = self.q.get(*args, **kwargs)
+        if type(item) is tuple:
+            return np.frombuffer(
+                self.bufs[item[2]], dtype=item[3]).copy().reshape(item[:2])
+        else:
+            raise NotImplementedError()
+
+
+
+def worker(shared, args):
+    cam, dm = open_hardware(args)
+    dm = VoltageTransform(dm)
+    shared.make_u()
+    for cmd in iter(shared.iq.get, 'STOP'):
+        if cmd[0] == 'get_exposure':
+            shared.oq.put(cam.get_exposure())
+        elif cmd[0] == 'get_exposure_range':
+            shared.oq.put(cam.get_exposure_range())
+        elif cmd[0] == 'set_exposure':
+            shared.oq.put(cam.set_exposure_range(cmd[1]))
+        elif cmd[0] == 'get_framerate':
+            shared.oq.put(cam.get_framerate())
+        elif cmd[0] == 'get_framerate_range':
+            shared.oq.put(cam.get_framerate_range())
+        elif cmd[0] == 'set_framerate':
+            shared.oq.put(cam.set_framerate(cmd[1]))
+        elif cmd[0] == 'write':
+            dm.write(shared.u)
+            shared.oq.put('OK')
+        elif cmd[0] == 'preset':
+            shared.u[:] = dm.preset(cmd[1], cmd[2])
+            shared.oq.put('OK')
+        else:
+            raise NotImplementedError(cmd)
+
+    print('STOPPED')
+
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    if platform.system() == 'Windows':
+        print(QStyleFactory.keys())
+        try:
+            app.setStyle(QStyleFactory.create('Fusion'))
+        except Exception:
+            pass
+
+    args = app.arguments()
+    parser = argparse.ArgumentParser(
+        description='DM calibration GUI',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument(
+        '--dm', choices=['sim', 'bmc', 'ciusb'], default='sim')
+    parser.add_argument(
+        '--cam', choices=['sim', 'thorcam'], default='sim')
+    parser.add_argument('--dm-name', type=str, default='C17W005#050')
+    parser.add_argument('--dm-index', type=int, default=0)
+    parser.add_argument('--cam-name', type=str, default=None)
+    args = parser.parse_args(args[1:])
+
+    cam, dm = open_hardware(args)
+    shared = Shared(cam, dm)
+    dm.close()
+    cam.close()
+
+    p = Process(target=worker, args=(shared, args))
+    p.start()
+
+    control = Control(p, shared)
     control.show()
 
     sys.exit(app.exec_())
