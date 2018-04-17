@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import h5py
 
-from multiprocessing import Process, Queue, Array
+from multiprocessing import Process, Queue, Array, Value
 from datetime import datetime, timezone
 from time import sleep
 from numpy.linalg import norm
@@ -396,7 +396,59 @@ class Control(QMainWindow):
 
         def f20():
             def f():
-                pass
+                a1 = self.align_axes[0, 0]
+                a2 = self.align_axes[0, 1]
+                a3 = self.align_axes[0, 2]
+                a4 = self.align_axes[1, 0]
+                a5 = self.align_axes[1, 1]
+                a6 = self.align_axes[1, 2]
+
+                a1.clear()
+                a1.imshow(
+                    self.shared.cam, extent=self.shared.cam_ext,
+                    origin='lower')
+                a1.set_xlabel('mm')
+                if self.shared.cam_sat:
+                    a1.set_title('cam SAT')
+                else:
+                    a1.set_title('cam {: 3d} {: 3d}'.format(
+                        self.shared.cam.min(), self.shared.cam.max()))
+                
+                a2.clear()
+                a2.imshow(
+                    self.shared.ft, extent=self.shared.ft_ext,
+                    origin='lower')
+                a2.set_xlabel('1/mm')
+                a2.set_title('FT')
+
+                fstord, mag, wrapped, unwrapped = self.shared.get_phase()
+
+                a3.clear()
+                a3.imshow(
+                    fstord, extent=self.shared.fstord_ext, origin='lower')
+                a3.set_xlabel('1/mm')
+                a3.set_title('1st order')
+
+                a4.clear()
+                a4.imshow(
+                    mag, extent=self.shared.mag_ext, origin='lower')
+                a4.set_xlabel('mm')
+                a4.set_title('magnitude')
+
+                a5.clear()
+                a5.imshow(
+                    wrapped, extent=self.shared.mag_ext, origin='lower')
+                a5.set_xlabel('mm')
+                a5.set_title('wrapped phi')
+
+                a6.clear()
+                a6.imshow(
+                    unwrapped, extent=self.shared.mag_ext, origin='lower')
+                a6.set_xlabel('mm')
+                a6.set_title('unwrapped phi')
+
+                a6.figure.canvas.draw()
+
             return f
 
         listener.sig_update.connect(f20())
@@ -1050,6 +1102,7 @@ class Shared:
 
         self.cam_buf = Array('c', cam_dtsize*totpixs, lock=False)
         self.cam_ext = Array('d', 4, lock=False)
+        self.cam_sat = Value('i', lock=False)
 
         self.ft_buf = Array('d', totpixs, lock=False)
         self.ft_ext = Array('d', 4, lock=False)
@@ -1058,6 +1111,7 @@ class Shared:
 
         self.fstord_buf = Array('c', dbl_dtsize*totpixs, lock=False)
         self.fstord_ext = Array('d', 4, lock=False)
+        self.fstord_shape = Array('i', 2, lock=False)
 
         self.mag_buf = Array('c', dbl_dtsize*totpixs, lock=False)
         self.wrapped_buf = Array('c', dbl_dtsize*totpixs, lock=False)
@@ -1081,12 +1135,17 @@ class Shared:
             self.ft_buf, np.float).reshape(self.cam_shape)
 
     def get_phase(self):
-        mag = np.frombuffer(self.mag_buf, np.float).reshape(self.mag_shape)
+        nsum1 = self.fstord_shape[0]*self.fstord_shape[1]
+        fstord = np.frombuffer(
+            self.fstord_buf, np.float, count=nsum1).reshape(self.fstord_shape)
+        nsum2 = self.mag_shape[0]*self.mag_shape[1]
+        mag = np.frombuffer(
+            self.mag_buf, np.float, count=nsum2).reshape(self.mag_shape)
         wrapped = np.frombuffer(
-            self.wrapped_buf, np.float).reshape(self.mag_shape)
+            self.wrapped_buf, np.float, count=nsum2).reshape(self.mag_shape)
         unwrapped = np.frombuffer(
-            self.unwrapped_buf, np.float).reshape(self.mag_shape)
-        return mag, wrapped, unwrapped
+            self.unwrapped_buf, np.float, count=nsum2).reshape(self.mag_shape)
+        return fstord, mag, wrapped, unwrapped
 
 
 class ArrayQueue:
@@ -1134,7 +1193,7 @@ def worker(shared, args):
     ft_grid = make_ft_grid(cam.shape(), P)
     for i in range(4):
         shared.cam_ext[i] = cam_grid[2][i]/1000
-        shared.ft_ext[i] = cam_grid[2][i]*1000
+        shared.ft_ext[i] = ft_grid[2][i]*1000
 
     f0f1 = None
     last_poke = 0
@@ -1147,6 +1206,10 @@ def worker(shared, args):
 
     def run_align():
         img = cam.grab_image()
+        if img.max == cam.get_image_max():
+            shared.cam_sat = 1
+        else:
+            shared.cam_sat = 0
         fimg = ft(img)
         logf2 = np.log(np.abs(fimg))
         if f0f1 is None or find_f0f1:
@@ -1173,7 +1236,13 @@ def worker(shared, args):
         shared.unwrapped_buf[:unwrapped.nbytes] = unwrapped.tobytes()
         for i in range(4):
             shared.mag_ext[i] = ext4[i]/1000
+        print('f3', f3.shape)
+        print('logf3', logf3.shape)
+        print('mag', mag.shape)
+        shared.fstord_shape[:] = logf3.shape[:]
         shared.mag_shape[:] = mag.shape[:]
+        print('fstord_shape', shared.fstord_shape[0], shared.fstord_shape[1])
+        print('mag_shape', shared.mag_shape[0], shared.mag_shape[1])
         shared.oq.put('OK')
         print('RAN align')
 
