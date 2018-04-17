@@ -267,7 +267,6 @@ class Control(QMainWindow):
         brepeat = QCheckBox('repeat')
         layout.addWidget(brepeat, 3, 1)
 
-        # snapshot = Snapshot(self.shared.u.size, self.cam)
         listener = Listener(self.shared)
 
         bpoke = QCheckBox('poke')
@@ -302,12 +301,10 @@ class Control(QMainWindow):
 
         def f1():
             def f():
-                snapshot.repeat = brepeat.isChecked()
                 status.setText('working...')
                 brun.setEnabled(False)
                 self.align_nav.setEnabled(False)
-                snapshot.start()
-                snapshot.run()
+                listener.start()
             return f
 
         def f2(a, txt, mm=True, satcheck=False):
@@ -397,6 +394,12 @@ class Control(QMainWindow):
                 snapshot.repeat = False
             return f
 
+        def f20():
+            def f():
+                pass
+            return f
+
+        listener.sig_update.connect(f20())
         # snapshot.finished.connect(f5())
         # snapshot.sig_error.connect(f6())
         # snapshot.sig_cam.connect(f2(
@@ -771,7 +774,7 @@ class Listener(QThread):
         self.shared = shared
 
     def run(self):
-        self.shared.iq.put('align')
+        self.shared.iq.put(('align',))
         self.sig_update.emit(self.shared.oq.get())
 
 
@@ -1143,7 +1146,7 @@ def worker(shared, args):
     poke = False
 
     def run_align():
-        img = self.cam.grab_image()
+        img = cam.grab_image()
         fimg = ft(img)
         logf2 = np.log(np.abs(fimg))
         if f0f1 is None or find_f0f1:
@@ -1158,20 +1161,21 @@ def worker(shared, args):
         wrapped = np.arctan2(gp.imag, gp.real)
         unwrapped = call_unwrap(wrapped)
 
-        shared.img[:] = img[:]
+        shared.cam[:] = img[:]
         shared.ft[:] = logf2[:]
         shared.f0f1[0] = f0
         shared.f0f1[1] = f1
         shared.fstord_buf[:logf3.nbytes] = logf3.tobytes()
         for i in range(4):
-            self.fstord_ext[i] = ext3[i]*1000
+            shared.fstord_ext[i] = ext3[i]*1000
         shared.mag_buf[:mag.nbytes] = mag.tobytes()
         shared.wrapped_buf[:wrapped.nbytes] = wrapped.tobytes()
         shared.unwrapped_buf[:unwrapped.nbytes] = unwrapped.tobytes()
         for i in range(4):
-            self.mag_ext[i] = ext4[i]/1000
+            shared.mag_ext[i] = ext4[i]/1000
         shared.mag_shape[:] = mag.shape[:]
         shared.oq.put('OK')
+        print('RAN align')
 
     for cmd in iter(shared.iq.get, 'STOP'):
         print(cmd)
