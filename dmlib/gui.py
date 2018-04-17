@@ -53,7 +53,7 @@ class Control(QMainWindow):
 
         self.tabs = QTabWidget()
         self.make_panel_align()
-        self.make_panel_data_collection()
+        self.make_panel_dataacq()
         central.addWidget(self.tabs)
 
         self.setCentralWidget(central)
@@ -397,7 +397,7 @@ class Control(QMainWindow):
 
         self.align_nav = NavigationToolbar2QT(self.align_fig, frame)
 
-    def make_panel_data_collection(self):
+    def make_panel_dataacq(self):
         frame = QFrame()
         self.da_fig = FigureCanvas(Figure(figsize=(7, 5)))
         layout = QGridLayout()
@@ -417,9 +417,9 @@ class Control(QMainWindow):
         self.da_axes[1, 1].set_title('unwrapped phi')
 
         brun = QPushButton('run')
-        bopen = QPushButton('open')
+        bstop = QPushButton('stop')
         layout.addWidget(brun, 1, 0)
-        layout.addWidget(bopen, 1, 1)
+        layout.addWidget(bstop, 1, 1)
         status = QLabel('')
         status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(status, 2, 0, 1, 2)
@@ -429,37 +429,35 @@ class Control(QMainWindow):
         def f1():
             def f():
                 status.setText('working...')
-                brun.setText('stop')
+                brun.setEnabled(False)
                 dataacq.start()
             return f
 
-        def f2(a, txt, mm=True, satcheck=False):
+        def f2():
+            def f():
+                dataacq.stop = True
+            return f
+
+        def f3():
+            a = self.da_axes[0, 0]
             def f(t):
-                a.clear()
-                if mm:
-                    mul = 1e-3
-                    lab = 'mm'
-                else:
-                    mul = 1e3
-                    lab = '1/mm'
+                print(t[2:])
+                mul = 1e-3
+                lab = 'mm'
                 ext = (t[1][0]*mul, t[1][1]*mul, t[1][2]*mul, t[1][3]*mul)
                 a.imshow(t[0], extent=ext, origin='lower')
                 a.set_xlabel(lab)
-                if satcheck:
-                    # FIXME
-                    if t[0].max() == self.cam.get_image_max():
-                        a.set_title(txt + ' SAT')
-                    else:
-                        a.set_title('{} {: 3d} {: 3d}'.format(
-                            txt, t[0].min(), t[0].max()))
+                if t[0].max() == self.cam.get_image_max():
+                    a.set_title('cam SAT')
                 else:
-                    a.set_title(txt)
+                    a.set_title('cam {: 3d} {: 3d}'.format(
+                        t[0].min(), t[0].max()))
                 a.figure.canvas.draw()
             return f
 
         brun.clicked.connect(f1())
-        dataacq.sig_cam.connect(f2(
-            self.align_axes[0, 0], 'camera', True, True))
+        bstop.clicked.connect(f2())
+        dataacq.sig_cam.connect(f3())
 
 
 class FakeCamera():
@@ -520,7 +518,8 @@ class FakeDM():
         return 140
 
     def write(self, v):
-        print('FakeDM', v)
+        # print('FakeDM', v)
+        pass
 
     def preset(self, name):
         return uniform(-1., 1., size=(140,))
@@ -824,6 +823,8 @@ class DataAcq(QThread):
             self.Ualign = np.zeros((self.dm.size(), 0))
 
     def run(self):
+        self.stop = False
+
         libver = 'latest'
         now = datetime.now(timezone.utc)
         h5fn = now.astimezone().strftime('%Y%m%d_%H%M%S.h5')
@@ -893,12 +894,16 @@ class DataAcq(QThread):
             h5f['align/images'].dims[1].label = 'height'
             h5f['align/images'].dims[1].label = 'width'
 
+            tot = U.shape[1] + self.Ualign.shape[1]
+            count = 0
+
             for i in range(self.Ualign.shape[1]):
                 self.dm.write(self.Ualign[:, i])
                 sleep(self.sleep)
                 img = self.cam.grab_image()
                 h5f['align/images'][i, ...] = img
-                self.sig_cam.emit((img, self.cam_grid[2]))
+                self.sig_cam.emit((img, self.cam_grid[2], count, tot))
+                count += 1
                 if self.stop:
                     return
 
@@ -907,7 +912,8 @@ class DataAcq(QThread):
                 sleep(self.sleep)
                 img = self.cam.grab_image()
                 h5f['data/images'][i, ...] = img
-                self.sig_cam.emit((img, self.cam_grid[2]))
+                self.sig_cam.emit((img, self.cam_grid[2], count, tot))
+                count += 1
                 if self.stop:
                     return
 
