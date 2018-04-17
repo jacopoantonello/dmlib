@@ -37,6 +37,8 @@ from interf import (
 
 class Control(QMainWindow):
 
+    closing = False
+
     def __init__(self, worker, shared, settings={}, parent=None):
         super().__init__()
 
@@ -59,10 +61,6 @@ class Control(QMainWindow):
         central.addWidget(self.tabs)
 
         self.setCentralWidget(central)
-
-    def closeEvent(self, event):
-        self.shared.iq.put('STOP')
-        event.accept()
 
     def make_toolbox(self):
         self.make_tool_cam()
@@ -1051,18 +1049,18 @@ class ArrayQueue:
             raise NotImplementedError()
 
 
-
 def worker(shared, args):
     cam, dm = open_hardware(args)
     dm = VoltageTransform(dm)
     shared.make_u()
     for cmd in iter(shared.iq.get, 'STOP'):
+        print(cmd)
         if cmd[0] == 'get_exposure':
             shared.oq.put(cam.get_exposure())
         elif cmd[0] == 'get_exposure_range':
             shared.oq.put(cam.get_exposure_range())
         elif cmd[0] == 'set_exposure':
-            shared.oq.put(cam.set_exposure_range(cmd[1]))
+            shared.oq.put(cam.set_exposure(cmd[1]))
         elif cmd[0] == 'get_framerate':
             shared.oq.put(cam.get_framerate())
         elif cmd[0] == 'get_framerate_range':
@@ -1077,6 +1075,10 @@ def worker(shared, args):
             shared.oq.put('OK')
         else:
             raise NotImplementedError(cmd)
+
+    print('STOP CMD')
+    while not shared.iq.empty():
+        print(shared.iq.get())
 
     print('STOPPED')
 
@@ -1114,4 +1116,6 @@ if __name__ == '__main__':
     control = Control(p, shared)
     control.show()
 
-    sys.exit(app.exec_())
+    exit = app.exec_()
+    shared.iq.put('STOP')
+    sys.exit(exit)
