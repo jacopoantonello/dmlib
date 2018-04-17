@@ -44,7 +44,7 @@ class Control(QMainWindow):
 
         self.worker = worker
         self.shared = shared
-        self.shared.make_u()
+        self.shared.make_static()
 
         self.setWindowTitle('DM control')
         QShortcut(QKeySequence("Ctrl+Q"), self, self.close)
@@ -267,8 +267,8 @@ class Control(QMainWindow):
         brepeat = QCheckBox('repeat')
         layout.addWidget(brepeat, 3, 1)
 
-        return
-        snapshot = Snapshot(self.shared.u.size, self.cam)
+        # snapshot = Snapshot(self.shared.u.size, self.cam)
+        listener = Listener(self.shared)
 
         bpoke = QCheckBox('poke')
         bsleep = QPushButton('sleep')
@@ -307,6 +307,7 @@ class Control(QMainWindow):
                 brun.setEnabled(False)
                 self.align_nav.setEnabled(False)
                 snapshot.start()
+                snapshot.run()
             return f
 
         def f2(a, txt, mm=True, satcheck=False):
@@ -396,20 +397,20 @@ class Control(QMainWindow):
                 snapshot.repeat = False
             return f
 
-        snapshot.finished.connect(f5())
-        snapshot.sig_error.connect(f6())
-        snapshot.sig_cam.connect(f2(
-            self.align_axes[0, 0], 'camera', True, True))
-        snapshot.sig_ft.connect(f2(self.align_axes[0, 1], 'FT', False))
-        snapshot.sig_f0f1.connect(f3(self.align_axes[0, 1]))
-        snapshot.sig_1ord.connect(f2(
-            self.align_axes[0, 2], '1st order', False))
-        snapshot.sig_magwrapped.connect(f4(
-            self.align_axes[1, 0], self.align_axes[1, 1],
-            'magnitude',  'wrapped phi'))
-        snapshot.sig_unwrapped.connect(
-            f2(self.align_axes[1, 2], 'unwrapped phi'))
-        snapshot.sig_dm.connect(f9())
+        # snapshot.finished.connect(f5())
+        # snapshot.sig_error.connect(f6())
+        # snapshot.sig_cam.connect(f2(
+        #     self.align_axes[0, 0], 'camera', True, True))
+        # snapshot.sig_ft.connect(f2(self.align_axes[0, 1], 'FT', False))
+        # snapshot.sig_f0f1.connect(f3(self.align_axes[0, 1]))
+        # snapshot.sig_1ord.connect(f2(
+        #     self.align_axes[0, 2], '1st order', False))
+        # snapshot.sig_magwrapped.connect(f4(
+        #     self.align_axes[1, 0], self.align_axes[1, 1],
+        #     'magnitude',  'wrapped phi'))
+        # snapshot.sig_unwrapped.connect(
+        #     f2(self.align_axes[1, 2], 'unwrapped phi'))
+        # snapshot.sig_dm.connect(f9())
 
         brun.clicked.connect(f1())
         bauto.stateChanged.connect(f7())
@@ -761,6 +762,19 @@ class DMPlot():
 # https://stackoverflow.com/questions/41794635/
 # https://stackoverflow.com/questions/38666078/
 
+class Listener(QThread):
+
+    sig_update = pyqtSignal(str)
+
+    def __init__(self, shared):
+        super().__init__()
+        self.shared = shared
+
+    def run(self):
+        self.shared.iq.put('align')
+        self.sig_update.emit(self.shared.oq.get())
+
+
 class Snapshot(QThread):
 
     f0f1 = None
@@ -1025,35 +1039,30 @@ def open_hardware(args):
 class Shared:
 
     def __init__(self, cam, dm):
+        dbl_dtsize = np.dtype('float').itemsize
         cam_dtsize = np.dtype(cam.get_image_dtype()).itemsize
         cam_shape = cam.shape()
         totpixs = cam_shape[0]*cam_shape[1]
         dm_size = dm.size()
 
-        self.cam = Array('c', cam_dtsize*totpixs, lock=False)
-        self.camext = Array('d', 4, lock=False)
+        self.cam_buf = Array('c', cam_dtsize*totpixs, lock=False)
+        self.cam_ext = Array('d', 4, lock=False)
 
-        self.ft = Array('d', totpixs, lock=False)
-        self.ftext = Array('d', 4, lock=False)
+        self.ft_buf = Array('d', totpixs, lock=False)
+        self.ft_ext = Array('d', 4, lock=False)
 
         self.f0f1 = Array('d', 2, lock=False)
 
-        self.fstord = Array('d', totpixs, lock=False)
-        self.fstordext = Array('d', 4, lock=False)
+        self.fstord_buf = Array('c', dbl_dtsize*totpixs, lock=False)
+        self.fstord_ext = Array('d', 4, lock=False)
 
-        self.mag = Array('d', totpixs, lock=False)
-        self.magext = Array('d', 4, lock=False)
+        self.mag_buf = Array('c', dbl_dtsize*totpixs, lock=False)
+        self.wrapped_buf = Array('c', dbl_dtsize*totpixs, lock=False)
+        self.unwrapped_buf = Array('c', dbl_dtsize*totpixs, lock=False)
+        self.mag_ext = Array('d', 4, lock=False)
+        self.mag_shape = Array('i', 2, lock=False)
 
-        self.wrapped = Array('d', totpixs, lock=False)
-        self.wrappedext = Array('d', 4, lock=False)
-
-        self.unwrapped = Array('d', totpixs, lock=False)
-        self.unwrappedext = Array('d', 4, lock=False)
-
-        self.unwrapped = Array('d', totpixs, lock=False)
-        self.unwrappedext = Array('d', 4, lock=False)
-
-        self.cam_dtsize = cam_dtsize
+        self.cam_dtype = cam.get_image_dtype()
         self.cam_shape = cam_shape
         self.dm_size = dm.size()
 
@@ -1061,8 +1070,20 @@ class Shared:
         self.iq = Queue()
         self.oq = Queue()
 
-    def make_u(self):
+    def make_static(self):
         self.u = np.frombuffer(self.dm, np.float)
+        self.cam = np.frombuffer(
+            self.cam_buf, self.cam_dtype).reshape(self.cam_shape)
+        self.ft = np.frombuffer(
+            self.ft_buf, np.float).reshape(self.cam_shape)
+
+    def get_phase(self):
+        mag = np.frombuffer(self.mag_buf, np.float).reshape(self.mag_shape)
+        wrapped = np.frombuffer(
+            self.wrapped_buf, np.float).reshape(self.mag_shape)
+        unwrapped = np.frombuffer(
+            self.unwrapped_buf, np.float).reshape(self.mag_shape)
+        return mag, wrapped, unwrapped
 
 
 class ArrayQueue:
@@ -1100,7 +1121,58 @@ class ArrayQueue:
 def worker(shared, args):
     cam, dm = open_hardware(args)
     dm = VoltageTransform(dm)
-    shared.make_u()
+    P = cam.get_pixel_size()
+
+    shared.make_static()
+    shared.f0f1[0] = 0.
+    shared.f0f1[1] = 0.
+
+    cam_grid = make_cam_grid(cam.shape(), P)
+    ft_grid = make_ft_grid(cam.shape(), P)
+    for i in range(4):
+        shared.cam_ext[i] = cam_grid[2][i]/1000
+        shared.ft_ext[i] = cam_grid[2][i]*1000
+
+    f0f1 = None
+    last_poke = 0
+
+    find_f0f1 = True
+    sleep = 0.1
+    error = None
+    repeat = False
+    poke = False
+
+    def run_align():
+        img = self.cam.grab_image()
+        fimg = ft(img)
+        logf2 = np.log(np.abs(fimg))
+        if f0f1 is None or find_f0f1:
+            f0, f1 = find_orders(ft_grid[0], ft_grid[1], logf2)
+        else:
+            f0, f1 = f0f1
+        f3, ext3 = extract_order(fimg, ft_grid[0], ft_grid[1], f0, f1, P)
+        logf3 = np.log(np.abs(f3))
+        f4, dd0, dd1, ext4 = repad_order(f3, ft_grid[0], ft_grid[1])
+        gp = ift(f4)
+        mag = np.abs(gp)
+        wrapped = np.arctan2(gp.imag, gp.real)
+        unwrapped = call_unwrap(wrapped)
+
+        shared.img[:] = img[:]
+        shared.ft[:] = logf2[:]
+        shared.f0f1[0] = f0
+        shared.f0f1[1] = f1
+        shared.fstord_buf[:logf3.nbytes] = logf3.tobytes()
+        for i in range(4):
+            self.fstord_ext[i] = ext3[i]*1000
+        shared.mag_buf[:mag.nbytes] = mag.tobytes()
+        shared.wrapped_buf[:wrapped.nbytes] = wrapped.tobytes()
+        shared.unwrapped_buf[:unwrapped.nbytes] = unwrapped.tobytes()
+        for i in range(4):
+            self.mag_ext[i] = ext4[i]/1000
+        shared.mag_shape[:] = mag.shape[:]
+        shared.oq.put('OK')
+
     for cmd in iter(shared.iq.get, 'STOP'):
         print(cmd)
         if cmd[0] == 'get_exposure':
@@ -1121,6 +1193,8 @@ def worker(shared, args):
         elif cmd[0] == 'preset':
             shared.u[:] = dm.preset(cmd[1], cmd[2])
             shared.oq.put('OK')
+        elif cmd[0] == 'align':
+            run_align()
         else:
             raise NotImplementedError(cmd)
 
@@ -1129,6 +1203,91 @@ def worker(shared, args):
         print(shared.iq.get())
 
     print('STOPPED')
+
+
+class Snapshot(QThread):
+
+    def run(self):
+        while True:
+            if self.poke:
+                self.u[:] = 0.
+                self.u[self.last_poke] = .7
+                self.sig_dm.emit(self.u)
+                self.last_poke += 1
+                self.last_poke %= self.u.size
+                sleep(self.sleep)
+
+            img = self.cam.grab_image()
+            self.sig_cam.emit((img, self.cam_grid[2]))
+
+            fimg = ft(img)
+            logf2 = np.log(np.abs(fimg))
+            self.sig_ft.emit((logf2, self.ft_grid[2]))
+
+            if self.use_last and self.f0f1:
+                f0, f1 = self.f0f1
+            else:
+                try:
+                    f0, f1 = find_orders(
+                        self.ft_grid[0], self.ft_grid[1], logf2)
+                except ValueError:
+                    self.sig_error.emit('Failed to find orders')
+                    if self.repeat:
+                        continue
+                    else:
+                        return
+                self.sig_f0f1.emit((f0, f1))
+                self.f0f1 = (f0, f1)
+
+            try:
+                f3, ext3 = extract_order(
+                    fimg, self.ft_grid[0], self.ft_grid[1], f0, f1,
+                    self.cam.get_pixel_size())
+            except Exception as ex:
+                self.sig_error.emit('Failed to extract order: ' + str(ex))
+                if self.repeat:
+                    continue
+                else:
+                    return
+                return
+            self.sig_1ord.emit((np.log(np.abs(f3)), ext3))
+
+            try:
+                f4, _, _, ext4 = repad_order(
+                    f3, self.ft_grid[0], self.ft_grid[1])
+            except Exception as ex:
+                self.sig_error.emit('Failed to repad order: ' + str(ex))
+                if self.repeat:
+                    continue
+                else:
+                    return
+
+            try:
+                gp = ift(f4)
+                mag = np.abs(gp)
+                wrapped = np.arctan2(gp.imag, gp.real)
+            except Exception as ex:
+                self.sig_error.emit('Failed to extract phase: ' + str(ex))
+                if self.repeat:
+                    continue
+                else:
+                    return
+            self.sig_magwrapped.emit((mag, wrapped, ext4))
+
+            if self.unwrap:
+                try:
+                    unwrapped = call_unwrap(wrapped)
+                except Exception as ex:
+                    self.sig_error.emit('Failed to unwrap phase: ' + str(ex))
+                    if self.repeat:
+                        continue
+                    else:
+                        return
+                self.sig_unwrapped.emit((unwrapped, ext4))
+
+            if not self.repeat:
+                break
+
 
 
 if __name__ == '__main__':
