@@ -818,7 +818,7 @@ class DataAcq(QThread):
     sig_cam = pyqtSignal(tuple)
     sig_h5 = pyqtSignal(str)
 
-    def __init__(self, dm, cam, wavelength, Ualign):
+    def __init__(self, dm, cam, wavelength, dmplot):
         super().__init__()
         self.dm = dm
         self.cam = cam
@@ -834,7 +834,11 @@ class DataAcq(QThread):
             h5fn = dmsn + h5fn
         self.h5fn = h5fn
 
-        U = np.kron(np.eye(dm.size()), np.linspace(-.7, .7, 5))
+        U = np.hstack((
+                np.zeros((dm.size(), 1)),
+                np.kron(np.eye(dm.size()), np.linspace(-.7, .7, 5)),
+                np.zeros((dm.size(), 1))
+                ))
 
         with h5py.File(h5fn, 'w', libver=libver) as h5f:
             h5f['datetime'] = datetime.now(timezone.utc).isoformat()
@@ -850,6 +854,8 @@ class DataAcq(QThread):
             h5f['dmlib/__date__'] = ''
             h5f['dmlib/__version__'] = ''
             h5f['dmlib/__commit__'] = ''
+
+            h5f['dmplot/flips'] = ''
 
             h5f['cam/serial'] = self.cam.get_serial_number()
             h5f['cam/camera_info'] = str(self.cam.get_camera_info())
