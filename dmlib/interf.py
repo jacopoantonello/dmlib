@@ -201,14 +201,11 @@ def repad_order(f3, ff0, ff1, pad=2, alpha=.25):
 
 
 def call_unwrap(phase, mask=None):
-    if mask is None:
-        mmax = max(phase.shape)
-        dd1 = np.linspace(
-            -phase.shape[0]/mmax/2, phase.shape[0]/mmax/2, phase.shape[0])
-        dd2 = np.linspace(
-            -phase.shape[1]/mmax/2, phase.shape[1]/mmax/2, phase.shape[1])
-        xx, yy = np.meshgrid(dd2, dd1)
-        mask = np.sqrt(np.square(xx) + np.square(yy)) > 1.0
-    masked = np.ma.masked_array(phase, mask)
-    unwr = np.array(unwrap_phase(masked))
-    return unwr
+    if mask is not None:
+        masked = np.ma.masked_array(phase, mask)
+        phi = np.array(unwrap_phase(phase))
+        # phi[mask] = phi[np.invert(mask)].mean()
+        phi[mask] = 0
+        return phi
+    else:
+        return np.array(unwrap_phase(phase))

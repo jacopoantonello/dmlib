@@ -468,6 +468,7 @@ class Control(QMainWindow):
         layout.addWidget(bwavelength, 3, 0)
 
         wavelength = []
+        dataset = []
         listener = DataAcqListener(self.shared, wavelength, self.dmplot)
 
         def f0():
@@ -536,6 +537,10 @@ class Control(QMainWindow):
                 if msg[0] == 'OK':
                     status.setText('{}/{}'.format(msg[1] + 1, msg[2]))
                 elif msg[0] == 'finished':
+                    if dataset:
+                        dataset[0] = msg[1]
+                    else:
+                        dataset.append(msg[1])
                     status.setText('finished ' + msg[1])
                     finish()
                 else:
@@ -1127,7 +1132,9 @@ class Worker(Process):
 
             if unwrap:
                 try:
-                    unwrapped = call_unwrap(wrapped)
+                    _, edges = np.histogram(mag.ravel(), bins=100)
+                    mask = (mag < edges[1]).reshape(mag.shape)
+                    unwrapped = call_unwrap(wrapped, mask)
                 except Exception as ex:
                     shared.oq.put('Failed to unwrap phase: ' + str(ex))
                     if repeat:
