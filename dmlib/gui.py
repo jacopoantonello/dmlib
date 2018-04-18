@@ -145,11 +145,14 @@ class Control(QMainWindow):
 
         self.toolbox.addItem(tool_cam, 'camera')
 
+    def update_dm_gui(self):
+        self.dmplot.draw(self.dm_ax, self.shared.u)
+        self.dm_ax.figure.canvas.draw()
+
     def write_dm(self, u=None):
         if u is not None:
             self.shared.u[:] = u[:]
-        self.dmplot.draw(self.dm_ax, self.shared.u)
-        self.dm_ax.figure.canvas.draw()
+        self.update_dm_gui()
         self.shared.iq.put(('write',))
         self.shared.oq.get()
 
@@ -326,7 +329,6 @@ class Control(QMainWindow):
 
         def f20():
             def f(msg):
-                print(msg)
                 a1 = self.align_axes[0, 0]
                 a2 = self.align_axes[0, 1]
                 a3 = self.align_axes[0, 2]
@@ -392,6 +394,8 @@ class Control(QMainWindow):
                 a6.set_title('unwrapped phi')
 
                 a6.figure.canvas.draw()
+
+                self.update_dm_gui()
 
                 status.setText('')
                 brun.setEnabled(True)
@@ -1153,10 +1157,10 @@ def worker(shared, args):
         while True:
             if poke:
                 shared.u[:] = 0.
-                shared.u[last_poke] = .7
+                shared.u[state[1]] = .7
                 state[1] += 1
                 state[1] %= shared.u.size
-                sleep(sleep)
+                time.sleep(sleep)
 
             img = cam.grab_image()
             if img.max == cam.get_image_max():
@@ -1237,7 +1241,7 @@ def worker(shared, args):
             shared.unwrapped_buf[:unwrapped.nbytes] = unwrapped.tobytes()
 
             shared.oq.put('OK')
-            print('RAN align')
+            print('run_align', 'finished')
 
             checkstop = shared.iq.get()[0]
             shared.oq.put('')
@@ -1246,7 +1250,7 @@ def worker(shared, args):
                 break
 
     for cmd in iter(shared.iq.get, 'STOP'):
-        print(cmd)
+        print('worker', 'cmd', cmd)
         if cmd[0] == 'get_exposure':
             shared.oq.put(cam.get_exposure())
         elif cmd[0] == 'get_exposure_range':
@@ -1270,11 +1274,11 @@ def worker(shared, args):
         else:
             raise NotImplementedError(cmd)
 
-    print('STOP CMD')
+    print('worker', 'STOP CMD')
     while not shared.iq.empty():
         print(shared.iq.get())
 
-    print('STOPPED')
+    print('worker', 'STOPPED')
 
 
 class Snapshot(QThread):
