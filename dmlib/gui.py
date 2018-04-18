@@ -464,11 +464,33 @@ class Control(QMainWindow):
         status = QLabel('')
         status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(status, 2, 0, 1, 2)
+        bwavelength = QPushButton('wavelength')
+        layout.addWidget(bwavelength, 3, 0)
 
-        listener = DataAcqListener(self.shared, 690, self.dmplot)
+        wavelength = []
+        listener = DataAcqListener(self.shared, wavelength, self.dmplot)
+
+        def f0():
+            def f():
+                if wavelength:
+                    wl = wavelength[0]
+                else:
+                    wl = 775.
+                val, ok = QInputDialog.getDouble(
+                    self, 'wavelength', '[nm]', wl, decimals=1)
+                if ok:
+                    if wavelength:
+                        wavelength[0] = val
+                    else:
+                        wavelength.append(val)
+            return f
 
         def f1():
+            askwl = f0()
             def f():
+                while not wavelength:
+                    askwl()
+
                 status.setText('working...')
                 ind = self.tabs.indexOf(frame)
                 for i in range(self.tabs.count()):
@@ -526,6 +548,7 @@ class Control(QMainWindow):
 
         brun.clicked.connect(f1())
         bstop.clicked.connect(f2())
+        bwavelength.clicked.connect(f0())
         listener.sig_update.connect(f20())
         self.dataacq_nav = NavigationToolbar2QT(self.dataacq_fig, frame)
 
@@ -846,10 +869,11 @@ class DataAcqListener(QThread):
     def __init__(self, shared, wavelength, dmplot):
         super().__init__()
         self.shared = shared
+        self.wavelength = wavelength
         self.dmplot = dmplot
 
     def run(self):
-        self.shared.iq.put(('dataacq', 690, self.dmplot.txs))
+        self.shared.iq.put(('dataacq', self.wavelength[0], self.dmplot.txs))
         while True:
             result = self.shared.oq.get()
             print('listener result', result)
@@ -1211,57 +1235,38 @@ class Worker(Process):
             h5f['align/images'].dims[1].label = 'width'
 
             tot = U.shape[1] + Ualign.shape[1]
-            count = 0
+            count = [0]
 
-            for i in range(Ualign.shape[1]):
-                dm.write(Ualign[:, i])
-                time.sleep(sleep)
-                img = cam.grab_image()
-                h5f['align/images'][i, ...] = img
-                shared.cam[:] = img
-                shared.oq.put(('OK', count, tot))
-                print('run_dataacq', 'iteration')
+            todo = ((Ualign, 'align/images'), (U, 'data/images'))
+            for U1, imaddr in todo:
+                for i in range(U1.shape[1]):
+                    dm.write(U1[:, i])
+                    time.sleep(sleep)
+                    img = cam.grab_image()
+                    if img.max() == cam.get_image_max():
+                        shared.cam_sat.value = 1
+                    else:
+                        shared.cam_sat.value = 0
+                    h5f[imaddr][i, ...] = img
+                    shared.cam[:] = img
+                    shared.oq.put(('OK', count[0], tot))
+                    print('run_dataacq', 'iteration')
 
-                stopcmd = shared.iq.get()[1]
-                shared.oq.put('')
+                    stopcmd = shared.iq.get()[1]
+                    shared.oq.put('')
 
-                if stopcmd:
-                    print('run_dataacq', 'stopcmd')
-                    h5f.close()
-                    try:
-                        os.remove(h5fn)
-                    except OSError:
-                        pass
-                    return
-                else:
-                    print('run_dataacq', 'continue')
+                    if stopcmd:
+                        print('run_dataacq', 'stopcmd')
+                        h5f.close()
+                        try:
+                            os.remove(h5fn)
+                        except OSError:
+                            pass
+                        return
+                    else:
+                        print('run_dataacq', 'continue')
 
-                count += 1
-
-            for i in range(U.shape[1]):
-                dm.write(U[:, i])
-                time.sleep(sleep)
-                img = cam.grab_image()
-                h5f['data/images'][i, ...] = img
-                shared.cam[:] = img
-                shared.oq.put(('OK', count, tot))
-                print('run_dataacq', 'iteration')
-
-                stopcmd = shared.iq.get()[1]
-                shared.oq.put('')
-
-                if stopcmd:
-                    print('run_dataacq', 'stopcmd')
-                    h5f.close()
-                    try:
-                        os.remove(h5fn)
-                    except OSError:
-                        pass
-                    return
-                else:
-                    print('run_dataacq', 'continue')
-
-                count += 1
+                    count[0] += 1
 
         print('run_dataacq', 'finished')
         shared.oq.put(('finished', h5fn))
