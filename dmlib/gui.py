@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import os
 import platform
 import sys
 import argparse
@@ -336,7 +337,8 @@ class Control(QMainWindow):
         def f4():
             def f():
                 listener.repeat = False
-                status.setText('stopping...')
+                if not listener.isFinished():
+                    status.setText('stopping...')
             return f
 
         def f20():
@@ -438,15 +440,15 @@ class Control(QMainWindow):
 
     def make_panel_dataacq(self):
         frame = QFrame()
-        self.da_fig = FigureCanvas(Figure(figsize=(7, 5)))
+        self.dataacq_fig = FigureCanvas(Figure(figsize=(7, 5)))
         layout = QGridLayout()
         frame.setLayout(layout)
-        layout.addWidget(self.da_fig, 0, 0, 1, 0)
+        layout.addWidget(self.dataacq_fig, 0, 0, 1, 0)
 
         self.tabs.addTab(frame, 'calibration')
 
-        self.dataacq_axes = self.da_fig.figure.subplots(2, 2)
-        self.da_fig.figure.subplots_adjust(
+        self.dataacq_axes = self.dataacq_fig.figure.subplots(2, 2)
+        self.dataacq_fig.figure.subplots_adjust(
             left=.125, right=.9,
             bottom=.1, top=.9,
             wspace=0.45, hspace=0.45)
@@ -474,7 +476,7 @@ class Control(QMainWindow):
                         self.tabs.setTabEnabled(i, False)
                 self.toolbox.setEnabled(False)
                 brun.setEnabled(False)
-                # self.align_nav.setEnabled(False)
+                self.dataacq_nav.setEnabled(False)
                 listener.run = True
                 listener.start()
             return f
@@ -482,7 +484,8 @@ class Control(QMainWindow):
         def f2():
             def f():
                 listener.run = False
-                status.setText('stopping...')
+                if not listener.isFinished():
+                    status.setText('stopping...')
             return f
 
         def f20():
@@ -491,7 +494,7 @@ class Control(QMainWindow):
                     self.tabs.setTabEnabled(i, True)
                 self.toolbox.setEnabled(True)
                 brun.setEnabled(True)
-                # self.align_nav.setEnabled(True)
+                self.dataacq_nav.setEnabled(True)
 
             def f(msg):
                 a1 = self.dataacq_axes[0, 0]
@@ -524,6 +527,7 @@ class Control(QMainWindow):
         brun.clicked.connect(f1())
         bstop.clicked.connect(f2())
         listener.sig_update.connect(f20())
+        self.dataacq_nav = NavigationToolbar2QT(self.dataacq_fig, frame)
 
 
 class FakeCamera():
@@ -677,7 +681,7 @@ class VoltageTransform():
     def get_serial_number(self):
         return self.dm.get_serial_number()
 
-    def preset(self, name, mag):
+    def preset(self, name, mag=0.7):
         return self.dm.preset(name, mag)
 
 
@@ -1223,6 +1227,11 @@ class Worker(Process):
 
                 if stopcmd:
                     print('run_dataacq', 'stopcmd')
+                    h5f.close()
+                    try:
+                        os.remove(h5fn)
+                    except OSError:
+                        pass
                     return
                 else:
                     print('run_dataacq', 'continue')
@@ -1243,6 +1252,11 @@ class Worker(Process):
 
                 if stopcmd:
                     print('run_dataacq', 'stopcmd')
+                    h5f.close()
+                    try:
+                        os.remove(h5fn)
+                    except OSError:
+                        pass
                     return
                 else:
                     print('run_dataacq', 'continue')
