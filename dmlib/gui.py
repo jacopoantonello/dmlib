@@ -445,15 +445,15 @@ class Control(QMainWindow):
 
         self.tabs.addTab(frame, 'calibration')
 
-        self.da_axes = self.da_fig.figure.subplots(2, 2)
+        self.dataacq_axes = self.da_fig.figure.subplots(2, 2)
         self.da_fig.figure.subplots_adjust(
             left=.125, right=.9,
             bottom=.1, top=.9,
             wspace=0.45, hspace=0.45)
-        self.da_axes[0, 0].set_title('camera')
-        self.da_axes[0, 1].set_title('mag')
-        self.da_axes[1, 0].set_title('wrapped phi')
-        self.da_axes[1, 1].set_title('unwrapped phi')
+        self.dataacq_axes[0, 0].set_title('camera')
+        self.dataacq_axes[0, 1].set_title('mag')
+        self.dataacq_axes[1, 0].set_title('wrapped phi')
+        self.dataacq_axes[1, 1].set_title('unwrapped phi')
 
         brun = QPushButton('run')
         bstop = QPushButton('stop')
@@ -463,41 +463,67 @@ class Control(QMainWindow):
         status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(status, 2, 0, 1, 2)
 
-        return
-        dataacq = DataAcq(self.dm, self.cam, self.dmplot)
+        listener = DataAcqListener(self.shared, 690, self.dmplot)
 
         def f1():
             def f():
                 status.setText('working...')
+                ind = self.tabs.indexOf(frame)
+                for i in range(self.tabs.count()):
+                    if i != ind:
+                        self.tabs.setTabEnabled(i, False)
+                self.toolbox.setEnabled(False)
                 brun.setEnabled(False)
-                dataacq.start()
+                # self.align_nav.setEnabled(False)
+                listener.run = True
+                listener.start()
             return f
 
         def f2():
             def f():
-                dataacq.stop = True
+                listener.run = False
+                status.setText('stopping...')
             return f
 
-        def f3():
-            a = self.da_axes[0, 0]
-            def f(t):
-                print(t[2:])
-                mul = 1e-3
-                lab = 'mm'
-                ext = (t[1][0]*mul, t[1][1]*mul, t[1][2]*mul, t[1][3]*mul)
-                a.imshow(t[0], extent=ext, origin='lower')
-                a.set_xlabel(lab)
-                if t[0].max() == self.cam.get_image_max():
-                    a.set_title('cam SAT')
+        def f20():
+            def finish():
+                for i in range(self.tabs.count()):
+                    self.tabs.setTabEnabled(i, True)
+                self.toolbox.setEnabled(True)
+                brun.setEnabled(True)
+                # self.align_nav.setEnabled(True)
+
+            def f(msg):
+                a1 = self.dataacq_axes[0, 0]
+
+                a1.clear()
+
+                a1.imshow(
+                    self.shared.cam, extent=self.shared.cam_ext,
+                    origin='lower')
+                a1.set_xlabel('mm')
+                if self.shared.cam_sat.value:
+                    a1.set_title('cam SAT')
                 else:
-                    a.set_title('cam {: 3d} {: 3d}'.format(
-                        t[0].min(), t[0].max()))
-                a.figure.canvas.draw()
+                    a1.set_title('cam {: 3d} {: 3d}'.format(
+                        self.shared.cam.min(), self.shared.cam.max()))
+                
+                if msg[0] == 'OK':
+                    status.setText('{}/{}'.format(msg[1] + 1, msg[2]))
+                elif msg[0] == 'finished':
+                    status.setText('finished ' + msg[1])
+                    finish()
+                else:
+                    status.setText(msg[0])
+                    finish()
+
+                a1.figure.canvas.draw()
+
             return f
 
         brun.clicked.connect(f1())
         bstop.clicked.connect(f2())
-        dataacq.sig_cam.connect(f3())
+        listener.sig_update.connect(f20())
 
 
 class FakeCamera():
@@ -808,131 +834,32 @@ class AlignListener(QThread):
                 return
 
 
-class DataAcq(QThread):
+class DataAcqListener(QThread):
 
-    sleep = .1
-    wavelength = 0
-    fname = None
-    stop = False
-    sig_error = pyqtSignal(str)
-    sig_cam = pyqtSignal(tuple)
-    sig_h5 = pyqtSignal(str)
+    run = True
+    sig_update = pyqtSignal(tuple)
 
-    def __init__(self, dm, cam, dmplot):
+    def __init__(self, shared, wavelength, dmplot):
         super().__init__()
-        self.dm = dm
-        self.cam = cam
+        self.shared = shared
         self.dmplot = dmplot
 
-        self.cam_grid = make_cam_grid(cam.shape(), cam.get_pixel_size())
-
-        Ualign = []
-        for name in ('centre', 'cross', 'x', 'rim', 'checker'):
-            try:
-                Ualign.append(dm.preset(name).reshape(-1, 1))
-            except Exception:
-                pass
-        if len(Ualign) > 0:
-            self.Ualign = np.hstack(Ualign)
-        else:
-            self.Ualign = np.zeros((self.dm.size(), 0))
-
     def run(self):
-        self.stop = False
-
-        libver = 'latest'
-        now = datetime.now(timezone.utc)
-        h5fn = now.astimezone().strftime('%Y%m%d_%H%M%S.h5')
-        dmsn = self.dm.get_serial_number()
-        if dmsn:
-            h5fn = dmsn + '_' + h5fn
-        self.fname = h5fn
-
-        U = np.hstack((
-                np.zeros((dm.size(), 1)),
-                np.kron(np.eye(dm.size()), np.linspace(-.7, .7, 5)),
-                np.zeros((dm.size(), 1))
-                ))
-
-        with h5py.File(h5fn, 'w', libver=libver) as h5f:
-            h5f['datetime'] = now.isoformat()
-
-            # save HDF5 library info
-            h5f['h5py/libver'] = libver
-            h5f['h5py/api_version'] = h5py.version.api_version
-            h5f['h5py/version'] = h5py.version.version
-            h5f['h5py/hdf5_version'] = h5py.version.hdf5_version
-            h5f['h5py/info'] = h5py.version.info
-
-            # save dmlib info
-            h5f['dmlib/__date__'] = ''
-            h5f['dmlib/__version__'] = ''
-            h5f['dmlib/__commit__'] = ''
-
-            h5f['dmplot/txs'] = self.dmplot.txs
-
-            h5f['cam/serial'] = self.cam.get_serial_number()
-            h5f['cam/camera_info'] = str(self.cam.get_camera_info())
-            h5f['cam/sensor_info'] = str(self.cam.get_sensor_info())
-            h5f['cam/pixel_size'] = self.cam.get_pixel_size()
-            h5f['cam/pixel_size'].attrs['units'] = 'um'
-            h5f['cam/exposure'] = self.cam.get_exposure()
-            h5f['cam/exposure'].attrs['units'] = 'ms'
-            h5f['cam/dtype'] = self.cam.get_image_dtype()
-            h5f['cam/max'] = self.cam.get_image_max()
-
-            h5f['wavelength'] = self.wavelength
-            h5f['wavelength'].attrs['units'] = 'nm'
-            h5f['sleep'] = self.sleep
-            h5f['sleep'].attrs['units'] = 's'
-
-            h5f['dm/serial'] = self.dm.get_serial_number()
-            h5f['dm/transform'] = self.dm.get_transform()
-
-            h5f['data/U'] = U
-            h5f['data/U'].dims[0].label = 'actuators'
-            h5f['data/U'].dims[1].label = 'step'
-            h5f.create_dataset(
-                'data/images', (U.shape[1],) + cam.shape(),
-                dtype=self.cam.get_image_dtype())
-            h5f['data/images'].dims[0].label = 'step'
-            h5f['data/images'].dims[1].label = 'height'
-            h5f['data/images'].dims[1].label = 'width'
-
-            h5f['align/U'] = self.Ualign
-            h5f['align/U'].dims[0].label = 'actuators'
-            h5f['align/U'].dims[1].label = 'step'
-            h5f.create_dataset(
-                'align/images', (U.shape[1],) + cam.shape(),
-                dtype=self.cam.get_image_dtype())
-            h5f['align/images'].dims[0].label = 'step'
-            h5f['align/images'].dims[1].label = 'height'
-            h5f['align/images'].dims[1].label = 'width'
-
-            tot = U.shape[1] + self.Ualign.shape[1]
-            count = 0
-
-            for i in range(self.Ualign.shape[1]):
-                self.dm.write(self.Ualign[:, i])
-                time.sleep(self.sleep)
-                img = self.cam.grab_image()
-                h5f['align/images'][i, ...] = img
-                self.sig_cam.emit((img, self.cam_grid[2], count, tot))
-                count += 1
-                if self.stop:
+        self.shared.iq.put(('dataacq', 690, self.dmplot.txs))
+        while True:
+            result = self.shared.oq.get()
+            print('listener result', result)
+            self.sig_update.emit(result)
+            if result[0] == 'OK':
+                self.shared.iq.put(('stopcmd', not self.run))
+                self.shared.oq.get()
+                if not self.run:
+                    self.sig_update.emit(('stopped',))
+                    print('DataAcqListener stopped')
                     return
-
-            for i in range(U.shape[1]):
-                self.dm.write(U[:, i])
-                time.sleep(self.sleep)
-                img = self.cam.grab_image()
-                h5f['data/images'][i, ...] = img
-                self.sig_cam.emit((img, self.cam_grid[2], count, tot))
-                count += 1
-                if self.stop:
-                    return
-
-        self.sig_h5.emit(self.fname)
+            else:
+                print('DataAcqListener terminates')
+                return
 
 
 def open_hardware(args):
@@ -1072,6 +999,8 @@ class Worker(Process):
                 shared.oq.put('OK')
             elif cmd[0] == 'align':
                 self.run_align(*cmd[1:])
+            elif cmd[0] == 'dataacq':
+                self.run_dataacq(*cmd[1:])
             else:
                 raise NotImplementedError(cmd)
 
@@ -1192,6 +1121,136 @@ class Worker(Process):
                 break
             else:
                 print('run_align', 'continue')
+
+    def run_dataacq(self, wavelength, dmplot_txs, sleep=.1):
+        cam = self.cam
+        dm = self.dm
+        shared = self.shared
+
+        Ualign = []
+        for name in ('centre', 'cross', 'x', 'rim', 'checker'):
+            try:
+                Ualign.append(dm.preset(name).reshape(-1, 1))
+            except Exception:
+                pass
+        if len(Ualign) > 0:
+            Ualign = np.hstack(Ualign)
+        else:
+            Ualign = np.zeros((dm.size(), 0))
+
+        libver = 'latest'
+        now = datetime.now(timezone.utc)
+        h5fn = now.astimezone().strftime('%Y%m%d_%H%M%S.h5')
+        dmsn = dm.get_serial_number()
+        if dmsn:
+            h5fn = dmsn + '_' + h5fn
+
+        U = np.hstack((
+                np.zeros((dm.size(), 1)),
+                np.kron(np.eye(dm.size()), np.linspace(-.7, .7, 5)),
+                np.zeros((dm.size(), 1))
+                ))
+
+        with h5py.File(h5fn, 'w', libver=libver) as h5f:
+            h5f['datetime'] = now.isoformat()
+
+            # save HDF5 library info
+            h5f['h5py/libver'] = libver
+            h5f['h5py/api_version'] = h5py.version.api_version
+            h5f['h5py/version'] = h5py.version.version
+            h5f['h5py/hdf5_version'] = h5py.version.hdf5_version
+            h5f['h5py/info'] = h5py.version.info
+
+            # save dmlib info
+            h5f['dmlib/__date__'] = ''
+            h5f['dmlib/__version__'] = ''
+            h5f['dmlib/__commit__'] = ''
+
+            h5f['dmplot/txs'] = dmplot_txs
+
+            h5f['cam/serial'] = cam.get_serial_number()
+            h5f['cam/camera_info'] = str(cam.get_camera_info())
+            h5f['cam/sensor_info'] = str(cam.get_sensor_info())
+            h5f['cam/pixel_size'] = cam.get_pixel_size()
+            h5f['cam/pixel_size'].attrs['units'] = 'um'
+            h5f['cam/exposure'] = cam.get_exposure()
+            h5f['cam/exposure'].attrs['units'] = 'ms'
+            h5f['cam/dtype'] = cam.get_image_dtype()
+            h5f['cam/max'] = cam.get_image_max()
+
+            h5f['wavelength'] = wavelength
+            h5f['wavelength'].attrs['units'] = 'nm'
+            h5f['sleep'] = sleep
+            h5f['sleep'].attrs['units'] = 's'
+
+            h5f['dm/serial'] = dm.get_serial_number()
+            h5f['dm/transform'] = dm.get_transform()
+
+            h5f['data/U'] = U
+            h5f['data/U'].dims[0].label = 'actuators'
+            h5f['data/U'].dims[1].label = 'step'
+            h5f.create_dataset(
+                'data/images', (U.shape[1],) + cam.shape(),
+                dtype=cam.get_image_dtype())
+            h5f['data/images'].dims[0].label = 'step'
+            h5f['data/images'].dims[1].label = 'height'
+            h5f['data/images'].dims[1].label = 'width'
+
+            h5f['align/U'] = Ualign
+            h5f['align/U'].dims[0].label = 'actuators'
+            h5f['align/U'].dims[1].label = 'step'
+            h5f.create_dataset(
+                'align/images', (U.shape[1],) + cam.shape(),
+                dtype=cam.get_image_dtype())
+            h5f['align/images'].dims[0].label = 'step'
+            h5f['align/images'].dims[1].label = 'height'
+            h5f['align/images'].dims[1].label = 'width'
+
+            tot = U.shape[1] + Ualign.shape[1]
+            count = 0
+
+            for i in range(Ualign.shape[1]):
+                dm.write(Ualign[:, i])
+                time.sleep(sleep)
+                img = cam.grab_image()
+                h5f['align/images'][i, ...] = img
+                shared.cam[:] = img
+                shared.oq.put(('OK', count, tot))
+                print('run_dataacq', 'iteration')
+
+                stopcmd = shared.iq.get()[1]
+                shared.oq.put('')
+
+                if stopcmd:
+                    print('run_dataacq', 'stopcmd')
+                    return
+                else:
+                    print('run_dataacq', 'continue')
+
+                count += 1
+
+            for i in range(U.shape[1]):
+                dm.write(U[:, i])
+                time.sleep(sleep)
+                img = cam.grab_image()
+                h5f['data/images'][i, ...] = img
+                shared.cam[:] = img
+                shared.oq.put(('OK', count, tot))
+                print('run_dataacq', 'iteration')
+
+                stopcmd = shared.iq.get()[1]
+                shared.oq.put('')
+
+                if stopcmd:
+                    print('run_dataacq', 'stopcmd')
+                    return
+                else:
+                    print('run_dataacq', 'continue')
+
+                count += 1
+
+        print('run_dataacq', 'finished')
+        shared.oq.put(('finished', h5fn))
 
 
 if __name__ == '__main__':
