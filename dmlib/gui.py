@@ -331,6 +331,7 @@ class Control(QMainWindow):
         def f4():
             def f():
                 listener.repeat = False
+                status.setText('stopping...')
             return f
 
         def f20():
@@ -403,8 +404,6 @@ class Control(QMainWindow):
 
                 self.update_dm_gui()
 
-                status.setText('')
-
                 if not listener.repeat:
                     brun.setEnabled(True)
                     bauto.setEnabled(True)
@@ -413,6 +412,8 @@ class Control(QMainWindow):
                     bsleep.setEnabled(True)
                     bunwrap.setEnabled(True)
                     self.align_nav.setEnabled(True)
+                    status.setText('stopped')
+
             return f
 
         listener.sig_update.connect(f20())
@@ -792,114 +793,6 @@ class Listener(QThread):
                 self.shared.oq.get()
             if self.repeat == False:
                 return
-
-
-class Snapshot(QThread):
-
-    f0f1 = None
-    sleep = 0.1
-
-    sig_error = pyqtSignal(str)
-    sig_cam = pyqtSignal(tuple)
-    sig_ft = pyqtSignal(tuple)
-    sig_f0f1 = pyqtSignal(tuple)
-    sig_1ord = pyqtSignal(tuple)
-    sig_magwrapped = pyqtSignal(tuple)
-    sig_unwrapped = pyqtSignal(tuple)
-    sig_dm = pyqtSignal(np.ndarray)
-
-    def __init__(self, dm_size, cam):
-        super().__init__()
-        self.cam = cam
-        self.use_last = False
-        self.repeat = False
-        self.poke = False
-        self.unwrap = True
-        self.last_poke = 0
-        self.u = np.zeros((dm_size,))
-        self.cam_grid = make_cam_grid(cam.shape(), cam.get_pixel_size())
-        self.ft_grid = make_ft_grid(cam.shape(), cam.get_pixel_size())
-
-    def run(self):
-        while True:
-            if self.poke:
-                self.u[:] = 0.
-                self.u[self.last_poke] = .7
-                self.sig_dm.emit(self.u)
-                self.last_poke += 1
-                self.last_poke %= self.u.size
-                time.sleep(self.sleep)
-
-            img = self.cam.grab_image()
-            self.sig_cam.emit((img, self.cam_grid[2]))
-
-            fimg = ft(img)
-            logf2 = np.log(np.abs(fimg))
-            self.sig_ft.emit((logf2, self.ft_grid[2]))
-
-            if self.use_last and self.f0f1:
-                f0, f1 = self.f0f1
-            else:
-                try:
-                    f0, f1 = find_orders(
-                        self.ft_grid[0], self.ft_grid[1], logf2)
-                except ValueError:
-                    self.sig_error.emit('Failed to find orders')
-                    if self.repeat:
-                        continue
-                    else:
-                        return
-                self.sig_f0f1.emit((f0, f1))
-                self.f0f1 = (f0, f1)
-
-            try:
-                f3, ext3 = extract_order(
-                    fimg, self.ft_grid[0], self.ft_grid[1], f0, f1,
-                    self.cam.get_pixel_size())
-            except Exception as ex:
-                self.sig_error.emit('Failed to extract order: ' + str(ex))
-                if self.repeat:
-                    continue
-                else:
-                    return
-                return
-            self.sig_1ord.emit((np.log(np.abs(f3)), ext3))
-
-            try:
-                f4, _, _, ext4 = repad_order(
-                    f3, self.ft_grid[0], self.ft_grid[1])
-            except Exception as ex:
-                self.sig_error.emit('Failed to repad order: ' + str(ex))
-                if self.repeat:
-                    continue
-                else:
-                    return
-
-            try:
-                gp = ift(f4)
-                mag = np.abs(gp)
-                wrapped = np.arctan2(gp.imag, gp.real)
-            except Exception as ex:
-                self.sig_error.emit('Failed to extract phase: ' + str(ex))
-                if self.repeat:
-                    continue
-                else:
-                    return
-            self.sig_magwrapped.emit((mag, wrapped, ext4))
-
-            if self.unwrap:
-                try:
-                    unwrapped = call_unwrap(wrapped)
-                except Exception as ex:
-                    self.sig_error.emit('Failed to unwrap phase: ' + str(ex))
-                    if self.repeat:
-                        continue
-                    else:
-                        return
-                self.sig_unwrapped.emit((unwrapped, ext4))
-
-            if not self.repeat:
-                break
 
 
 class DataAcq(QThread):
@@ -1291,91 +1184,6 @@ def worker(shared, args):
         print(shared.iq.get())
 
     print('worker', 'STOPPED')
-
-
-class Snapshot(QThread):
-
-    def run(self):
-        while True:
-            if self.poke:
-                self.u[:] = 0.
-                self.u[self.last_poke] = .7
-                self.sig_dm.emit(self.u)
-                self.last_poke += 1
-                self.last_poke %= self.u.size
-                sleep(self.sleep)
-
-            img = self.cam.grab_image()
-            self.sig_cam.emit((img, self.cam_grid[2]))
-
-            fimg = ft(img)
-            logf2 = np.log(np.abs(fimg))
-            self.sig_ft.emit((logf2, self.ft_grid[2]))
-
-            if self.use_last and self.f0f1:
-                f0, f1 = self.f0f1
-            else:
-                try:
-                    f0, f1 = find_orders(
-                        self.ft_grid[0], self.ft_grid[1], logf2)
-                except ValueError:
-                    self.sig_error.emit('Failed to find orders')
-                    if self.repeat:
-                        continue
-                    else:
-                        return
-                self.sig_f0f1.emit((f0, f1))
-                self.f0f1 = (f0, f1)
-
-            try:
-                f3, ext3 = extract_order(
-                    fimg, self.ft_grid[0], self.ft_grid[1], f0, f1,
-                    self.cam.get_pixel_size())
-            except Exception as ex:
-                self.sig_error.emit('Failed to extract order: ' + str(ex))
-                if self.repeat:
-                    continue
-                else:
-                    return
-                return
-            self.sig_1ord.emit((np.log(np.abs(f3)), ext3))
-
-            try:
-                f4, _, _, ext4 = repad_order(
-                    f3, self.ft_grid[0], self.ft_grid[1])
-            except Exception as ex:
-                self.sig_error.emit('Failed to repad order: ' + str(ex))
-                if self.repeat:
-                    continue
-                else:
-                    return
-
-            try:
-                gp = ift(f4)
-                mag = np.abs(gp)
-                wrapped = np.arctan2(gp.imag, gp.real)
-            except Exception as ex:
-                self.sig_error.emit('Failed to extract phase: ' + str(ex))
-                if self.repeat:
-                    continue
-                else:
-                    return
-            self.sig_magwrapped.emit((mag, wrapped, ext4))
-
-            if self.unwrap:
-                try:
-                    unwrapped = call_unwrap(wrapped)
-                except Exception as ex:
-                    self.sig_error.emit('Failed to unwrap phase: ' + str(ex))
-                    if self.repeat:
-                        continue
-                    else:
-                        return
-                self.sig_unwrapped.emit((unwrapped, ext4))
-
-            if not self.repeat:
-                break
-
 
 
 if __name__ == '__main__':
