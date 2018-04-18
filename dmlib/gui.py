@@ -314,6 +314,7 @@ class Control(QMainWindow):
                 bsleep.setEnabled(False)
                 bunwrap.setEnabled(False)
                 self.align_nav.setEnabled(False)
+                listener.repeat = brepeat.isChecked()
                 listener.start()
             return f
 
@@ -325,6 +326,11 @@ class Control(QMainWindow):
         def f3():
             def f(p):
                 listener.repeat = p
+            return f
+
+        def f4():
+            def f():
+                listener.repeat = False
             return f
 
         def f20():
@@ -398,17 +404,20 @@ class Control(QMainWindow):
                 self.update_dm_gui()
 
                 status.setText('')
-                brun.setEnabled(True)
-                bauto.setEnabled(True)
-                brepeat.setEnabled(True)
-                bpoke.setEnabled(True)
-                bsleep.setEnabled(True)
-                bunwrap.setEnabled(True)
-                self.align_nav.setEnabled(True)
+
+                if not listener.repeat:
+                    brun.setEnabled(True)
+                    bauto.setEnabled(True)
+                    brepeat.setEnabled(True)
+                    bpoke.setEnabled(True)
+                    bsleep.setEnabled(True)
+                    bunwrap.setEnabled(True)
+                    self.align_nav.setEnabled(True)
             return f
 
         listener.sig_update.connect(f20())
         brun.clicked.connect(f1())
+        bstop.clicked.connect(f4())
         bauto.stateChanged.connect(f2())
         brepeat.stateChanged.connect(f3())
         self.align_nav = NavigationToolbar2QT(self.align_fig, frame)
@@ -1241,13 +1250,16 @@ def worker(shared, args):
             shared.unwrapped_buf[:unwrapped.nbytes] = unwrapped.tobytes()
 
             shared.oq.put('OK')
-            print('run_align', 'finished')
+            print('run_align', 'iteration')
 
             checkstop = shared.iq.get()[0]
             shared.oq.put('')
 
             if not repeat or checkstop:
+                print('run_align', 'break')
                 break
+            else:
+                print('run_align', 'continue')
 
     for cmd in iter(shared.iq.get, 'STOP'):
         print('worker', 'cmd', cmd)
