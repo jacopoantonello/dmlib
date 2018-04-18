@@ -272,7 +272,7 @@ class Control(QMainWindow):
         brepeat = QCheckBox('repeat')
         layout.addWidget(brepeat, 3, 1)
 
-        listener = Listener(self.shared)
+        listener = AlignListener(self.shared)
 
         bpoke = QCheckBox('poke')
         bsleep = QPushButton('sleep')
@@ -340,6 +340,18 @@ class Control(QMainWindow):
             return f
 
         def f20():
+            def finish():
+                for i in range(self.tabs.count()):
+                    self.tabs.setTabEnabled(i, True)
+                self.toolbox.setEnabled(True)
+                brun.setEnabled(True)
+                bauto.setEnabled(True)
+                brepeat.setEnabled(True)
+                bpoke.setEnabled(True)
+                bsleep.setEnabled(True)
+                bunwrap.setEnabled(True)
+                self.align_nav.setEnabled(True)
+
             def f(msg):
                 a1 = self.align_axes[0, 0]
                 a2 = self.align_axes[0, 1]
@@ -359,7 +371,7 @@ class Control(QMainWindow):
                     self.shared.cam, extent=self.shared.cam_ext,
                     origin='lower')
                 a1.set_xlabel('mm')
-                if self.shared.cam_sat:
+                if self.shared.cam_sat.value:
                     a1.set_title('cam SAT')
                 else:
                     a1.set_title('cam {: 3d} {: 3d}'.format(
@@ -372,7 +384,9 @@ class Control(QMainWindow):
                 a2.set_title('FT')
 
                 if msg != 'OK':
-                    status.setText(x)
+                    status.setText(msg)
+                    finish()
+                    a2.figure.canvas.draw()
                     return
 
                 a2.plot(
@@ -410,17 +424,8 @@ class Control(QMainWindow):
                 self.update_dm_gui()
 
                 if not listener.repeat:
-                    for i in range(self.tabs.count()):
-                        self.tabs.setTabEnabled(i, True)
-                    self.toolbox.setEnabled(True)
-                    brun.setEnabled(True)
-                    bauto.setEnabled(True)
-                    brepeat.setEnabled(True)
-                    bpoke.setEnabled(True)
-                    bsleep.setEnabled(True)
-                    bunwrap.setEnabled(True)
-                    self.align_nav.setEnabled(True)
                     status.setText('stopped')
+                    finish()
 
             return f
 
@@ -775,7 +780,7 @@ class DMPlot():
 # https://stackoverflow.com/questions/41794635/
 # https://stackoverflow.com/questions/38666078/
 
-class Listener(QThread):
+class AlignListener(QThread):
 
     auto = True
     repeat = False
@@ -1097,10 +1102,10 @@ class Worker(Process):
                 time.sleep(sleep)
 
             img = cam.grab_image()
-            if img.max == cam.get_image_max():
-                shared.cam_sat = 1
+            if img.max() == cam.get_image_max():
+                shared.cam_sat.value = 1
             else:
-                shared.cam_sat = 0
+                shared.cam_sat.value = 0
             shared.cam[:] = img[:]
 
             fimg = ft(img)
@@ -1127,7 +1132,7 @@ class Worker(Process):
                     fimg, ft_grid[0], ft_grid[1], f0, f1, P)
             except Exception as ex:
                 shared.oq.put('Failed to extract order: ' + str(ex))
-                if self.repeat:
+                if repeat:
                     continue
                 else:
                     return
@@ -1142,7 +1147,7 @@ class Worker(Process):
                 f4, dd0, dd1, ext4 = repad_order(f3, ft_grid[0], ft_grid[1])
             except Exception as ex:
                 shared.oq.put('Failed to repad order: ' + str(ex))
-                if self.repeat:
+                if repeat:
                     continue
                 else:
                     return
@@ -1153,7 +1158,7 @@ class Worker(Process):
                 wrapped = np.arctan2(gp.imag, gp.real)
             except Exception as ex:
                 shared.oq.put('Failed to extract phase: ' + str(ex))
-                if self.repeat:
+                if repeat:
                     continue
                 else:
                     return
@@ -1168,7 +1173,7 @@ class Worker(Process):
                     unwrapped = call_unwrap(wrapped)
                 except Exception as ex:
                     shared.oq.put('Failed to unwrap phase: ' + str(ex))
-                    if self.repeat:
+                    if repeat:
                         continue
                     else:
                         return
