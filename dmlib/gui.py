@@ -7,10 +7,10 @@ import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 import h5py
+import time
 
 from multiprocessing import Process, Queue, Array, Value
 from datetime import datetime, timezone
-from time import sleep
 from numpy.linalg import norm
 from numpy.random import uniform
 
@@ -256,7 +256,9 @@ class Control(QMainWindow):
         self.align_axes[1, 2].set_title('unwrapped phi')
 
         brun = QPushButton('run')
+        bstop = QPushButton('stop')
         layout.addWidget(brun, 1, 0)
+        layout.addWidget(bstop, 1, 1)
         status = QLabel('')
         status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(status, 2, 0, 1, 2)
@@ -280,19 +282,19 @@ class Control(QMainWindow):
         def f1():
             def f():
                 val, ok = QInputDialog.getDouble(
-                    self, '', 'sleep [s]', snapshot.sleep, decimals=4)
+                    self, '', 'sleep [s]', listener.sleep, decimals=4)
                 if ok:
-                    snapshot.sleep = val
+                    listener.sleep = val
             return f
 
         def f2():
             def f(p):
-                snapshot.poke = p
+                listener.poke = p
             return f
 
         def f3():
             def f(p):
-                snapshot.unwrap = p
+                listener.unwrap = p
             return f
 
         bsleep.clicked.connect(f1())
@@ -303,99 +305,28 @@ class Control(QMainWindow):
             def f():
                 status.setText('working...')
                 brun.setEnabled(False)
+                bauto.setEnabled(False)
+                brepeat.setEnabled(False)
+                bpoke.setEnabled(False)
+                bsleep.setEnabled(False)
+                bunwrap.setEnabled(False)
                 self.align_nav.setEnabled(False)
                 listener.start()
             return f
 
-        def f2(a, txt, mm=True, satcheck=False):
-            def f(t):
-                a.clear()
-                if mm:
-                    mul = 1e-3
-                    lab = 'mm'
-                else:
-                    mul = 1e3
-                    lab = '1/mm'
-                ext = (t[1][0]*mul, t[1][1]*mul, t[1][2]*mul, t[1][3]*mul)
-                a.imshow(t[0], extent=ext, origin='lower')
-                a.set_xlabel(lab)
-                if satcheck:
-                    # FIXME
-                    if t[0].max() == self.cam.get_image_max():
-                        a.set_title(txt + ' SAT')
-                    else:
-                        a.set_title('{} {: 3d} {: 3d}'.format(
-                            txt, t[0].min(), t[0].max()))
-                else:
-                    a.set_title(txt)
-                a.figure.canvas.draw()
-            return f
-
-        def f3(a):
-            def f(t):
-                a.plot(t[0]*1e3, t[1]*1e3, 'rx', markersize=6)
-                a.plot(-t[0]*1e3, -t[1]*1e3, 'rx', markersize=6)
-                a.figure.canvas.draw()
-            return f
-
-        def f4(a1, a2, txt1, txt2):
-            def f(t):
-                mul = 1e-3
-                ext = (t[2][0]*mul, t[2][1]*mul, t[2][2]*mul, t[2][3]*mul)
-                a1.clear()
-                a1.imshow(t[0], extent=ext, origin='lower')
-                a1.set_xlabel('mm')
-                a1.set_title(txt1)
-
-                a2.clear()
-                a2.imshow(t[1], extent=ext, origin='lower')
-                a2.set_xlabel('mm')
-                a2.set_title(txt2)
-
-                a1.figure.canvas.draw()
-            return f
-
-        def f5():
+        def f2():
             def f():
-                if status.text() == 'working...':
-                    status.setText('')
-                brun.setEnabled(True)
-                self.align_nav.setEnabled(True)
+                listener.auto = not listener.auto
             return f
 
-        def f6():
-            def f(errstr):
-                self.align_axes[0, 2].clear()
-                self.align_axes[1, 0].clear()
-                self.align_axes[1, 1].clear()
-                self.align_axes[1, 2].clear()
-
-                status.setText(errstr)
-                self.dm_fig.figure.canvas.draw()
-            return f
-
-        def f7():
-            def f():
-                snapshot.use_last = not snapshot.use_last
-            return f
-
-        def f8():
+        def f3():
             def f(p):
-                snapshot.repeat = p
-            return f
-
-        def f9():
-            def f(u):
-                self.write_dm(u)
-            return f
-
-        def f10():
-            def f():
-                snapshot.repeat = False
+                listener.repeat = p
             return f
 
         def f20():
-            def f():
+            def f(msg):
+                print(msg)
                 a1 = self.align_axes[0, 0]
                 a2 = self.align_axes[0, 1]
                 a3 = self.align_axes[0, 2]
@@ -404,6 +335,12 @@ class Control(QMainWindow):
                 a6 = self.align_axes[1, 2]
 
                 a1.clear()
+                a2.clear()
+                a3.clear()
+                a4.clear()
+                a5.clear()
+                a6.clear()
+
                 a1.imshow(
                     self.shared.cam, extent=self.shared.cam_ext,
                     origin='lower')
@@ -414,34 +351,41 @@ class Control(QMainWindow):
                     a1.set_title('cam {: 3d} {: 3d}'.format(
                         self.shared.cam.min(), self.shared.cam.max()))
                 
-                a2.clear()
                 a2.imshow(
                     self.shared.ft, extent=self.shared.ft_ext,
                     origin='lower')
                 a2.set_xlabel('1/mm')
                 a2.set_title('FT')
 
+                if msg != 'OK':
+                    status.setText(x)
+                    return
+
+                a2.plot(
+                    self.shared.f0f1[0]*1e3, self.shared.f0f1[1]*1e3,
+                    'rx', markersize=6)
+
+                a2.plot(
+                    -self.shared.f0f1[0]*1e3, -self.shared.f0f1[1]*1e3,
+                    'rx', markersize=6)
+
                 fstord, mag, wrapped, unwrapped = self.shared.get_phase()
 
-                a3.clear()
                 a3.imshow(
                     fstord, extent=self.shared.fstord_ext, origin='lower')
                 a3.set_xlabel('1/mm')
                 a3.set_title('1st order')
 
-                a4.clear()
                 a4.imshow(
                     mag, extent=self.shared.mag_ext, origin='lower')
                 a4.set_xlabel('mm')
                 a4.set_title('magnitude')
 
-                a5.clear()
                 a5.imshow(
                     wrapped, extent=self.shared.mag_ext, origin='lower')
                 a5.set_xlabel('mm')
                 a5.set_title('wrapped phi')
 
-                a6.clear()
                 a6.imshow(
                     unwrapped, extent=self.shared.mag_ext, origin='lower')
                 a6.set_xlabel('mm')
@@ -449,28 +393,20 @@ class Control(QMainWindow):
 
                 a6.figure.canvas.draw()
 
+                status.setText('')
+                brun.setEnabled(True)
+                bauto.setEnabled(True)
+                brepeat.setEnabled(True)
+                bpoke.setEnabled(True)
+                bsleep.setEnabled(True)
+                bunwrap.setEnabled(True)
+                self.align_nav.setEnabled(True)
             return f
 
         listener.sig_update.connect(f20())
-        # snapshot.finished.connect(f5())
-        # snapshot.sig_error.connect(f6())
-        # snapshot.sig_cam.connect(f2(
-        #     self.align_axes[0, 0], 'camera', True, True))
-        # snapshot.sig_ft.connect(f2(self.align_axes[0, 1], 'FT', False))
-        # snapshot.sig_f0f1.connect(f3(self.align_axes[0, 1]))
-        # snapshot.sig_1ord.connect(f2(
-        #     self.align_axes[0, 2], '1st order', False))
-        # snapshot.sig_magwrapped.connect(f4(
-        #     self.align_axes[1, 0], self.align_axes[1, 1],
-        #     'magnitude',  'wrapped phi'))
-        # snapshot.sig_unwrapped.connect(
-        #     f2(self.align_axes[1, 2], 'unwrapped phi'))
-        # snapshot.sig_dm.connect(f9())
-
         brun.clicked.connect(f1())
-        bauto.stateChanged.connect(f7())
-        brepeat.stateChanged.connect(f8())
-
+        bauto.stateChanged.connect(f2())
+        brepeat.stateChanged.connect(f3())
         self.align_nav = NavigationToolbar2QT(self.align_fig, frame)
 
     def make_panel_dataacq(self):
@@ -819,6 +755,12 @@ class DMPlot():
 
 class Listener(QThread):
 
+    auto = True
+    repeat = False
+    poke = False
+    sleep = .1
+    unwrap = True
+
     sig_update = pyqtSignal(str)
 
     def __init__(self, shared):
@@ -826,8 +768,17 @@ class Listener(QThread):
         self.shared = shared
 
     def run(self):
-        self.shared.iq.put(('align',))
-        self.sig_update.emit(self.shared.oq.get())
+        while True:
+            self.shared.iq.put((
+                'align', self.auto, self.repeat, self.poke, self.sleep,
+                self.unwrap))
+            result = self.shared.oq.get()
+            self.sig_update.emit(result)
+            if result == 'OK':
+                self.shared.iq.put(('checkstop', self.repeat))
+                self.shared.oq.get()
+            if self.repeat == False:
+                return
 
 
 class Snapshot(QThread):
@@ -864,7 +815,7 @@ class Snapshot(QThread):
                 self.sig_dm.emit(self.u)
                 self.last_poke += 1
                 self.last_poke %= self.u.size
-                sleep(self.sleep)
+                time.sleep(self.sleep)
 
             img = self.cam.grab_image()
             self.sig_cam.emit((img, self.cam_grid[2]))
@@ -1044,7 +995,7 @@ class DataAcq(QThread):
 
             for i in range(self.Ualign.shape[1]):
                 self.dm.write(self.Ualign[:, i])
-                sleep(self.sleep)
+                time.sleep(self.sleep)
                 img = self.cam.grab_image()
                 h5f['align/images'][i, ...] = img
                 self.sig_cam.emit((img, self.cam_grid[2], count, tot))
@@ -1054,7 +1005,7 @@ class DataAcq(QThread):
 
             for i in range(U.shape[1]):
                 self.dm.write(U[:, i])
-                sleep(self.sleep)
+                time.sleep(self.sleep)
                 img = self.cam.grab_image()
                 h5f['data/images'][i, ...] = img
                 self.sig_cam.emit((img, self.cam_grid[2], count, tot))
@@ -1195,56 +1146,104 @@ def worker(shared, args):
         shared.cam_ext[i] = cam_grid[2][i]/1000
         shared.ft_ext[i] = ft_grid[2][i]*1000
 
-    f0f1 = None
-    last_poke = 0
+    # f0f1, lastpoke
+    state = [None, 0]
 
-    find_f0f1 = True
-    sleep = 0.1
-    error = None
-    repeat = False
-    poke = False
+    def run_align(auto, repeat, poke, sleep, unwrap):
+        while True:
+            if poke:
+                shared.u[:] = 0.
+                shared.u[last_poke] = .7
+                state[1] += 1
+                state[1] %= shared.u.size
+                sleep(sleep)
 
-    def run_align():
-        img = cam.grab_image()
-        if img.max == cam.get_image_max():
-            shared.cam_sat = 1
-        else:
-            shared.cam_sat = 0
-        fimg = ft(img)
-        logf2 = np.log(np.abs(fimg))
-        if f0f1 is None or find_f0f1:
-            f0, f1 = find_orders(ft_grid[0], ft_grid[1], logf2)
-        else:
-            f0, f1 = f0f1
-        f3, ext3 = extract_order(fimg, ft_grid[0], ft_grid[1], f0, f1, P)
-        logf3 = np.log(np.abs(f3))
-        f4, dd0, dd1, ext4 = repad_order(f3, ft_grid[0], ft_grid[1])
-        gp = ift(f4)
-        mag = np.abs(gp)
-        wrapped = np.arctan2(gp.imag, gp.real)
-        unwrapped = call_unwrap(wrapped)
+            img = cam.grab_image()
+            if img.max == cam.get_image_max():
+                shared.cam_sat = 1
+            else:
+                shared.cam_sat = 0
+            shared.cam[:] = img[:]
 
-        shared.cam[:] = img[:]
-        shared.ft[:] = logf2[:]
-        shared.f0f1[0] = f0
-        shared.f0f1[1] = f1
-        shared.fstord_buf[:logf3.nbytes] = logf3.tobytes()
-        for i in range(4):
-            shared.fstord_ext[i] = ext3[i]*1000
-        shared.mag_buf[:mag.nbytes] = mag.tobytes()
-        shared.wrapped_buf[:wrapped.nbytes] = wrapped.tobytes()
-        shared.unwrapped_buf[:unwrapped.nbytes] = unwrapped.tobytes()
-        for i in range(4):
-            shared.mag_ext[i] = ext4[i]/1000
-        print('f3', f3.shape)
-        print('logf3', logf3.shape)
-        print('mag', mag.shape)
-        shared.fstord_shape[:] = logf3.shape[:]
-        shared.mag_shape[:] = mag.shape[:]
-        print('fstord_shape', shared.fstord_shape[0], shared.fstord_shape[1])
-        print('mag_shape', shared.mag_shape[0], shared.mag_shape[1])
-        shared.oq.put('OK')
-        print('RAN align')
+            fimg = ft(img)
+            logf2 = np.log(np.abs(fimg))
+            shared.ft[:] = logf2[:]
+
+            if state[0] is None or auto:
+                try:
+                    f0, f1 = find_orders(ft_grid[0], ft_grid[1], logf2)
+                except ValueError:
+                    shared.oq.put('Failed to find orders')
+                    if repeat:
+                        continue
+                    else:
+                        return
+            else:
+                f0, f1 = state[0]
+            state[0] = (f0, f1)
+            shared.f0f1[0] = f0
+            shared.f0f1[1] = f1
+
+            try:
+                f3, ext3 = extract_order(
+                    fimg, ft_grid[0], ft_grid[1], f0, f1, P)
+            except Exception as ex:
+                shared.oq.put('Failed to extract order: ' + str(ex))
+                if self.repeat:
+                    continue
+                else:
+                    return
+                return
+            logf3 = np.log(np.abs(f3))
+            shared.fstord_buf[:logf3.nbytes] = logf3.tobytes()
+            for i in range(4):
+                shared.fstord_ext[i] = ext3[i]*1000
+            shared.fstord_shape[:] = logf3.shape[:]
+
+            try:
+                f4, dd0, dd1, ext4 = repad_order(f3, ft_grid[0], ft_grid[1])
+            except Exception as ex:
+                shared.oq.put('Failed to repad order: ' + str(ex))
+                if self.repeat:
+                    continue
+                else:
+                    return
+                return
+            try:
+                gp = ift(f4)
+                mag = np.abs(gp)
+                wrapped = np.arctan2(gp.imag, gp.real)
+            except Exception as ex:
+                shared.oq.put('Failed to extract phase: ' + str(ex))
+                if self.repeat:
+                    continue
+                else:
+                    return
+            shared.mag_buf[:mag.nbytes] = mag.tobytes()
+            shared.wrapped_buf[:wrapped.nbytes] = wrapped.tobytes()
+            for i in range(4):
+                shared.mag_ext[i] = ext4[i]/1000
+            shared.mag_shape[:] = mag.shape[:]
+
+            if unwrap:
+                try:
+                    unwrapped = call_unwrap(wrapped)
+                except Exception as ex:
+                    shared.oq.put('Failed to unwrap phase: ' + str(ex))
+                    if self.repeat:
+                        continue
+                    else:
+                        return
+            shared.unwrapped_buf[:unwrapped.nbytes] = unwrapped.tobytes()
+
+            shared.oq.put('OK')
+            print('RAN align')
+
+            checkstop = shared.iq.get()[0]
+            shared.oq.put('')
+
+            if not repeat or checkstop:
+                break
 
     for cmd in iter(shared.iq.get, 'STOP'):
         print(cmd)
@@ -1267,7 +1266,7 @@ def worker(shared, args):
             shared.u[:] = dm.preset(cmd[1], cmd[2])
             shared.oq.put('OK')
         elif cmd[0] == 'align':
-            run_align()
+            run_align(*cmd[1:])
         else:
             raise NotImplementedError(cmd)
 
