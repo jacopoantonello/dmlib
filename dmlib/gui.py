@@ -795,14 +795,14 @@ class AlignListener(QThread):
         self.shared = shared
 
     def run(self):
+        self.shared.iq.put((
+            'align', self.auto, self.repeat, self.poke, self.sleep,
+            self.unwrap))
         while True:
-            self.shared.iq.put((
-                'align', self.auto, self.repeat, self.poke, self.sleep,
-                self.unwrap))
             result = self.shared.oq.get()
             self.sig_update.emit(result)
             if result == 'OK':
-                self.shared.iq.put(('checkstop', self.repeat))
+                self.shared.iq.put(('stopcmd', not self.repeat))
                 self.shared.oq.get()
             if self.repeat == False:
                 return
@@ -1184,11 +1184,11 @@ class Worker(Process):
             shared.oq.put('OK')
             print('run_align', 'iteration')
 
-            checkstop = shared.iq.get()[0]
+            stopcmd = shared.iq.get()[1]
             shared.oq.put('')
 
-            if not repeat or checkstop:
-                print('run_align', 'break')
+            if not repeat or stopcmd:
+                print('run_align', 'break', repeat, stopcmd)
                 break
             else:
                 print('run_align', 'continue')
