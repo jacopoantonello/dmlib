@@ -307,6 +307,11 @@ class Control(QMainWindow):
         def f1():
             def f():
                 status.setText('working...')
+                ind = self.tabs.indexOf(frame)
+                for i in range(self.tabs.count()):
+                    if i != ind:
+                        self.tabs.setTabEnabled(i, False)
+                self.toolbox.setEnabled(False)
                 brun.setEnabled(False)
                 bauto.setEnabled(False)
                 brepeat.setEnabled(False)
@@ -405,6 +410,9 @@ class Control(QMainWindow):
                 self.update_dm_gui()
 
                 if not listener.repeat:
+                    for i in range(self.tabs.count()):
+                        self.tabs.setTabEnabled(i, True)
+                    self.toolbox.setEnabled(True)
                     brun.setEnabled(True)
                     bauto.setEnabled(True)
                     brepeat.setEnabled(True)
