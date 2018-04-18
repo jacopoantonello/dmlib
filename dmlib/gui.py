@@ -1014,38 +1014,6 @@ class Shared:
         return fstord, mag, wrapped, unwrapped
 
 
-class ArrayQueue:
-
-    def __init__(self, maxbytes, maxlen):
-        self.maxbytes = maxbytes
-        self.maxlen = maxlen
-
-        self.qfree = Queue(maxlen)
-        self.qbuzy = Queue(maxlen)
-        self.bufs = []
-        for i in range(maxlen):
-            self.bufs.append(Array('c', self.maxbytes, lock=False))
-            self.qfree.append(i)
-
-    def put(self, item, *args, **kwargs):
-        if type(item) is np.ndarray:
-            if item.nbytes > self.maxbytes:
-                raise ValueError('item.nbytes > self.maxbytes')
-            bufid = self.qfree.get()
-            self.bufs[bufid][:item.nbytes] = item.tobytes()
-            self.qbuzy.put(item.shape + (bufid, item.dtype.name))
-        else:
-            raise NotImplementedError()
-
-    def get(self, *args, **kwargs):
-        item = self.q.get(*args, **kwargs)
-        if type(item) is tuple:
-            return np.frombuffer(
-                self.bufs[item[2]], dtype=item[3]).copy().reshape(item[:2])
-        else:
-            raise NotImplementedError()
-
-
 def worker(shared, args):
     cam, dm = open_hardware(args)
     dm = VoltageTransform(dm)
