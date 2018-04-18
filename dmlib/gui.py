@@ -1014,25 +1014,80 @@ class Shared:
         return fstord, mag, wrapped, unwrapped
 
 
-def worker(shared, args):
-    cam, dm = open_hardware(args)
-    dm = VoltageTransform(dm)
-    P = cam.get_pixel_size()
+class Worker(Process):
 
-    shared.make_static()
-    shared.f0f1[0] = 0.
-    shared.f0f1[1] = 0.
+    def __init__(self, shared, args):
+        super().__init__(name='Worker')
 
-    cam_grid = make_cam_grid(cam.shape(), P)
-    ft_grid = make_ft_grid(cam.shape(), P)
-    for i in range(4):
-        shared.cam_ext[i] = cam_grid[2][i]/1000
-        shared.ft_ext[i] = ft_grid[2][i]*1000
+        cam, dm = open_hardware(args)
+        dm = VoltageTransform(dm)
 
-    # f0f1, lastpoke
-    state = [None, 0]
+        shared.make_static()
+        shared.f0f1[0] = 0.
+        shared.f0f1[1] = 0.
 
-    def run_align(auto, repeat, poke, sleep, unwrap):
+        P = cam.get_pixel_size()
+        cam_grid = make_cam_grid(cam.shape(), P)
+        ft_grid = make_ft_grid(cam.shape(), P)
+        for i in range(4):
+            shared.cam_ext[i] = cam_grid[2][i]/1000
+            shared.ft_ext[i] = ft_grid[2][i]*1000
+
+        self.cam = cam
+        self.dm = dm
+        self.shared = shared
+        self.cam_grid = cam_grid
+        self.ft_grid = ft_grid
+        self.P = P
+
+    def run(self):
+        cam = self.cam
+        dm = self.dm
+        shared = self.shared
+
+        for cmd in iter(shared.iq.get, 'STOP'):
+            print('worker', 'cmd', cmd)
+            if cmd[0] == 'get_exposure':
+                shared.oq.put(cam.get_exposure())
+            elif cmd[0] == 'get_exposure_range':
+                shared.oq.put(cam.get_exposure_range())
+            elif cmd[0] == 'set_exposure':
+                shared.oq.put(cam.set_exposure(cmd[1]))
+            elif cmd[0] == 'get_framerate':
+                shared.oq.put(cam.get_framerate())
+            elif cmd[0] == 'get_framerate_range':
+                shared.oq.put(cam.get_framerate_range())
+            elif cmd[0] == 'set_framerate':
+                shared.oq.put(cam.set_framerate(cmd[1]))
+            elif cmd[0] == 'write':
+                dm.write(shared.u)
+                shared.oq.put('OK')
+            elif cmd[0] == 'preset':
+                shared.u[:] = dm.preset(cmd[1], cmd[2])
+                shared.oq.put('OK')
+            elif cmd[0] == 'align':
+                self.run_align(*cmd[1:])
+            else:
+                raise NotImplementedError(cmd)
+
+        print('worker', 'STOP CMD')
+        while not shared.iq.empty():
+            print(shared.iq.get())
+
+        print('worker', 'STOPPED')
+
+    def run_align(self, auto, repeat, poke, sleep, unwrap):
+        cam = self.cam
+        dm = self.dm
+        shared = self.shared
+
+        cam_grid = self.cam_grid
+        ft_grid = self.ft_grid
+        P = self.P
+
+        # f0f1, lastpoke
+        state = [None, 0]
+
         while True:
             if poke:
                 shared.u[:] = 0.
@@ -1133,37 +1188,6 @@ def worker(shared, args):
             else:
                 print('run_align', 'continue')
 
-    for cmd in iter(shared.iq.get, 'STOP'):
-        print('worker', 'cmd', cmd)
-        if cmd[0] == 'get_exposure':
-            shared.oq.put(cam.get_exposure())
-        elif cmd[0] == 'get_exposure_range':
-            shared.oq.put(cam.get_exposure_range())
-        elif cmd[0] == 'set_exposure':
-            shared.oq.put(cam.set_exposure(cmd[1]))
-        elif cmd[0] == 'get_framerate':
-            shared.oq.put(cam.get_framerate())
-        elif cmd[0] == 'get_framerate_range':
-            shared.oq.put(cam.get_framerate_range())
-        elif cmd[0] == 'set_framerate':
-            shared.oq.put(cam.set_framerate(cmd[1]))
-        elif cmd[0] == 'write':
-            dm.write(shared.u)
-            shared.oq.put('OK')
-        elif cmd[0] == 'preset':
-            shared.u[:] = dm.preset(cmd[1], cmd[2])
-            shared.oq.put('OK')
-        elif cmd[0] == 'align':
-            run_align(*cmd[1:])
-        else:
-            raise NotImplementedError(cmd)
-
-    print('worker', 'STOP CMD')
-    while not shared.iq.empty():
-        print(shared.iq.get())
-
-    print('worker', 'STOPPED')
-
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
@@ -1192,7 +1216,7 @@ if __name__ == '__main__':
     dm.close()
     cam.close()
 
-    p = Process(target=worker, args=(shared, args))
+    p = Worker(shared, args)
     p.start()
 
     control = Control(p, shared)
