@@ -984,6 +984,7 @@ class Shared:
         self.mag_ext = Array('d', 4, lock=False)
         self.mag_shape = Array('i', 2, lock=False)
 
+        self.totpixs = totpixs
         self.cam_dtype = cam.get_image_dtype()
         self.cam_shape = cam_shape
         self.dm_size = dm.size()
@@ -1148,7 +1149,9 @@ def worker(shared, args):
                         continue
                     else:
                         return
-            shared.unwrapped_buf[:unwrapped.nbytes] = unwrapped.tobytes()
+                shared.unwrapped_buf[:unwrapped.nbytes] = unwrapped.tobytes()
+            else:
+                shared.unwrapped_buf[:] = np.zeros(shared.totpixs).tobytes()
 
             shared.oq.put('OK')
             print('run_align', 'iteration')
