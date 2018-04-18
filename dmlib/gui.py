@@ -1130,7 +1130,7 @@ class Worker(Process):
         Ualign = []
         for name in ('centre', 'cross', 'x', 'rim', 'checker'):
             try:
-                Ualign.append(dm.preset(name).reshape(-1, 1))
+                Ualign.append(dm.preset(name, 0.7).reshape(-1, 1))
             except Exception:
                 pass
         if len(Ualign) > 0:
@@ -1200,7 +1200,7 @@ class Worker(Process):
             h5f['align/U'].dims[0].label = 'actuators'
             h5f['align/U'].dims[1].label = 'step'
             h5f.create_dataset(
-                'align/images', (U.shape[1],) + cam.shape(),
+                'align/images', (Ualign.shape[1],) + cam.shape(),
                 dtype=cam.get_image_dtype())
             h5f['align/images'].dims[0].label = 'step'
             h5f['align/images'].dims[1].label = 'height'
