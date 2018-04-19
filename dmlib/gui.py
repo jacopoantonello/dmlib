@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import h5py
 import time
 
+from collections import namedtuple
 from multiprocessing import Process, Queue, Array, Value
 from datetime import datetime, timezone
 from numpy.linalg import norm
@@ -453,7 +454,7 @@ class Control(QMainWindow):
             bottom=.1, top=.9,
             wspace=0.45, hspace=0.45)
         self.dataacq_axes[0, 0].set_title('camera')
-        self.dataacq_axes[0, 1].set_title('mag')
+        self.dataacq_axes[0, 1].set_title('dm')
         self.dataacq_axes[1, 0].set_title('wrapped phi')
         self.dataacq_axes[1, 1].set_title('unwrapped phi')
 
@@ -466,9 +467,12 @@ class Control(QMainWindow):
         layout.addWidget(status, 2, 0, 1, 2)
         bwavelength = QPushButton('wavelength')
         layout.addWidget(bwavelength, 3, 0)
+        bplot = QPushButton('plot')
+        layout.addWidget(bplot, 3, 1)
 
         wavelength = []
         dataset = []
+        lastind = []
         listener = DataAcqListener(self.shared, wavelength, self.dmplot)
 
         def f0():
@@ -493,6 +497,14 @@ class Control(QMainWindow):
                 while not wavelength:
                     askwl()
 
+                self.dataacq_axes[0, 0].clear()
+                self.dataacq_axes[0, 1].clear()
+                self.dataacq_axes[1, 0].clear()
+                self.dataacq_axes[1, 1].clear()
+                self.dataacq_axes[1, 1].figure.canvas.draw()
+                dataset.clear()
+                lastind.clear()
+
                 status.setText('working...')
                 ind = self.tabs.indexOf(frame)
                 for i in range(self.tabs.count()):
@@ -503,6 +515,93 @@ class Control(QMainWindow):
                 self.dataacq_nav.setEnabled(False)
                 listener.run = True
                 listener.start()
+            return f
+
+        def f3():
+            def check_err():
+                reply = self.shared.oq.get()
+                if reply[0] != 'OK':
+                    status.setText(reply[0])
+                    return -1
+                else:
+                    return reply[1:]
+
+            def f():
+                if not dataset:
+                    fileName, _ = QFileDialog.getOpenFileName(
+                        self, 'Select dataset', '',
+                        'H5 (*.h5);;All Files (*)')
+                    if not fileName:
+                        return
+                    else:
+                        dataset.append(fileName)
+
+                if lastind:
+                    last = lastind[0]
+                else:
+                    last = 0
+                self.shared.iq.put(('query', dataset[0]))
+                ndata = check_err()
+                if ndata == -1:
+                    return
+                val, ok = QInputDialog.getInt(
+                    self, 'Index', '[{}, {}]'.format(0, ndata[0] - 1), last, 0,
+                    ndata[0] - 1)
+                if not ok:
+                    return
+                else:
+                    if lastind:
+                        lastind[0] = val
+                    else:
+                        lastind.append(val)
+                    self.shared.iq.put(('plot', dataset[0], val))
+                    if check_err() == -1:
+                        return
+
+                    a1 = self.dataacq_axes[0, 0]
+                    a2 = self.dataacq_axes[0, 1]
+                    a3 = self.dataacq_axes[1, 0]
+                    a4 = self.dataacq_axes[1, 1]
+
+                    a1.clear()
+                    a2.clear()
+                    a3.clear()
+                    a4.clear()
+
+                    a1.imshow(
+                        self.shared.cam, extent=self.shared.cam_ext,
+                        origin='lower')
+                    a1.set_xlabel('mm')
+                    if self.shared.cam_sat.value:
+                        a1.set_title('cam SAT')
+                    else:
+                        a1.set_title('cam {: 3d} {: 3d}'.format(
+                            self.shared.cam.min(), self.shared.cam.max()))
+
+                    data = self.shared.get_phase()
+                    wrapped, unwrapped = data[2:]
+
+                    self.dmplot.draw(a2, self.shared.u)
+                    a2.axis('off')
+
+                    a3.imshow(
+                        wrapped, extent=self.shared.mag_ext,
+                        origin='lower')
+                    a3.set_xlabel('mm')
+                    a3.set_title('wrapped phi')
+
+                    a4.imshow(
+                        unwrapped, extent=self.shared.mag_ext,
+                        origin='lower')
+                    a4.set_xlabel('mm')
+                    a4.set_title('unwrapped phi')
+
+                    a4.figure.canvas.draw()
+
+                    self.update_dm_gui()
+                    status.setText('{} {}/{}'.format(
+                        dataset[0], val, ndata[0]))
+
             return f
 
         def f2():
@@ -555,6 +654,7 @@ class Control(QMainWindow):
         brun.clicked.connect(f1())
         bstop.clicked.connect(f2())
         bwavelength.clicked.connect(f0())
+        bplot.clicked.connect(f3())
         listener.sig_update.connect(f20())
         self.dataacq_nav = NavigationToolbar2QT(self.dataacq_fig, frame)
 
@@ -978,6 +1078,9 @@ class Shared:
 
 class Worker(Process):
 
+    dfname = None
+    dset = None
+
     def __init__(self, shared, args):
         super().__init__(name='Worker')
 
@@ -1031,6 +1134,10 @@ class Worker(Process):
                 self.run_align(*cmd[1:])
             elif cmd[0] == 'dataacq':
                 self.run_dataacq(*cmd[1:])
+            elif cmd[0] == 'query':
+                self.run_query(*cmd[1:])
+            elif cmd[0] == 'plot':
+                self.run_plot(*cmd[1:])
             else:
                 raise NotImplementedError(cmd)
 
@@ -1153,6 +1260,88 @@ class Worker(Process):
                 break
             else:
                 print('run_align', 'continue')
+
+    def open_dset(self, dname):
+        if self.dfname is None or self.dfname != dname:
+            if self.dset is not None:
+                self.dset.close()
+            self.dset = h5py.File(dname, 'r')
+            self.dfname = dname
+
+            try:
+                img = self.dset['data/images'][0, ...]
+                P = self.dset['cam/pixel_size']
+                shape = img.shape
+                cam_grid = make_cam_grid(shape, P)
+                ft_grid = make_ft_grid(shape, P)
+                fimg = ft(img)
+                logf2 = np.log(np.abs(fimg))
+                f0, f1 = find_orders(ft_grid[0], ft_grid[1], logf2)
+                f3, ext3 = extract_order(
+                    fimg, ft_grid[0], ft_grid[1], f0, f1, P)
+                f4, dd0, dd1, ext4 = repad_order(f3, ft_grid[0], ft_grid[1])
+                gp = ift(f4)
+                mag = np.abs(gp)
+                wrapped = np.arctan2(gp.imag, gp.real)
+                unwrapped = call_unwrap(wrapped)
+            except Exception as e:
+                self.shared.oq.put((str(e),))
+                return -1
+
+            DSetPars = namedtuple(
+                'DSetPars', (
+                    'img P shape cam_grid ft_grid fimg logf2 f0 f1 f3 ' +
+                    'ext3 f4 dd0 dd1 ext4 gp mag wrapped unwrapped'))
+            self.dsetpars = DSetPars(
+                img, P, shape, cam_grid, ft_grid, fimg, logf2, f0, f1, f3,
+                ext3, f4, dd0, dd1, ext4, gp, mag, wrapped, unwrapped)
+            return 0
+
+    def run_query(self, dname):
+        if self.open_dset(dname):
+            return
+
+        shared.oq.put((
+            'OK',
+            self.dset['align/U'].shape[1] + self.dset['data/U'].shape[1]))
+
+    def run_plot(self, dname, ind):
+        if self.open_dset(dname):
+            return
+
+        t1 = self.dset['align/U'].shape[1]
+        t2 = self.dset['data/U'].shape[1]
+        if ind < 0 or ind > t1 + t2:
+            shared.oq.put((
+                'index must be within {} and {}'.format(0, t1 + t2 - 1),))
+        if ind < t1:
+            addr = 'align/'
+        else:
+            addr = 'data/'
+            ind -= t1
+        try:
+            img = self.dset[addr + 'images'][ind, ...]
+            fimg = ft(img)
+            f3, ext3 = extract_order(
+                fimg, self.dsetpars.ft_grid[0], self.dsetpars.ft_grid[1],
+                self.dsetpars.f0, self.dsetpars.f1, self.dsetpars.P)
+            f4, dd0, dd1, ext4 = repad_order(
+                f3, self.dsetpars.ft_grid[0], self.dsetpars.ft_grid[1])
+            gp = ift(f4)
+            mag = np.abs(gp)
+            wrapped = np.arctan2(gp.imag, gp.real)
+            unwrapped = call_unwrap(wrapped)
+
+            self.shared.cam[:] = img[:]
+            self.shared.u[:] = self.dset[addr + 'U'][:, ind]
+            self.shared.wrapped_buf[:wrapped.nbytes] = wrapped.tobytes()
+            for i in range(4):
+                shared.mag_ext[i] = ext4[i]/1000
+            shared.mag_shape[:] = mag.shape[:]
+            shared.unwrapped_buf[:unwrapped.nbytes] = unwrapped.tobytes()
+            shared.oq.put(('OK',))
+        except Exception as e:
+            shared.oq.put((str(e),))
 
     def run_dataacq(self, wavelength, dmplot_txs, sleep=.1):
         cam = self.cam
