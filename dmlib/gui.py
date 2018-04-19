@@ -212,7 +212,7 @@ class Control(QMainWindow):
         def f2():
             def f():
                 self.shared.u[:] = 0
-                self.write_update_dm()
+                self.write_dm()
             return f
 
         reset.clicked.connect(f2())
@@ -1346,6 +1346,10 @@ class Worker(Process):
             wrapped = np.arctan2(gp.imag, gp.real)
             unwrapped = call_unwrap(wrapped)
 
+            if img.max() == self.cam.get_image_max():
+                self.shared.cam_sat.value = 1
+            else:
+                self.shared.cam_sat.value = 0
             self.shared.cam[:] = img[:]
             self.shared.u[:] = self.dset[addr + 'U'][:, ind]
             self.shared.wrapped_buf[:wrapped.nbytes] = wrapped.tobytes()
