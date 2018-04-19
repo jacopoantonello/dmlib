@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import h5py
 import time
+import multiprocessing
 
 from collections import namedtuple
 from multiprocessing import Process, Queue, Array, Value
@@ -1092,14 +1093,17 @@ class Shared:
         return fstord, mag, wrapped, unwrapped
 
 
-class Worker(Process):
+def run_worker(shared, args):
+    p = Worker(shared, args)
+    p.run()
+
+
+class Worker:
 
     dfname = None
     dset = None
 
     def __init__(self, shared, args):
-        super().__init__(name='Worker')
-
         cam, dm = open_hardware(args)
         dm = VoltageTransform(dm)
 
@@ -1489,6 +1493,9 @@ class Worker(Process):
 
 
 if __name__ == '__main__':
+    multiprocessing.freeze_support()
+    multiprocessing.set_start_method('spawn')
+
     app = QApplication(sys.argv)
     if platform.system() == 'Windows':
         print(QStyleFactory.keys())
@@ -1515,12 +1522,14 @@ if __name__ == '__main__':
     dm.close()
     cam.close()
 
-    p = Worker(shared, args)
+    p = Process(name='worker', target=run_worker, args=(shared, args))
     p.start()
 
     control = Control(p, shared)
     control.show()
 
     exit = app.exec_()
+
     shared.iq.put('STOP')
+    p.join()
     sys.exit(exit)
