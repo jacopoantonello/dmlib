@@ -1194,80 +1194,69 @@ class Worker:
                 shared.cam_sat.value = 0
             shared.cam[:] = img[:]
 
-            fimg = ft(img)
-            logf2 = np.log(np.abs(fimg))
-            shared.ft[:] = logf2[:]
-
-            if state[0] is None or auto:
-                try:
-                    f0, f1 = find_orders(ft_grid[0], ft_grid[1], logf2)
-                except ValueError:
-                    shared.oq.put('Failed to find orders')
-                    if repeat:
-                        continue
-                    else:
-                        return
-            else:
-                f0, f1 = state[0]
-            state[0] = (f0, f1)
-            shared.f0f1[0] = f0
-            shared.f0f1[1] = f1
-
             try:
+                fimg = ft(img)
+                logf2 = np.log(np.abs(fimg))
+                shared.ft[:] = logf2[:]
+
+                if state[0] is None or auto:
+                    try:
+                        f0, f1 = find_orders(ft_grid[0], ft_grid[1], logf2)
+                    except ValueError:
+                        shared.oq.put('Failed to find orders')
+                        if repeat:
+                            continue
+                        else:
+                            return
+                else:
+                    f0, f1 = state[0]
+                state[0] = (f0, f1)
+                shared.f0f1[0] = f0
+                shared.f0f1[1] = f1
+
                 f3, ext3 = extract_order(
                     fimg, ft_grid[0], ft_grid[1], f0, f1, P)
-            except Exception as ex:
-                shared.oq.put('Failed to extract order: ' + str(ex))
-                if repeat:
-                    continue
-                else:
-                    return
-                return
-            logf3 = np.log(np.abs(f3))
-            shared.fstord_buf[:logf3.nbytes] = logf3.tobytes()
-            for i in range(4):
-                shared.fstord_ext[i] = ext3[i]*1000
-            shared.fstord_shape[:] = logf3.shape[:]
 
-            try:
+                logf3 = np.log(np.abs(f3))
+                shared.fstord_buf[:logf3.nbytes] = logf3.tobytes()
+                for i in range(4):
+                    shared.fstord_ext[i] = ext3[i]*1000
+                shared.fstord_shape[:] = logf3.shape[:]
+
                 f4, dd0, dd1, ext4 = repad_order(f3, ft_grid[0], ft_grid[1])
-            except Exception as ex:
-                shared.oq.put('Failed to repad order: ' + str(ex))
-                if repeat:
-                    continue
-                else:
-                    return
-                return
-            try:
+
                 gp = ift(f4)
                 mag = np.abs(gp)
                 wrapped = np.arctan2(gp.imag, gp.real)
+
+                shared.mag_buf[:mag.nbytes] = mag.tobytes()
+                shared.wrapped_buf[:wrapped.nbytes] = wrapped.tobytes()
+                for i in range(4):
+                    shared.mag_ext[i] = ext4[i]/1000
+                shared.mag_shape[:] = mag.shape[:]
+
+                if unwrap:
+                    try:
+                        _, edges = np.histogram(mag.ravel(), bins=100)
+                        mask = (mag < edges[1]).reshape(mag.shape)
+                        unwrapped = call_unwrap(wrapped, mask)
+                    except Exception as ex:
+                        shared.oq.put('Failed to unwrap phase: ' + str(ex))
+                        if repeat:
+                            continue
+                        else:
+                            return
+                    shared.unwrapped_buf[:unwrapped.nbytes] = \
+                        unwrapped.tobytes()
+                else:
+                    shared.unwrapped_buf[:] = \
+                        np.zeros(shared.totpixs).tobytes()
             except Exception as ex:
-                shared.oq.put('Failed to extract phase: ' + str(ex))
+                shared.oq.put('Error: ' + str(ex))
                 if repeat:
                     continue
                 else:
                     return
-            shared.mag_buf[:mag.nbytes] = mag.tobytes()
-            shared.wrapped_buf[:wrapped.nbytes] = wrapped.tobytes()
-            for i in range(4):
-                shared.mag_ext[i] = ext4[i]/1000
-            shared.mag_shape[:] = mag.shape[:]
-
-            if unwrap:
-                try:
-                    _, edges = np.histogram(mag.ravel(), bins=100)
-                    mask = (mag < edges[1]).reshape(mag.shape)
-                    unwrapped = call_unwrap(wrapped, mask)
-                except Exception as ex:
-                    shared.oq.put('Failed to unwrap phase: ' + str(ex))
-                    if repeat:
-                        continue
-                    else:
-                        return
-                shared.unwrapped_buf[:unwrapped.nbytes] = unwrapped.tobytes()
-            else:
-                shared.unwrapped_buf[:] = np.zeros(shared.totpixs).tobytes()
 
             shared.oq.put('OK')
             print('run_align', 'iteration')
