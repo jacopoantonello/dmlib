@@ -1367,9 +1367,11 @@ class Worker(Process):
         shared = self.shared
 
         Ualign = []
+        align_names = []
         for name in ('centre', 'cross', 'x', 'rim', 'checker'):
             try:
                 Ualign.append(dm.preset(name, 0.7).reshape(-1, 1))
+                align_names.append(name)
             except Exception:
                 pass
         if len(Ualign) > 0:
@@ -1444,6 +1446,7 @@ class Worker(Process):
             h5f['align/images'].dims[0].label = 'step'
             h5f['align/images'].dims[1].label = 'height'
             h5f['align/images'].dims[1].label = 'width'
+            h5f['align/names'] = ','.join(align_names)
 
             tot = U.shape[1] + Ualign.shape[1]
             count = [0]
