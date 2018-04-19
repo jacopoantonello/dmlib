@@ -1317,7 +1317,7 @@ class Worker(Process):
         if self.open_dset(dname):
             return
 
-        shared.oq.put((
+        self.shared.oq.put((
             'OK',
             self.dset['align/U'].shape[1] + self.dset['data/U'].shape[1]))
 
@@ -1328,7 +1328,7 @@ class Worker(Process):
         t1 = self.dset['align/U'].shape[1]
         t2 = self.dset['data/U'].shape[1]
         if ind < 0 or ind > t1 + t2:
-            shared.oq.put((
+            self.shared.oq.put((
                 'index must be within {} and {}'.format(0, t1 + t2 - 1),))
         if ind < t1:
             addr = 'align/'
@@ -1356,12 +1356,12 @@ class Worker(Process):
             self.shared.u[:] = self.dset[addr + 'U'][:, ind]
             self.shared.wrapped_buf[:wrapped.nbytes] = wrapped.tobytes()
             for i in range(4):
-                shared.mag_ext[i] = ext4[i]/1000
-            shared.mag_shape[:] = mag.shape[:]
-            shared.unwrapped_buf[:unwrapped.nbytes] = unwrapped.tobytes()
-            shared.oq.put(('OK',))
+                self.shared.mag_ext[i] = ext4[i]/1000
+            self.shared.mag_shape[:] = mag.shape[:]
+            self.shared.unwrapped_buf[:unwrapped.nbytes] = unwrapped.tobytes()
+            self.shared.oq.put(('OK',))
         except Exception as e:
-            shared.oq.put((str(e),))
+            self.shared.oq.put((str(e),))
 
     def run_dataacq(self, wavelength, dmplot_txs, sleep=.1):
         cam = self.cam
