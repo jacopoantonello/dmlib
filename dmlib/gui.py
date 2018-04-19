@@ -378,7 +378,7 @@ class Control(QMainWindow):
                 else:
                     a1.set_title('cam {: 3d} {: 3d}'.format(
                         self.shared.cam.min(), self.shared.cam.max()))
-                
+
                 a2.imshow(
                     self.shared.ft, extent=self.shared.ft_ext,
                     origin='lower')
@@ -488,6 +488,7 @@ class Control(QMainWindow):
 
         def f1():
             askwl = f0()
+
             def f():
                 while not wavelength:
                     askwl()
@@ -533,7 +534,7 @@ class Control(QMainWindow):
                 else:
                     a1.set_title('cam {: 3d} {: 3d}'.format(
                         self.shared.cam.min(), self.shared.cam.max()))
-                
+
                 if msg[0] == 'OK':
                     status.setText('{}/{}'.format(msg[1] + 1, msg[2]))
                 elif msg[0] == 'finished':
@@ -620,9 +621,6 @@ class FakeDM():
 
     def write(self, v):
         print('FakeDM', v)
-
-    def preset(self, name):
-        return uniform(-1., 1., size=(140,))
 
     def get_transform(self):
         return None
@@ -862,7 +860,7 @@ class AlignListener(QThread):
             if result == 'OK':
                 self.shared.iq.put(('stopcmd', not self.repeat))
                 self.shared.oq.get()
-            if self.repeat == False:
+            if not self.repeat:
                 return
 
 
@@ -928,7 +926,6 @@ class Shared:
         cam_dtsize = np.dtype(cam.get_image_dtype()).itemsize
         cam_shape = cam.shape()
         totpixs = cam_shape[0]*cam_shape[1]
-        dm_size = dm.size()
 
         self.cam_buf = Array('c', cam_dtsize*totpixs, lock=False)
         self.cam_ext = Array('d', 4, lock=False)
@@ -1048,7 +1045,6 @@ class Worker(Process):
         dm = self.dm
         shared = self.shared
 
-        cam_grid = self.cam_grid
         ft_grid = self.ft_grid
         P = self.P
 
@@ -1061,6 +1057,7 @@ class Worker(Process):
                 shared.u[state[1]] = .7
                 state[1] += 1
                 state[1] %= shared.u.size
+                dm.write(shared.u)
                 time.sleep(sleep)
 
             img = cam.grab_image()

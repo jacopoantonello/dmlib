@@ -203,7 +203,7 @@ def repad_order(f3, ff0, ff1, pad=2, alpha=.25):
 def call_unwrap(phase, mask=None):
     if mask is not None:
         masked = np.ma.masked_array(phase, mask)
-        phi = np.array(unwrap_phase(phase))
+        phi = np.array(unwrap_phase(masked))
         # phi[mask] = phi[np.invert(mask)].mean()
         phi[mask] = 0
         return phi
