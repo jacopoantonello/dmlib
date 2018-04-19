@@ -460,15 +460,20 @@ class Control(QMainWindow):
 
         brun = QPushButton('run')
         bstop = QPushButton('stop')
+        bwavelength = QPushButton('wavelength')
         layout.addWidget(brun, 1, 0)
         layout.addWidget(bstop, 1, 1)
+        layout.addWidget(bwavelength, 1, 2)
         status = QLabel('')
         status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        layout.addWidget(status, 2, 0, 1, 2)
-        bwavelength = QPushButton('wavelength')
-        layout.addWidget(bwavelength, 3, 0)
-        bplot = QPushButton('plot')
-        layout.addWidget(bplot, 3, 1)
+        layout.addWidget(status, 2, 0, 1, 3)
+
+        bplot = QPushButton('plot index')
+        bprev = QPushButton('prev')
+        bnext = QPushButton('next')
+        layout.addWidget(bplot, 3, 0)
+        layout.addWidget(bprev, 3, 1)
+        layout.addWidget(bnext, 3, 2)
 
         wavelength = []
         dataset = []
@@ -517,7 +522,7 @@ class Control(QMainWindow):
                 listener.start()
             return f
 
-        def f3():
+        def f3(offset=None):
             def check_err():
                 reply = self.shared.oq.get()
                 if reply[0] != 'OK':
@@ -544,64 +549,71 @@ class Control(QMainWindow):
                 ndata = check_err()
                 if ndata == -1:
                     return
-                val, ok = QInputDialog.getInt(
-                    self, 'Index', '[{}, {}]'.format(0, ndata[0] - 1), last, 0,
-                    ndata[0] - 1)
-                if not ok:
-                    return
-                else:
-                    if lastind:
-                        lastind[0] = val
-                    else:
-                        lastind.append(val)
-                    self.shared.iq.put(('plot', dataset[0], val))
-                    if check_err() == -1:
+                if offset is None or not lastind:
+                    val, ok = QInputDialog.getInt(
+                        self, 'Index', '[{}, {}]'.format(0, ndata[0] - 1),
+                        last, 0, ndata[0] - 1)
+                    if not ok:
                         return
+                else:
+                    val = lastind[0] + offset
 
-                    a1 = self.dataacq_axes[0, 0]
-                    a2 = self.dataacq_axes[0, 1]
-                    a3 = self.dataacq_axes[1, 0]
-                    a4 = self.dataacq_axes[1, 1]
+                if val < 0:
+                    val = 0
+                elif val >= ndata[0]:
+                    val = ndata[0] - 1
+                if lastind:
+                    lastind[0] = val
+                else:
+                    lastind.append(val)
 
-                    a1.clear()
-                    a2.clear()
-                    a3.clear()
-                    a4.clear()
+                self.shared.iq.put(('plot', dataset[0], val))
+                if check_err() == -1:
+                    return
 
-                    a1.imshow(
-                        self.shared.cam, extent=self.shared.cam_ext,
-                        origin='lower')
-                    a1.set_xlabel('mm')
-                    if self.shared.cam_sat.value:
-                        a1.set_title('cam SAT')
-                    else:
-                        a1.set_title('cam {: 3d} {: 3d}'.format(
-                            self.shared.cam.min(), self.shared.cam.max()))
+                a1 = self.dataacq_axes[0, 0]
+                a2 = self.dataacq_axes[0, 1]
+                a3 = self.dataacq_axes[1, 0]
+                a4 = self.dataacq_axes[1, 1]
 
-                    data = self.shared.get_phase()
-                    wrapped, unwrapped = data[2:]
+                a1.clear()
+                a2.clear()
+                a3.clear()
+                a4.clear()
 
-                    self.dmplot.draw(a2, self.shared.u)
-                    a2.axis('off')
+                a1.imshow(
+                    self.shared.cam, extent=self.shared.cam_ext,
+                    origin='lower')
+                a1.set_xlabel('mm')
+                if self.shared.cam_sat.value:
+                    a1.set_title('cam SAT')
+                else:
+                    a1.set_title('cam {: 3d} {: 3d}'.format(
+                        self.shared.cam.min(), self.shared.cam.max()))
 
-                    a3.imshow(
-                        wrapped, extent=self.shared.mag_ext,
-                        origin='lower')
-                    a3.set_xlabel('mm')
-                    a3.set_title('wrapped phi')
+                data = self.shared.get_phase()
+                wrapped, unwrapped = data[2:]
 
-                    a4.imshow(
-                        unwrapped, extent=self.shared.mag_ext,
-                        origin='lower')
-                    a4.set_xlabel('mm')
-                    a4.set_title('unwrapped phi')
+                self.dmplot.draw(a2, self.shared.u)
+                a2.axis('off')
 
-                    a4.figure.canvas.draw()
+                a3.imshow(
+                    wrapped, extent=self.shared.mag_ext,
+                    origin='lower')
+                a3.set_xlabel('mm')
+                a3.set_title('wrapped phi')
 
-                    self.update_dm_gui()
-                    status.setText('{} {}/{}'.format(
-                        dataset[0], val, ndata[0]))
+                a4.imshow(
+                    unwrapped, extent=self.shared.mag_ext,
+                    origin='lower')
+                a4.set_xlabel('mm')
+                a4.set_title('unwrapped phi')
 
+                a4.figure.canvas.draw()
+
+                self.update_dm_gui()
+                status.setText('{} {}/{}'.format(
+                    dataset[0], val, ndata[0] - 1))
             return f
 
         def f2():
@@ -655,6 +667,8 @@ class Control(QMainWindow):
         bstop.clicked.connect(f2())
         bwavelength.clicked.connect(f0())
         bplot.clicked.connect(f3())
+        bnext.clicked.connect(f3(1))
+        bprev.clicked.connect(f3(-1))
         listener.sig_update.connect(f20())
         self.dataacq_nav = NavigationToolbar2QT(self.dataacq_fig, frame)
 
