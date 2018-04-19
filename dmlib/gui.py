@@ -442,6 +442,7 @@ class Control(QMainWindow):
     def make_panel_dataacq(self):
         frame = QFrame()
         self.dataacq_fig = FigureCanvas(Figure(figsize=(7, 5)))
+        self.dataacq_nav = NavigationToolbar2QT(self.dataacq_fig, frame)
         layout = QGridLayout()
         frame.setLayout(layout)
         layout.addWidget(self.dataacq_fig, 0, 0, 1, 0)
@@ -474,6 +475,9 @@ class Control(QMainWindow):
         layout.addWidget(bplot, 3, 0)
         layout.addWidget(bprev, 3, 1)
         layout.addWidget(bnext, 3, 2)
+        disables = [
+            self.toolbox, self.dataacq_nav, brun, bwavelength, bplot,
+            bprev, bnext]
 
         wavelength = []
         dataset = []
@@ -515,9 +519,8 @@ class Control(QMainWindow):
                 for i in range(self.tabs.count()):
                     if i != ind:
                         self.tabs.setTabEnabled(i, False)
-                self.toolbox.setEnabled(False)
-                brun.setEnabled(False)
-                self.dataacq_nav.setEnabled(False)
+                for b in disables:
+                    b.setEnabled(False)
                 listener.run = True
                 listener.start()
             return f
@@ -596,6 +599,7 @@ class Control(QMainWindow):
 
                 self.dmplot.draw(a2, self.shared.u)
                 a2.axis('off')
+                a2.set_title('dm')
 
                 a3.imshow(
                     wrapped, extent=self.shared.mag_ext,
@@ -611,7 +615,7 @@ class Control(QMainWindow):
 
                 a4.figure.canvas.draw()
 
-                self.update_dm_gui()
+                # self.update_dm_gui()
                 status.setText('{} {}/{}'.format(
                     dataset[0], val, ndata[0] - 1))
             return f
@@ -627,9 +631,8 @@ class Control(QMainWindow):
             def finish():
                 for i in range(self.tabs.count()):
                     self.tabs.setTabEnabled(i, True)
-                self.toolbox.setEnabled(True)
-                brun.setEnabled(True)
-                self.dataacq_nav.setEnabled(True)
+                for b in disables:
+                    b.setEnabled(True)
 
             def f(msg):
                 a1 = self.dataacq_axes[0, 0]
@@ -670,7 +673,6 @@ class Control(QMainWindow):
         bnext.clicked.connect(f3(1))
         bprev.clicked.connect(f3(-1))
         listener.sig_update.connect(f20())
-        self.dataacq_nav = NavigationToolbar2QT(self.dataacq_fig, frame)
 
 
 class FakeCamera():
