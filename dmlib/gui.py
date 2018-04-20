@@ -1118,6 +1118,7 @@ class Worker:
 
     def __init__(self, shared, args):
         cam, dm = open_hardware(args)
+        cam.set_exposure(cam.get_exposure_range()[0])
         dm = VoltageTransform(dm)
 
         shared.make_static()
@@ -1405,7 +1406,7 @@ class Worker:
 
         Ualign = []
         align_names = []
-        for name in ('centre', 'cross', 'x', 'rim', 'checker'):
+        for name in ('centre', 'cross', 'x', 'rim', 'checker', 'arrow'):
             try:
                 Ualign.append(dm.preset(name, 0.7).reshape(-1, 1))
                 align_names.append(name)
