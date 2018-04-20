@@ -1104,6 +1104,9 @@ class Worker:
     dfname = None
     dset = None
 
+    # f0f1, lastpoke
+    run_align_state = [None, 0]
+
     def __init__(self, shared, args):
         cam, dm = open_hardware(args)
         dm = VoltageTransform(dm)
@@ -1174,12 +1177,10 @@ class Worker:
         cam = self.cam
         dm = self.dm
         shared = self.shared
+        state = self.run_align_state
 
         ft_grid = self.ft_grid
         P = self.P
-
-        # f0f1, lastpoke
-        state = [None, 0]
 
         while True:
             if poke:
@@ -1190,14 +1191,14 @@ class Worker:
                 dm.write(shared.u)
                 time.sleep(sleep)
 
-            img = cam.grab_image()
-            if img.max() == cam.get_image_max():
-                shared.cam_sat.value = 1
-            else:
-                shared.cam_sat.value = 0
-            shared.cam[:] = img[:]
-
             try:
+                img = cam.grab_image()
+                if img.max() == cam.get_image_max():
+                    shared.cam_sat.value = 1
+                else:
+                    shared.cam_sat.value = 0
+                shared.cam[:] = img[:]
+
                 fimg = ft(img)
                 logf2 = np.log(np.abs(fimg))
                 shared.ft[:] = logf2[:]
@@ -1481,9 +1482,13 @@ class Worker:
             todo = ((Ualign, 'align/images'), (U, 'data/images'))
             for U1, imaddr in todo:
                 for i in range(U1.shape[1]):
-                    dm.write(U1[:, i])
-                    time.sleep(sleep)
-                    img = cam.grab_image()
+                    try:
+                        dm.write(U1[:, i])
+                        time.sleep(sleep)
+                        img = cam.grab_image()
+                    except Exception as e:
+                        shared.oq.put((str(e),))
+                        return
                     if img.max() == cam.get_image_max():
                         shared.cam_sat.value = 1
                     else:
@@ -1535,7 +1540,7 @@ if __name__ == '__main__':
         '--cam', choices=['sim', 'thorcam'], default='sim')
     parser.add_argument('--dm-name', type=str, default='C17W005#050')
     parser.add_argument('--dm-index', type=int, default=0)
-    parser.add_argument('--cam-name', type=str, default=None)
+    parser.add_argument('--cam-name', type=str, default='4103267374')
     args = parser.parse_args(args[1:])
 
     cam, dm = open_hardware(args)
