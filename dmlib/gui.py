@@ -443,7 +443,6 @@ class Control(QMainWindow):
     def make_panel_dataacq(self):
         frame = QFrame()
         self.dataacq_fig = FigureCanvas(Figure(figsize=(7, 5)))
-        self.dataacq_nav = NavigationToolbar2QT(self.dataacq_fig, frame)
         layout = QGridLayout()
         frame.setLayout(layout)
         layout.addWidget(self.dataacq_fig, 0, 0, 1, 0)
@@ -477,7 +476,7 @@ class Control(QMainWindow):
         layout.addWidget(bprev, 3, 1)
         layout.addWidget(bnext, 3, 2)
         disables = [
-            self.toolbox, self.dataacq_nav, brun, bwavelength, bplot,
+            self.toolbox, brun, bwavelength, bplot,
             bprev, bnext]
 
         wavelength = []
@@ -674,6 +673,8 @@ class Control(QMainWindow):
         bnext.clicked.connect(f3(1))
         bprev.clicked.connect(f3(-1))
         listener.sig_update.connect(f20())
+        self.dataacq_nav = NavigationToolbar2QT(self.dataacq_fig, frame)
+        disables.append(self.dataacq_nav)
 
 
 class FakeCamera():
