@@ -199,7 +199,7 @@ class Control(QMainWindow):
 
         i = 4
         j = 0
-        for name in ('centre', 'cross', 'x', 'rim', 'checker'):
+        for name in ('centre', 'cross', 'x', 'rim', 'checker', 'arrow'):
             b = QPushButton(name)
             b.setCheckable(True)
             layout.addWidget(b, i, j)
@@ -790,6 +790,15 @@ class FakeDM():
                 u[c] = s
                 c += 1
                 s *= -1
+        elif name == 'arrow':
+            inds = np.array([
+                20, 31, 42, 53, 64, 75, 86, 97, 108, 119,
+                16, 17, 18, 19,
+                29, 30,
+                32, 44, 56, 68,
+                43, 55,
+                ])
+            u[inds] = mag
         else:
             raise NotImplementedError(name)
         return u
@@ -1379,7 +1388,7 @@ class Worker:
             else:
                 self.shared.cam_sat.value = 0
             self.shared.cam[:] = img[:]
-            self.shared.u[:] = self.dset[addr + 'U'][:, ind]
+            self.shared.u[:] = self.dset[addr + '/U'][:, ind]
             self.shared.wrapped_buf[:wrapped.nbytes] = wrapped.tobytes()
             for i in range(4):
                 self.shared.mag_ext[i] = ext4[i]/1000
