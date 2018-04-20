@@ -35,7 +35,7 @@ from PyQt5.QtWidgets import (  # noqa: F401
 
 from interf import (
     make_cam_grid, make_ft_grid, ft, ift, find_orders, repad_order,
-    extract_order, call_unwrap)
+    extract_order, call_unwrap, mgcentroid)
 
 
 class Control(QMainWindow):
@@ -1158,6 +1158,8 @@ class Worker:
                 self.run_query(*cmd[1:])
             elif cmd[0] == 'plot':
                 self.run_plot(*cmd[1:])
+            elif cmd[0] == 'centre':
+                self.run_centre(*cmd[1:])
             else:
                 raise NotImplementedError(cmd)
 
@@ -1314,6 +1316,45 @@ class Worker:
             'OK',
             self.dset['align/U'].shape[1] + self.dset['data/U'].shape[1]))
 
+    def pull(self, addr, ind):
+        img = self.dset[addr + '/images'][ind, ...]
+        fimg = ft(img)
+        f3, ext3 = extract_order(
+            fimg, self.dsetpars.ft_grid[0], self.dsetpars.ft_grid[1],
+            self.dsetpars.f0, self.dsetpars.f1, self.dsetpars.P)
+        f4, dd0, dd1, ext4 = repad_order(
+            f3, self.dsetpars.ft_grid[0], self.dsetpars.ft_grid[1])
+        gp = ift(f4)
+        mag = np.abs(gp)
+        wrapped = np.arctan2(gp.imag, gp.real)
+        unwrapped = call_unwrap(wrapped)
+
+        return img, mag, ext4, wrapped, unwrapped
+
+    def run_centre(self, dname):
+        if self.open_dset(dname):
+            return
+
+        names = self.dset['align/names']
+        if 'centre' not in names.split(','):
+            shared.oq.put(('centre measurement is missing',))
+            return
+
+        try:
+            centre = self.pull('align', names.index('centre'))
+            _, edges1 = np.histogram(centre[1], bins=10)
+            zero = self.pull('data', 0)
+            _, edges2 = np.histogram(zero[1], bins=10)
+            phi1 = centre[-1]*(centre[1] > edges1[1])
+            phi2 = zero[-1]*(zero[1] > edges2[1])
+            xx, yy = np.meshgrid(self.dsetpars.dd1, self.dsetpars.dd0)
+            delta = phi1 - phi2
+            delta -= delta.mean()
+            cross = np.array(mgcentroid(xx, yy, delta))
+            shared.oq.put(('OK', cross[0], cross[1]))
+        except Exception as e:
+            shared.oq.put((str(e),))
+
     def run_plot(self, dname, ind):
         if self.open_dset(dname):
             return
@@ -1324,22 +1365,12 @@ class Worker:
             self.shared.oq.put((
                 'index must be within {} and {}'.format(0, t1 + t2 - 1),))
         if ind < t1:
-            addr = 'align/'
+            addr = 'align'
         else:
-            addr = 'data/'
+            addr = 'data'
             ind -= t1
         try:
-            img = self.dset[addr + 'images'][ind, ...]
-            fimg = ft(img)
-            f3, ext3 = extract_order(
-                fimg, self.dsetpars.ft_grid[0], self.dsetpars.ft_grid[1],
-                self.dsetpars.f0, self.dsetpars.f1, self.dsetpars.P)
-            f4, dd0, dd1, ext4 = repad_order(
-                f3, self.dsetpars.ft_grid[0], self.dsetpars.ft_grid[1])
-            gp = ift(f4)
-            mag = np.abs(gp)
-            wrapped = np.arctan2(gp.imag, gp.real)
-            unwrapped = call_unwrap(wrapped)
+            img, mag, ext4, wrapped, unwrapped = self.pull(addr, ind)
 
             if img.max() == self.cam.get_image_max():
                 self.shared.cam_sat.value = 1
