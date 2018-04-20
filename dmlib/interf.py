@@ -184,8 +184,8 @@ def repad_order(f3, ff0, ff1, pad=2, alpha=.25):
 
     mm0 = nextpow2(f3.shape[0])
     nn0 = nextpow2(f3.shape[1])
-    l0 = int(pad*mm0)
-    l1 = int(pad*nn0)
+    l0 = int(mm0)
+    l1 = int(nn0)
     off1 = (l0 - f3.shape[0])//2
     off2 = off1 + f3.shape[0]
     off3 = (l1 - f3.shape[1])//2
