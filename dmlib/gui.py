@@ -288,7 +288,8 @@ class Control(QMainWindow):
         def f1():
             def f():
                 val, ok = QInputDialog.getDouble(
-                    self, '', 'sleep [s]', listener.sleep, decimals=4)
+                    self, 'Delay', 'write/read delay [s]',
+                    listener.sleep, decimals=4)
                 if ok:
                     listener.sleep = val
             return f
@@ -497,7 +498,7 @@ class Control(QMainWindow):
                 else:
                     wl = 775.
                 val, ok = QInputDialog.getDouble(
-                    self, 'wavelength', '[nm]', wl, decimals=1)
+                    self, 'Wavelength', 'wavelength [nm]', wl, decimals=1)
                 if ok:
                     if wavelength:
                         wavelength[0] = val
@@ -569,7 +570,8 @@ class Control(QMainWindow):
 
                 if offset is None or not lastind:
                     val, ok = QInputDialog.getInt(
-                        self, 'Index', '[{}, {}]'.format(0, ndata[0] - 1),
+                        self, 'Index',
+                        'time step [{}, {}]'.format(0, ndata[0] - 1),
                         last, 0, ndata[0] - 1)
                     if not ok:
                         return
@@ -1016,7 +1018,7 @@ class DMPlot():
                 ind = self.index_actuator(e.xdata, e.ydata)
                 if ind != -1:
                     val, ok = QInputDialog.getDouble(
-                        parent, 'Actuator ' + str(ind), 'Range [-1, 1]',
+                        parent, 'Actuator ' + str(ind), 'range [-1, 1]',
                         u[ind], -1., 1., 4)
                     if ok:
                         u[ind] = val
