@@ -175,33 +175,28 @@ class Control(QMainWindow):
             bottom=.1, top=.9,
             wspace=0.45, hspace=0.45)
 
-        reset = QPushButton('reset')
-        layout.addWidget(reset, 1, 0)
         flipx = QPushButton('flipx')
-        layout.addWidget(flipx, 2, 0)
+        layout.addWidget(flipx, 1, 0)
         flipy = QPushButton('flipy')
-        layout.addWidget(flipy, 2, 1)
+        layout.addWidget(flipy, 1, 1)
         rotate1 = QPushButton('rotate cw')
-        layout.addWidget(rotate1, 3, 0)
+        layout.addWidget(rotate1, 2, 0)
         rotate2 = QPushButton('rotate acw')
-        layout.addWidget(rotate2, 3, 1)
+        layout.addWidget(rotate2, 2, 1)
 
         def f4(n):
-            def f(p):
-                if p:
-                    d = .8
-                else:
-                    d = .0
-                self.shared.iq.put(('preset', n, d))
+            def f():
+                self.shared.iq.put(('preset', n, 0.8))
                 self.shared.oq.get()
                 self.write_dm(None)
             return f
 
+        reset = QPushButton('reset')
+        layout.addWidget(reset, 3, 0)
         i = 4
         j = 0
         for name in ('centre', 'cross', 'x', 'rim', 'checker', 'arrows'):
             b = QPushButton(name)
-            b.setCheckable(True)
             layout.addWidget(b, i, j)
             if j == 1:
                 i += 1
@@ -225,13 +220,19 @@ class Control(QMainWindow):
                 ind[0] += sign
                 ind[0] %= 4
                 self.dmplot.rotate(ind[0])
-                self.dm_ax.figure.canvas.draw()
+                self.update_dm_gui()
+            return f
+
+        def f4(cb, b):
+            def f():
+                cb(b.isChecked())
+                self.update_dm_gui()
             return f
 
         flipx.setCheckable(True)
         flipy.setCheckable(True)
-        flipx.clicked.connect(self.dmplot.flipx)
-        flipy.clicked.connect(self.dmplot.flipy)
+        flipx.clicked.connect(f4(self.dmplot.flipx, flipx))
+        flipy.clicked.connect(f4(self.dmplot.flipy, flipy))
         rotate1.clicked.connect(f3(1))
         rotate2.clicked.connect(f3(-1))
 
