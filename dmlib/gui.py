@@ -700,7 +700,10 @@ class Control(QMainWindow):
                     b.setEnabled(True)
 
             def f(msg):
+                listener.busy = True
+
                 a1 = self.dataacq_axes[0, 0]
+                a2 = self.dataacq_axes[0, 1]
 
                 a1.clear()
 
@@ -727,7 +730,12 @@ class Control(QMainWindow):
                     status.setText(msg[0])
                     finish()
 
-                a1.figure.canvas.draw()
+                self.dmplot.draw(a2, self.shared.u)
+                a2.axis('off')
+                a2.set_title('dm')
+                a2.figure.canvas.draw()
+
+                listener.busy = False
 
             return f
 
@@ -1067,6 +1075,7 @@ class AlignListener(QThread):
 
 class DataAcqListener(QThread):
 
+    busy = False
     run = True
     sig_update = pyqtSignal(tuple)
 
@@ -1081,7 +1090,8 @@ class DataAcqListener(QThread):
         while True:
             result = self.shared.oq.get()
             print('listener result', result)
-            self.sig_update.emit(result)
+            if not self.busy:
+                self.sig_update.emit(result)
             if result[0] == 'OK':
                 self.shared.iq.put(('stopcmd', not self.run))
                 self.shared.oq.get()
@@ -1583,6 +1593,7 @@ class Worker:
                     else:
                         shared.cam_sat.value = 0
                     h5f[imaddr][i, ...] = img
+                    shared.u[:] = U1[:, i]
                     shared.cam[:] = img
                     shared.oq.put(('OK', count[0], tot))
                     print('run_dataacq', 'iteration')
