@@ -549,9 +549,13 @@ class Control(QMainWindow):
                 else:
                     last = 0
                 self.shared.iq.put(('query', dataset[0]))
+
                 ndata = check_err()
                 if ndata == -1:
                     return
+                else:
+                    self.dmplot.update_txs(ndata[1])
+
                 if offset is None or not lastind:
                     val, ok = QInputDialog.getInt(
                         self, 'Index', '[{}, {}]'.format(0, ndata[0] - 1),
@@ -847,6 +851,11 @@ class DMPlot():
 
     def __init__(self, sampling=128, nact=12, pitch=.3, roll=2, mapmul=.3):
         self.make_grids(sampling, nact, pitch, roll, mapmul)
+
+    def update_txs(self, txs):
+        self.txs[:] = txs[:]
+        self.make_grids(
+            self.sampling, self.nact, self.pitch, self.roll, self.mapmul)
 
     def flipx(self, b):
         self.txs[0] = b
@@ -1326,9 +1335,12 @@ class Worker:
         if self.open_dset(dname):
             return
 
+        dmplot_txs = self.dset['dmplot/txs'][()].tolist()
+
         self.shared.oq.put((
             'OK',
-            self.dset['align/U'].shape[1] + self.dset['data/U'].shape[1]))
+            self.dset['align/U'].shape[1] + self.dset['data/U'].shape[1],
+            dmplot_txs))
 
     def pull(self, addr, ind):
         img = self.dset[addr + '/images'][ind, ...]
