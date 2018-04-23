@@ -487,7 +487,7 @@ class Control(QMainWindow):
         dataset = []
         lastind = []
         centre = []
-        radius = []
+        radius = [.0]
         listener = DataAcqListener(self.shared, wavelength, self.dmplot)
 
         def f0():
@@ -585,7 +585,8 @@ class Control(QMainWindow):
                 else:
                     lastind.append(val)
 
-                self.shared.iq.put(('plot', dataset[0], val))
+                self.shared.iq.put((
+                    'plot', dataset[0], val, centre, radius[0]))
                 if check_err() == -1:
                     return
 
@@ -629,11 +630,10 @@ class Control(QMainWindow):
                 a4.set_title('unwrapped phi')
                 if centre:
                     a4.plot(centre[0]/1000, centre[1]/1000, 'rx')
-                if radius and centre:
-                    print(centre, radius)
+                if radius[0] > 0. and centre:
                     a4.plot(
-                        centre[0]/1000 + radius[0]*np.cos(theta),
-                        centre[1]/1000 + radius[0]*np.sin(theta), 'r')
+                        centre[0]/1000 + radius[0]/1000*np.cos(theta),
+                        centre[1]/1000 + radius[0]/1000*np.sin(theta), 'r')
 
                 a4.figure.canvas.draw()
 
@@ -649,7 +649,7 @@ class Control(QMainWindow):
                 bootstrap()
 
                 if radius:
-                    rad = radius[0]
+                    rad = radius[0]/1000
                 else:
                     rad = 2.1
 
@@ -658,34 +658,27 @@ class Control(QMainWindow):
                         self.shared.cam_ext[1], self.shared.cam_ext[3]))
                 else:
                     radmax = 10.
-                print(rad)
-                print(
-                    self.shared.cam_ext[0],
-                    self.shared.cam_ext[1],
-                    self.shared.cam_ext[2],
-                    self.shared.cam_ext[3])
-                print(radmax)
 
                 val, ok = QInputDialog.getDouble(
                     self, 'Aperture radius', 'radius in mm', rad, 0.,
                     radmax, 3)
                 if ok:
                     if radius:
-                        radius[0] = val
+                        radius[0] = val*1000
                     else:
-                        radius.append(val)
+                        radius.append(val*1000)
 
-                self.shared.iq.put(('centre', dataset[0]))
-                ndata = check_err()
-                if ndata == -1:
-                    return
-                if centre:
-                    centre[:] = ndata[:]
-                else:
-                    centre.append(ndata[0])
-                    centre.append(ndata[1])
+                    self.shared.iq.put(('centre', dataset[0]))
+                    ndata = check_err()
+                    if ndata == -1:
+                        return
+                    if centre:
+                        centre[:] = ndata[:]
+                    else:
+                        centre.append(ndata[0])
+                        centre.append(ndata[1])
 
-                drawf()
+                    drawf()
 
             return f
 
@@ -1409,7 +1402,7 @@ class Worker:
             self.dset['align/U'].shape[1] + self.dset['data/U'].shape[1],
             dmplot_txs))
 
-    def pull(self, addr, ind):
+    def pull(self, addr, ind, centre=None, radius=.0):
         img = self.dset[addr + '/images'][ind, ...]
         fimg = ft(img)
         f3, ext3 = extract_order(
@@ -1417,10 +1410,15 @@ class Worker:
             self.dsetpars.f0, self.dsetpars.f1, self.dsetpars.P)
         f4, dd0, dd1, ext4 = repad_order(
             f3, self.dsetpars.ft_grid[0], self.dsetpars.ft_grid[1])
+        if radius > 0 and centre:
+            [xx, yy] = np.meshgrid(dd1 - centre[0], dd0 - centre[1])
+            mask = np.sqrt(xx**2 + yy**2) >= radius
+        else:
+            mask = None
         gp = ift(f4)
         mag = np.abs(gp)
         wrapped = np.arctan2(gp.imag, gp.real)
-        unwrapped = call_unwrap(wrapped)
+        unwrapped = call_unwrap(wrapped, mask)
 
         return img, mag, ext4, wrapped, unwrapped
 
@@ -1444,7 +1442,7 @@ class Worker:
         except Exception as e:
             self.shared.oq.put((str(e),))
 
-    def run_plot(self, dname, ind):
+    def run_plot(self, dname, ind, centre, radius):
         if self.open_dset(dname):
             return
 
@@ -1459,7 +1457,8 @@ class Worker:
             addr = 'data'
             ind -= t1
         try:
-            img, mag, ext4, wrapped, unwrapped = self.pull(addr, ind)
+            img, mag, ext4, wrapped, unwrapped = self.pull(
+                addr, ind, centre, radius)
 
             if img.max() == self.cam.get_image_max():
                 self.shared.cam_sat.value = 1
