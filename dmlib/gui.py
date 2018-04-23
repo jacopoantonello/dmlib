@@ -1090,8 +1090,6 @@ class DataAcqListener(QThread):
         while True:
             result = self.shared.oq.get()
             print('listener result', result)
-            if not self.busy:
-                self.sig_update.emit(result)
             if result[0] == 'OK':
                 self.shared.iq.put(('stopcmd', not self.run))
                 self.shared.oq.get()
@@ -1099,7 +1097,10 @@ class DataAcqListener(QThread):
                     self.sig_update.emit(('stopped',))
                     print('DataAcqListener stopped')
                     return
+                elif not self.busy:
+                    self.sig_update.emit(result)
             else:
+                self.sig_update.emit(result)
                 print('DataAcqListener terminates')
                 return
 
