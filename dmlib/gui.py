@@ -199,7 +199,7 @@ class Control(QMainWindow):
 
         i = 4
         j = 0
-        for name in ('centre', 'cross', 'x', 'rim', 'checker', 'arrow'):
+        for name in ('centre', 'cross', 'x', 'rim', 'checker', 'arrows'):
             b = QPushButton(name)
             b.setCheckable(True)
             layout.addWidget(b, i, j)
@@ -790,13 +790,15 @@ class FakeDM():
                 u[c] = s
                 c += 1
                 s *= -1
-        elif name == 'arrow':
+        elif name == 'arrows':
             inds = np.array([
                 20, 31, 42, 53, 64, 75, 86, 97, 108, 119,
                 16, 17, 18, 19,
                 29, 30,
                 32, 44, 56, 68,
                 43, 55,
+                34, 23, 12, 25, 38, 24, 36, 48, 60,
+                89, 102, 115, 128, 101, 113, 90, 91,
                 ])
             u[inds] = mag
         else:
@@ -1406,7 +1408,7 @@ class Worker:
 
         Ualign = []
         align_names = []
-        for name in ('centre', 'cross', 'x', 'rim', 'checker', 'arrow'):
+        for name in ('centre', 'cross', 'x', 'rim', 'checker', 'arrows'):
             try:
                 Ualign.append(dm.preset(name, 0.7).reshape(-1, 1))
                 align_names.append(name)
