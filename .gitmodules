@@ -1,3 +1,6 @@
 [submodule "devwraps"]
 	path = devwraps
 	url = /home/jacopo/reports/gits/devwraps.git
+[submodule "sensorless"]
+	path = sensorless
+	url = /home/jacopo/reports/gits/sensorless.git
