@@ -35,7 +35,7 @@ from PyQt5.QtWidgets import (  # noqa: F401
 
 from interf import (
     make_cam_grid, make_ft_grid, ft, ift, find_orders, repad_order,
-    extract_order, call_unwrap, mgcentroid)
+    extract_order, call_unwrap, estimate_aperture_centre)
 
 
 class Control(QMainWindow):
@@ -475,13 +475,19 @@ class Control(QMainWindow):
         layout.addWidget(bplot, 3, 0)
         layout.addWidget(bprev, 3, 1)
         layout.addWidget(bnext, 3, 2)
+
+        baperture = QPushButton('aperture')
+        layout.addWidget(baperture, 4, 0)
+
         disables = [
             self.toolbox, brun, bwavelength, bplot,
-            bprev, bnext]
+            bprev, bnext, baperture]
 
         wavelength = []
         dataset = []
         lastind = []
+        centre = []
+        radius = []
         listener = DataAcqListener(self.shared, wavelength, self.dmplot)
 
         def f0():
@@ -525,24 +531,29 @@ class Control(QMainWindow):
                 listener.start()
             return f
 
-        def f3(offset=None):
-            def check_err():
-                reply = self.shared.oq.get()
-                if reply[0] != 'OK':
-                    status.setText(reply[0])
-                    return -1
+        def check_err():
+            reply = self.shared.oq.get()
+            if reply[0] != 'OK':
+                status.setText(reply[0])
+                return -1
+            else:
+                return reply[1:]
+
+        def bootstrap():
+            if not dataset:
+                fileName, _ = QFileDialog.getOpenFileName(
+                    self, 'Select dataset', '',
+                    'H5 (*.h5);;All Files (*)')
+                if not fileName:
+                    return
                 else:
-                    return reply[1:]
+                    dataset.append(fileName)
+
+        def f3(offset=None):
+            theta = np.linspace(0, 2*np.pi, 96)
 
             def f():
-                if not dataset:
-                    fileName, _ = QFileDialog.getOpenFileName(
-                        self, 'Select dataset', '',
-                        'H5 (*.h5);;All Files (*)')
-                    if not fileName:
-                        return
-                    else:
-                        dataset.append(fileName)
+                bootstrap()
 
                 if lastind:
                     last = lastind[0]
@@ -616,12 +627,66 @@ class Control(QMainWindow):
                     origin='lower')
                 a4.set_xlabel('mm')
                 a4.set_title('unwrapped phi')
+                if centre:
+                    a4.plot(centre[0]/1000, centre[1]/1000, 'rx')
+                if radius and centre:
+                    print(centre, radius)
+                    a4.plot(
+                        centre[0]/1000 + radius[0]*np.cos(theta),
+                        centre[1]/1000 + radius[0]*np.sin(theta), 'r')
 
                 a4.figure.canvas.draw()
 
                 # self.update_dm_gui()
                 status.setText('{} {}/{}'.format(
                     dataset[0], val, ndata[0] - 1))
+            return f
+
+        def f4():
+            drawf = f3(0)
+
+            def f():
+                bootstrap()
+
+                if radius:
+                    rad = radius[0]
+                else:
+                    rad = 2.1
+
+                if self.shared.cam_ext[1] > 0:
+                    radmax = min((
+                        self.shared.cam_ext[1], self.shared.cam_ext[3]))
+                else:
+                    radmax = 10.
+                print(rad)
+                print(
+                    self.shared.cam_ext[0],
+                    self.shared.cam_ext[1],
+                    self.shared.cam_ext[2],
+                    self.shared.cam_ext[3])
+                print(radmax)
+
+                val, ok = QInputDialog.getDouble(
+                    self, 'Aperture radius', 'radius in mm', rad, 0.,
+                    radmax, 3)
+                if ok:
+                    if radius:
+                        radius[0] = val
+                    else:
+                        radius.append(val)
+
+                self.shared.iq.put(('centre', dataset[0]))
+                ndata = check_err()
+                if ndata == -1:
+                    return
+                if centre:
+                    centre[:] = ndata[:]
+                else:
+                    centre.append(ndata[0])
+                    centre.append(ndata[1])
+
+                drawf()
+
             return f
 
         def f2():
@@ -676,6 +741,8 @@ class Control(QMainWindow):
         bplot.clicked.connect(f3())
         bnext.clicked.connect(f3(1))
         bprev.clicked.connect(f3(-1))
+        baperture.clicked.connect(f4())
+
         listener.sig_update.connect(f20())
         self.dataacq_nav = NavigationToolbar2QT(self.dataacq_fig, frame)
         disables.append(self.dataacq_nav)
@@ -1361,25 +1428,21 @@ class Worker:
         if self.open_dset(dname):
             return
 
-        names = self.dset['align/names']
+        names = self.dset['align/names'][()]
         if 'centre' not in names.split(','):
-            shared.oq.put(('centre measurement is missing',))
+            self.shared.oq.put(('centre measurement is missing',))
             return
 
         try:
             centre = self.pull('align', names.index('centre'))
-            _, edges1 = np.histogram(centre[1], bins=10)
             zero = self.pull('data', 0)
-            _, edges2 = np.histogram(zero[1], bins=10)
-            phi1 = centre[-1]*(centre[1] > edges1[1])
-            phi2 = zero[-1]*(zero[1] > edges2[1])
-            xx, yy = np.meshgrid(self.dsetpars.dd1, self.dsetpars.dd0)
-            delta = phi1 - phi2
-            delta -= delta.mean()
-            cross = np.array(mgcentroid(xx, yy, delta))
-            shared.oq.put(('OK', cross[0], cross[1]))
+
+            cross = estimate_aperture_centre(
+                self.dsetpars.dd0, self.dsetpars.dd1,
+                zero[-4], zero[-1], centre[-4], centre[-1])
+            self.shared.oq.put(('OK', cross[0], cross[1]))
         except Exception as e:
-            shared.oq.put((str(e),))
+            self.shared.oq.put((str(e),))
 
     def run_plot(self, dname, ind):
         if self.open_dset(dname):

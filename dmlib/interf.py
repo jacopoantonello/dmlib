@@ -200,6 +200,37 @@ def repad_order(f3, ff0, ff1, pad=2, alpha=.25):
     return f4, dd0, dd1, ext4
 
 
+def estimate_aperture_centre(
+        dd0, dd1, zero_mag, zero_phi, centre_mag, centre_phi):
+    _, e0 = np.histogram(zero_mag, bins=10)
+    mask0 = zero_mag > e0[1]
+    _, ec = np.histogram(centre_mag, bins=10)
+    maskc = centre_mag > ec[1]
+    mask = mask0*maskc
+
+    dd = np.linspace(-1, 1, 64)
+    selem = np.ones((dd.size, dd.size))
+    [xx, yy] = np.meshgrid(dd, dd)
+    rr = np.sqrt(xx**2 + yy**2)
+    selem = rr < 1
+    mask = morphology.binary_erosion(mask, selem)
+    mask = morphology.binary_opening(mask, selem)
+
+    phi0 = zero_phi*mask
+    phic = centre_phi*mask
+
+    delta = phi0 - phic
+    delta[mask] = delta[mask] - delta[mask].mean()
+    delta[np.invert(mask)] = 0
+    delta = np.abs(delta)
+    _, e2 = np.histogram(delta, bins=10)
+    delta[delta < e2[3]] = 0
+
+    xx, yy = np.meshgrid(dd1, dd0)
+    cross = np.array(mgcentroid(xx, yy, delta))
+    return cross
+
+
 def call_unwrap(phase, mask=None):
     if mask is not None:
         masked = np.ma.masked_array(phase, mask)
