@@ -487,7 +487,7 @@ class Control(QMainWindow):
 
         disables = [
             self.toolbox, brun, bwavelength, bplot,
-            bprev, bnext, baperture]
+            bprev, bnext, baperture, bcalibrate]
 
         wavelength = []
         dataset = []
@@ -497,7 +497,6 @@ class Control(QMainWindow):
         listener = DataAcqListener(self.shared, wavelength, self.dmplot)
 
         def disable():
-            status.setText('working...')
             ind = self.tabs.indexOf(frame)
             for i in range(self.tabs.count()):
                 if i != ind:
@@ -707,23 +706,35 @@ class Control(QMainWindow):
 
             return f
 
+        def f6():
+            def f():
+                ndata = check_err()
+                if ndata == -1:
+                    pass
+                else:
+                    status.setText('done')
+                enable()
+                bstop.setEnabled(True)
+            return f
+
+        clistener = CalibListener(self.shared, dataset, centre, radius)
+        clistener.finished.connect(f6())
+
         def f5():
             setup_aperture = f4()
 
             def f():
                 disable()
+                bstop.setEnabled(False)
+
                 ok = True
                 if radius[0] <= 0 or not centre:
                     ok = setup_aperture()
 
                 if ok and radius[0] > 0 and centre:
-                    self.shared.iq.put((
-                        'calibrate', dataset[0], centre, radius[0]))
-                    ndata = check_err()
-                    if ndata == -1:
-                        enable()
-                        return
-                enable()
+                    status.setText('working...')
+                    clistener.start()
+
             return f
 
         def f2():
@@ -1109,6 +1120,20 @@ class AlignListener(QThread):
                 return
 
 
+class CalibListener(QThread):
+
+    def __init__(self, shared, dset, centre, radius):
+        super().__init__()
+        self.shared = shared
+        self.dset = dset
+        self.centre = centre
+        self.radius = radius
+
+    def run(self):
+        self.shared.iq.put((
+            'calibrate', self.dset[0], self.centre, self.radius[0]))
+
+
 class DataAcqListener(QThread):
 
     busy = False
@@ -1416,7 +1441,7 @@ class Worker:
 
             try:
                 img = self.dset['data/images'][0, ...]
-                P = self.dset['cam/pixel_size']
+                P = self.dset['cam/pixel_size'][()]
                 shape = img.shape
                 cam_grid = make_cam_grid(shape, P)
                 ft_grid = make_ft_grid(shape, P)
@@ -1478,6 +1503,7 @@ class Worker:
         if self.open_dset(dname):
             return
 
+        import traceback, sys
         try:
             print('run_centre', centre, radius, self.dsetpars.dd0.max())
             H, mvaf, phi0, z0, C = calibrate(
@@ -1487,6 +1513,7 @@ class Worker:
                 self.dset['data/images'])
             self.shared.oq.put(('OK',))
         except Exception as e:
+            traceback.print_exc(file=sys.stdout)
             self.shared.oq.put((str(e),))
 
     def run_centre(self, dname):
