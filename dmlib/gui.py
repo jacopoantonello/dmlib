@@ -31,7 +31,7 @@ from PyQt5.QtWidgets import (  # noqa: F401
     QComboBox, QGroupBox, QGridLayout, QCheckBox, QVBoxLayout, QFrame,
     QApplication, QShortcut, QSlider, QDoubleSpinBox, QToolBox,
     QWidget, QFileDialog, QScrollArea, QMessageBox, QSplitter,
-    QInputDialog, QStyleFactory, QSizePolicy
+    QInputDialog, QStyleFactory, QSizePolicy, QErrorMessage,
     )
 
 import version
@@ -869,8 +869,14 @@ class FakeCamera():
     def close(self):
         pass
 
+    def get_devices(self):
+        return ['cam0']
+
 
 class FakeDM():
+
+    def get_devices(self):
+        return ['dm0']
 
     def size(self):
         return 140
@@ -1797,12 +1803,39 @@ if __name__ == '__main__':
         '--dm', choices=['sim', 'bmc', 'ciusb'], default='sim')
     parser.add_argument(
         '--cam', choices=['sim', 'thorcam'], default='sim')
-    parser.add_argument('--dm-name', type=str, default='C17W005#050')
-    parser.add_argument('--dm-index', type=int, default=0)
-    parser.add_argument('--cam-name', type=str, default='4103267374')
+    parser.add_argument('--dm-name', type=str, default=None)
+    parser.add_argument('--cam-name', type=str, default=None)
     args = parser.parse_args(args[1:])
 
     cam, dm = open_hardware(args)
+
+    def set_dm(t):
+        args.dm_name = t
+
+    def set_cam(t):
+        args.cam_name = t
+
+    loops = zip(
+        (cam, dm), ('camera', 'dm'),
+        (args.cam_name, args.dm_name),
+        (set_cam, set_dm))
+    for dev, name, def1, set1 in loops:
+        devs = dev.get_devices()
+        if len(devs) == 0:
+            e = QErrorMessage()
+            e.showMessage('no {} found'.format(name))
+            sys.exit(app.exec_())
+        elif def1 is None or def1 not in devs:
+            if len(devs) == 1:
+                set1(devs[0])
+            else:
+                item, ok = QInputDialog.getItem(
+                    None, '', 'select ' + name + ':', devs, 0, False)
+                if ok and item:
+                    set1(item)
+                else:
+                    sys.exit(0)
+
     shared = Shared(cam, dm)
     dm.close()
     cam.close()
