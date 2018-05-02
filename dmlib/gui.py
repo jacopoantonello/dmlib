@@ -11,6 +11,7 @@ import h5py
 import time
 import multiprocessing
 
+from os import path
 from collections import namedtuple
 from multiprocessing import Process, Queue, Array, Value
 from datetime import datetime, timezone
@@ -39,6 +40,14 @@ from interf import (
     extract_order, call_unwrap, estimate_aperture_centre)
 
 from calibrate import calibrate
+
+
+HDF5_options = {
+    'chunks': True,
+    'shuffle': True,
+    'fletcher32': True,
+    'compression': 'gzip',
+    'compression_opts': 9}
 
 
 class Control(QMainWindow):
@@ -715,10 +724,8 @@ class Control(QMainWindow):
         def f6():
             def f():
                 ndata = check_err()
-                if ndata == -1:
-                    pass
-                else:
-                    status.setText('done')
+                if ndata != -1:
+                    status.setText('{} {:.2f}%'.format(*ndata))
                 enable()
                 bstop.setEnabled(True)
             return f
@@ -1514,12 +1521,71 @@ class Worker:
 
         try:
             print('run_centre', centre, radius, self.dsetpars.dd0.max())
-            H, mvaf, phi0, z0, C = calibrate(
+            H, mvaf, phi0, z0, C, alpha, lambda1, cart = calibrate(
                 self.dsetpars.ft_grid, self.dsetpars.f0, self.dsetpars.f1,
                 self.dsetpars.P, self.dsetpars.dd0, self.dsetpars.dd1,
                 centre, radius, self.dset['data/U'][()],
                 self.dset['data/images'])
-            self.shared.oq.put(('OK',))
+
+            now = datetime.now(timezone.utc)
+            libver = 'latest'
+            h5fn = path.join(
+                path.dirname(dname), path.basename(dname).rstrip('.h5') +
+                '-{:.3f}mm'.format(radius/1000) + '.h5')
+
+            wavelength = self.dset['wavelength'][()]
+            dm_serial = self.dset['dm/serial'][()]
+            dm_transform = self.dset['dm/transform'][()]
+            dm_transform = self.dset['dm/transform'][()]
+            cam_pixel_size = self.dset['cam/pixel_size'][()]
+            cam_serial = self.dset['cam/serial'][()]
+            dmplot_txs = self.dset['dmplot/txs'][()]
+            with h5py.File(h5fn, 'w', libver=libver) as h5f:
+                self.write_h5_header(h5f, libver, now)
+
+                h5f['data/name'] = dname
+                h5f['data/md5'] = version.hash_file(dname)
+                h5f['data/wavelength'] = wavelength
+                h5f['data/wavelength'].attrs['units'] = 'nm'
+                h5f['dm/serial'] = dm_serial
+                h5f['dm/transform'] = dm_transform
+                h5f['cam/serial'] = cam_serial
+                h5f['cam/pixel_size'] = cam_pixel_size
+                h5f['cam/pixel_size'].attrs['units'] = 'um'
+                h5f['dmplot/txs'] = dmplot_txs
+
+                h5f['interf/img'] = self.dsetpars.img
+                h5f['interf/P'] = self.dsetpars.P
+                h5f['interf/shape'] = self.dsetpars.shape
+                for k, p in enumerate(self.dsetpars.cam_grid):
+                    h5f['interf/cam_grid{}'.format(k)] = p
+                for k, p in enumerate(self.dsetpars.ft_grid):
+                    h5f['interf/ft_grid{}'.format(k)] = p
+                h5f['interf/fimg'] = self.dsetpars.fimg
+                h5f['interf/logf2'] = self.dsetpars.logf2
+                h5f['interf/f0'] = self.dsetpars.f0
+                h5f['interf/f1'] = self.dsetpars.f1
+                h5f['interf/f3'] = self.dsetpars.f3
+                h5f['interf/ext3'] = self.dsetpars.ext3
+                h5f['interf/f4'] = self.dsetpars.f4
+                h5f['interf/dd0'] = self.dsetpars.dd0
+                h5f['interf/dd1'] = self.dsetpars.dd1
+                h5f['interf/ext4'] = self.dsetpars.ext4
+                h5f['interf/gp'] = self.dsetpars.gp
+                h5f['interf/mag'] = self.dsetpars.mag
+                h5f['interf/wrapped'] = self.dsetpars.wrapped
+                h5f['interf/unwrapped'] = self.dsetpars.unwrapped
+
+                h5f['calib/H'] = H
+                h5f['calib/mvaf'] = mvaf
+                h5f['calib/phi0'] = phi0
+                h5f['calib/z0'] = z0
+                h5f['calib/C'] = C
+                h5f['calib/alpha'] = alpha
+                h5f['calib/lambda1'] = lambda1
+                cart.save_h5py(h5f, 'cart')
+
+            self.shared.oq.put(('OK', h5fn, mvaf.mean()))
         except Exception as e:
             self.shared.oq.put((str(e),))
 
@@ -1652,7 +1718,7 @@ class Worker:
             h5f['data/U'].dims[1].label = 'step'
             h5f.create_dataset(
                 'data/images', (U.shape[1],) + cam.shape(),
-                dtype=cam.get_image_dtype())
+                dtype=cam.get_image_dtype(), **HDF5_options)
             h5f['data/images'].dims[0].label = 'step'
             h5f['data/images'].dims[1].label = 'height'
             h5f['data/images'].dims[1].label = 'width'
@@ -1662,7 +1728,7 @@ class Worker:
             h5f['align/U'].dims[1].label = 'step'
             h5f.create_dataset(
                 'align/images', (Ualign.shape[1],) + cam.shape(),
-                dtype=cam.get_image_dtype())
+                dtype=cam.get_image_dtype(), **HDF5_options)
             h5f['align/images'].dims[0].label = 'step'
             h5f['align/images'].dims[1].label = 'height'
             h5f['align/images'].dims[1].label = 'width'
