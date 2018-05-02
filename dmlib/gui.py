@@ -33,6 +33,7 @@ from PyQt5.QtWidgets import (  # noqa: F401
     QInputDialog, QStyleFactory, QSizePolicy
     )
 
+import version
 from interf import (
     make_cam_grid, make_ft_grid, ft, ift, find_orders, repad_order,
     extract_order, call_unwrap, estimate_aperture_centre)
@@ -51,7 +52,7 @@ class Control(QMainWindow):
         self.shared = shared
         self.shared.make_static()
 
-        self.setWindowTitle('DM control')
+        self.setWindowTitle('DM calibration ' + version.__version__)
         QShortcut(QKeySequence("Ctrl+Q"), self, self.close)
 
         central = QSplitter(Qt.Horizontal)
@@ -1511,7 +1512,6 @@ class Worker:
         if self.open_dset(dname):
             return
 
-        import traceback, sys
         try:
             print('run_centre', centre, radius, self.dsetpars.dd0.max())
             H, mvaf, phi0, z0, C = calibrate(
@@ -1521,7 +1521,6 @@ class Worker:
                 self.dset['data/images'])
             self.shared.oq.put(('OK',))
         except Exception as e:
-            traceback.print_exc(file=sys.stdout)
             self.shared.oq.put((str(e),))
 
     def run_centre(self, dname):
@@ -1577,6 +1576,23 @@ class Worker:
         except Exception as e:
             self.shared.oq.put((str(e),))
 
+    def write_h5_header(self, h5f, libver, now):
+        libver = 'latest'
+
+        h5f['datetime'] = now.isoformat()
+
+        # save HDF5 library info
+        h5f['h5py/libver'] = libver
+        h5f['h5py/api_version'] = h5py.version.api_version
+        h5f['h5py/version'] = h5py.version.version
+        h5f['h5py/hdf5_version'] = h5py.version.hdf5_version
+        h5f['h5py/info'] = h5py.version.info
+
+        # save dmlib info
+        h5f['dmlib/__date__'] = version.__date__
+        h5f['dmlib/__version__'] = version.__version__
+        h5f['dmlib/__commit__'] = version.__commit__
+
     def run_dataacq(self, wavelength, dmplot_txs, sleep=.1):
         cam = self.cam
         dm = self.dm
@@ -1609,19 +1625,7 @@ class Worker:
                 ))
 
         with h5py.File(h5fn, 'w', libver=libver) as h5f:
-            h5f['datetime'] = now.isoformat()
-
-            # save HDF5 library info
-            h5f['h5py/libver'] = libver
-            h5f['h5py/api_version'] = h5py.version.api_version
-            h5f['h5py/version'] = h5py.version.version
-            h5f['h5py/hdf5_version'] = h5py.version.hdf5_version
-            h5f['h5py/info'] = h5py.version.info
-
-            # save dmlib info
-            h5f['dmlib/__date__'] = ''
-            h5f['dmlib/__version__'] = ''
-            h5f['dmlib/__commit__'] = ''
+            self.write_h5_header(h5f, libver, now)
 
             h5f['dmplot/txs'] = dmplot_txs
 
