@@ -480,6 +480,8 @@ class Control(QMainWindow):
 
         baperture = QPushButton('aperture')
         layout.addWidget(baperture, 4, 0)
+        bcalibrate = QPushButton('calibrate')
+        layout.addWidget(bcalibrate, 4, 1)
 
         disables = [
             self.toolbox, brun, bwavelength, bplot,
@@ -685,6 +687,24 @@ class Control(QMainWindow):
 
             return f
 
+        def f5():
+            setup_aperture = f4()
+
+            def f():
+                if radius[0] <= 0 or not centre:
+                    setup_aperture()
+
+                if radius[0] <= 0 or not centre:
+                    return
+
+                self.shared.iq.put((
+                    'calibration', dataset[0], centre, radius[0]))
+                ndata = check_err()
+                if ndata == -1:
+                    return
+
+            return f
+
         def f2():
             def f():
                 listener.run = False
@@ -746,6 +766,7 @@ class Control(QMainWindow):
         bnext.clicked.connect(f3(1))
         bprev.clicked.connect(f3(-1))
         baperture.clicked.connect(f4())
+        bcalibrate.clicked.connect(f5())
 
         listener.sig_update.connect(f20())
         self.dataacq_nav = NavigationToolbar2QT(self.dataacq_fig, frame)
@@ -1259,6 +1280,8 @@ class Worker:
                 self.run_plot(*cmd[1:])
             elif cmd[0] == 'centre':
                 self.run_centre(*cmd[1:])
+            elif cmd[0] == 'calibrate':
+                self.run_calibrate(*cmd[1:])
             else:
                 raise NotImplementedError(cmd)
 
@@ -1435,6 +1458,26 @@ class Worker:
         unwrapped = call_unwrap(wrapped, mask)
 
         return img, mag, ext4, wrapped, unwrapped
+
+    def run_calibrate(self, dname, centre, radius):
+        if self.open_dset(dname):
+            return
+
+        names = self.dset['align/names'][()]
+        if 'centre' not in names.split(','):
+            self.shared.oq.put(('centre measurement is missing',))
+            return
+
+        try:
+            centre = self.pull('align', names.index('centre'))
+            zero = self.pull('data', 0)
+
+            cross = estimate_aperture_centre(
+                self.dsetpars.dd0, self.dsetpars.dd1,
+                zero[-4], zero[-1], centre[-4], centre[-1])
+            self.shared.oq.put(('OK', cross[0], cross[1]))
+        except Exception as e:
+            self.shared.oq.put((str(e),))
 
     def run_centre(self, dname):
         if self.open_dset(dname):
