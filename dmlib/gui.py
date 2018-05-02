@@ -565,15 +565,19 @@ class Control(QMainWindow):
                     self, 'Select dataset', '',
                     'H5 (*.h5);;All Files (*)')
                 if not fileName:
-                    return
+                    return False
                 else:
                     dataset.append(fileName)
+                    return True
+            else:
+                return True
 
         def f3(offset=None):
             theta = np.linspace(0, 2*np.pi, 96)
 
             def f():
-                bootstrap()
+                if not bootstrap():
+                    return
 
                 if lastind:
                     last = lastind[0]
@@ -667,7 +671,8 @@ class Control(QMainWindow):
             drawf = f3(0)
 
             def f():
-                bootstrap()
+                if not bootstrap():
+                    return False
 
                 if radius:
                     rad = radius[0]/1000
@@ -692,7 +697,7 @@ class Control(QMainWindow):
                     self.shared.iq.put(('centre', dataset[0]))
                     ndata = check_err()
                     if ndata == -1:
-                        return
+                        return False
                     if centre:
                         centre[:] = ndata[:]
                     else:
@@ -734,6 +739,9 @@ class Control(QMainWindow):
                 if ok and radius[0] > 0 and centre:
                     status.setText('working...')
                     clistener.start()
+                else:
+                    enable()
+                    bstop.setEnabled(True)
 
             return f
 
