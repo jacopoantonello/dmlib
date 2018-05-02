@@ -37,6 +37,8 @@ from interf import (
     make_cam_grid, make_ft_grid, ft, ift, find_orders, repad_order,
     extract_order, call_unwrap, estimate_aperture_centre)
 
+from calibrate import calibrate
+
 
 class Control(QMainWindow):
 
@@ -494,6 +496,21 @@ class Control(QMainWindow):
         radius = [.0]
         listener = DataAcqListener(self.shared, wavelength, self.dmplot)
 
+        def disable():
+            status.setText('working...')
+            ind = self.tabs.indexOf(frame)
+            for i in range(self.tabs.count()):
+                if i != ind:
+                    self.tabs.setTabEnabled(i, False)
+            for b in disables:
+                b.setEnabled(False)
+
+        def enable():
+            for i in range(self.tabs.count()):
+                self.tabs.setTabEnabled(i, True)
+            for b in disables:
+                b.setEnabled(True)
+
         def f0():
             def f():
                 if wavelength:
@@ -513,6 +530,12 @@ class Control(QMainWindow):
             askwl = f0()
 
             def f():
+                wavelength.clear()
+                dataset.clear()
+                lastind.clear()
+                centre.clear()
+                radius[0] = .0
+
                 while not wavelength:
                     askwl()
 
@@ -523,14 +546,8 @@ class Control(QMainWindow):
                 self.dataacq_axes[1, 1].figure.canvas.draw()
                 dataset.clear()
                 lastind.clear()
+                disable()
 
-                status.setText('working...')
-                ind = self.tabs.indexOf(frame)
-                for i in range(self.tabs.count()):
-                    if i != ind:
-                        self.tabs.setTabEnabled(i, False)
-                for b in disables:
-                    b.setEnabled(False)
                 listener.run = True
                 listener.start()
             return f
@@ -573,7 +590,7 @@ class Control(QMainWindow):
 
                 if offset is None or not lastind:
                     val, ok = QInputDialog.getInt(
-                        self, 'Index',
+                        self, 'Select an index to plot',
                         'time step [{}, {}]'.format(0, ndata[0] - 1),
                         last, 0, ndata[0] - 1)
                     if not ok:
@@ -667,7 +684,7 @@ class Control(QMainWindow):
                 val, ok = QInputDialog.getDouble(
                     self, 'Aperture radius', 'radius in mm', rad, 0.,
                     radmax, 3)
-                if ok:
+                if ok and val > 0.:
                     if radius:
                         radius[0] = val*1000
                     else:
@@ -684,6 +701,9 @@ class Control(QMainWindow):
                         centre.append(ndata[1])
 
                     drawf()
+                    return True
+                else:
+                    return False
 
             return f
 
@@ -691,18 +711,19 @@ class Control(QMainWindow):
             setup_aperture = f4()
 
             def f():
+                disable()
+                ok = True
                 if radius[0] <= 0 or not centre:
-                    setup_aperture()
+                    ok = setup_aperture()
 
-                if radius[0] <= 0 or not centre:
-                    return
-
-                self.shared.iq.put((
-                    'calibration', dataset[0], centre, radius[0]))
-                ndata = check_err()
-                if ndata == -1:
-                    return
-
+                if ok and radius[0] > 0 and centre:
+                    self.shared.iq.put((
+                        'calibrate', dataset[0], centre, radius[0]))
+                    ndata = check_err()
+                    if ndata == -1:
+                        enable()
+                        return
+                enable()
             return f
 
         def f2():
@@ -713,12 +734,6 @@ class Control(QMainWindow):
             return f
 
         def f20():
-            def finish():
-                for i in range(self.tabs.count()):
-                    self.tabs.setTabEnabled(i, True)
-                for b in disables:
-                    b.setEnabled(True)
-
             def f(msg):
                 listener.busy = True
 
@@ -745,10 +760,10 @@ class Control(QMainWindow):
                     else:
                         dataset.append(msg[1])
                     status.setText('finished ' + msg[1])
-                    finish()
+                    enable()
                 else:
                     status.setText(msg[0])
-                    finish()
+                    enable()
 
                 self.dmplot.draw(a2, self.shared.u)
                 a2.axis('off')
@@ -1463,19 +1478,14 @@ class Worker:
         if self.open_dset(dname):
             return
 
-        names = self.dset['align/names'][()]
-        if 'centre' not in names.split(','):
-            self.shared.oq.put(('centre measurement is missing',))
-            return
-
         try:
-            centre = self.pull('align', names.index('centre'))
-            zero = self.pull('data', 0)
-
-            cross = estimate_aperture_centre(
-                self.dsetpars.dd0, self.dsetpars.dd1,
-                zero[-4], zero[-1], centre[-4], centre[-1])
-            self.shared.oq.put(('OK', cross[0], cross[1]))
+            print('run_centre', centre, radius, self.dsetpars.dd0.max())
+            H, mvaf, phi0, z0, C = calibrate(
+                self.dsetpars.ft_grid, self.dsetpars.f0, self.dsetpars.f1,
+                self.dsetpars.P, self.dsetpars.dd0, self.dsetpars.dd1,
+                centre, radius, self.dset['data/U'][()],
+                self.dset['data/images'])
+            self.shared.oq.put(('OK',))
         except Exception as e:
             self.shared.oq.put((str(e),))
 
