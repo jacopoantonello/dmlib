@@ -65,6 +65,7 @@ class Control(QMainWindow):
         self.tabs = QTabWidget()
         self.make_panel_align()
         self.make_panel_dataacq()
+        self.make_panel_test()
         central.addWidget(self.tabs)
 
         self.setCentralWidget(central)
@@ -824,6 +825,364 @@ class Control(QMainWindow):
         self.dataacq_nav = NavigationToolbar2QT(self.dataacq_fig, frame)
         disables.append(self.dataacq_nav)
 
+    def make_panel_test(self):
+        frame = QFrame()
+        self.test_fig = FigureCanvas(Figure(figsize=(7, 5)))
+        layout = QGridLayout()
+        frame.setLayout(layout)
+        layout.addWidget(self.test_fig, 0, 0, 1, 0)
+
+        self.tabs.addTab(frame, 'test')
+
+        self.test_axes = self.test_fig.figure.subplots(2, 3)
+        self.test_fig.figure.subplots_adjust(
+            left=.125, right=.9,
+            bottom=.1, top=.9,
+            wspace=0.45, hspace=0.45)
+        self.test_axes[0, 0].set_title('cam')
+        self.test_axes[0, 1].set_title('dm')
+        self.test_axes[0, 2].set_title('dm')
+        self.test_axes[1, 0].set_title('phi set')
+        self.test_axes[1, 1].set_title('phi meas')
+        self.test_axes[1, 2].set_title('phi err')
+
+        brun = QPushButton('run')
+        bstop = QPushButton('stop')
+        bwavelength = QPushButton('wavelength')
+        layout.addWidget(brun, 1, 0)
+        layout.addWidget(bstop, 1, 1)
+        layout.addWidget(bwavelength, 1, 2)
+        status = QLabel('')
+        status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        layout.addWidget(status, 2, 0, 1, 3)
+
+        bplot = QPushButton('open')
+        bprev = QPushButton('prev')
+        bnext = QPushButton('next')
+        layout.addWidget(bplot, 3, 0)
+        layout.addWidget(bprev, 3, 1)
+        layout.addWidget(bnext, 3, 2)
+
+        baperture = QPushButton('aperture')
+        layout.addWidget(baperture, 4, 0)
+        bcalibrate = QPushButton('calibrate')
+        layout.addWidget(bcalibrate, 4, 1)
+        bclear = QPushButton('clear')
+        layout.addWidget(bclear, 4, 2)
+
+        disables = [
+            self.toolbox, brun, bwavelength, bplot,
+            bprev, bnext, baperture, bcalibrate, bclear]
+
+        dataset = []
+
+        def clearup(clear_status=False):
+            dataset.clear()
+
+            if clear_status:
+                status.setText('')
+                self.test_axes[0, 0].clear()
+                self.test_axes[0, 1].clear()
+                self.test_axes[0, 2].clear()
+                self.test_axes[1, 0].clear()
+                self.test_axes[1, 1].clear()
+                self.test_axes[1, 2].clear()
+                self.test_axes[1, 1].figure.canvas.draw()
+
+        def disable():
+            ind = self.tabs.indexOf(frame)
+            for i in range(self.tabs.count()):
+                if i != ind:
+                    self.tabs.setTabEnabled(i, False)
+            for b in disables:
+                b.setEnabled(False)
+
+        def enable():
+            for i in range(self.tabs.count()):
+                self.tabs.setTabEnabled(i, True)
+            for b in disables:
+                b.setEnabled(True)
+
+        def f1():
+            askwl = f0()
+
+            def f():
+                clearup()
+
+                while not wavelength:
+                    askwl()
+
+                self.test_axes[0, 0].clear()
+                self.test_axes[0, 1].clear()
+                self.test_axes[1, 0].clear()
+                self.test_axes[1, 1].clear()
+                self.test_axes[1, 1].figure.canvas.draw()
+                disable()
+
+                listener.run = True
+                listener.start()
+            return f
+
+        def check_err():
+            reply = self.shared.oq.get()
+            if reply[0] != 'OK':
+                status.setText(reply[0])
+                return -1
+            else:
+                return reply[1:]
+
+        def bootstrap():
+            if not dataset:
+                fileName, _ = QFileDialog.getOpenFileName(
+                    self, 'Select a calibration', '',
+                    'H5 (*.h5);;All Files (*)')
+                if not fileName:
+                    return False
+                else:
+                    dataset.append(fileName)
+                    return True
+            else:
+                return True
+
+        def f3(offset=None):
+            def f():
+                if not bootstrap():
+                    return
+
+                self.shared.iq.put(('load_calib', dataset[0]))
+
+                ndata = check_err()
+                if ndata == -1:
+                    clearup()
+                    return
+                else:
+                    self.dmplot.update_txs(ndata[1])
+
+                if offset is None or not lastind:
+                    val, ok = QInputDialog.getInt(
+                        self, 'Select an index to plot',
+                        'time step [{}, {}]'.format(0, ndata[0] - 1),
+                        last, 0, ndata[0] - 1)
+                    if not ok:
+                        return
+                else:
+                    val = lastind[0] + offset
+
+                if val < 0:
+                    val = 0
+                elif val >= ndata[0]:
+                    val = ndata[0] - 1
+                if lastind:
+                    lastind[0] = val
+                else:
+                    lastind.append(val)
+
+                self.shared.iq.put((
+                    'plot', dataset[0], val, centre, radius[0]))
+                if check_err() == -1:
+                    return
+
+                a1 = self.test_axes[0, 0]
+                a2 = self.test_axes[0, 1]
+                a3 = self.test_axes[0, 2]
+                a4 = self.test_axes[1, 0]
+                a5 = self.test_axes[1, 1]
+                a6 = self.test_axes[1, 2]
+
+                a1.clear()
+                a2.clear()
+                a3.clear()
+                a4.clear()
+
+                a1.imshow(
+                    self.shared.cam, extent=self.shared.cam_ext,
+                    origin='lower')
+                a1.set_xlabel('mm')
+                if self.shared.cam_sat.value:
+                    a1.set_title('cam SAT')
+                else:
+                    a1.set_title('cam {: 3d} {: 3d}'.format(
+                        self.shared.cam.min(), self.shared.cam.max()))
+
+                data = self.shared.get_phase()
+                wrapped, unwrapped = data[2:]
+
+                self.dmplot.draw(a2, self.shared.u)
+                a2.axis('off')
+                a2.set_title('dm')
+
+                self.dmplot.draw(a3, self.shared.u)
+                a3.axis('off')
+                a3.set_title('dm')
+
+                a4.imshow(
+                    wrapped, extent=self.shared.mag_ext,
+                    origin='lower')
+                a4.set_xlabel('mm')
+                a4.set_title('phi set')
+
+                a5.imshow(
+                    unwrapped, extent=self.shared.mag_ext,
+                    origin='lower')
+                a5.set_xlabel('mm')
+                a5.set_title('phi meas')
+
+                a6.imshow(
+                    unwrapped, extent=self.shared.mag_ext,
+                    origin='lower')
+                a6.set_xlabel('mm')
+                a6.set_title('phi err')
+
+                a6.figure.canvas.draw()
+
+                # self.update_dm_gui()
+                status.setText('{} {}/{}'.format(
+                    dataset[0], val, ndata[0] - 1))
+            return f
+
+        def f4():
+            drawf = f3(0)
+
+            def f():
+                if not bootstrap():
+                    return False
+
+                if radius:
+                    rad = radius[0]/1000
+                else:
+                    rad = 2.1
+
+                if self.shared.cam_ext[1] > 0:
+                    radmax = min((
+                        self.shared.cam_ext[1], self.shared.cam_ext[3]))
+                else:
+                    radmax = 10.
+
+                val, ok = QInputDialog.getDouble(
+                    self, 'Aperture radius', 'radius in mm', rad, 0.,
+                    radmax, 3)
+                if ok and val > 0.:
+                    if radius:
+                        radius[0] = val*1000
+                    else:
+                        radius.append(val*1000)
+
+                    self.shared.iq.put(('centre', dataset[0]))
+                    ndata = check_err()
+                    if ndata == -1:
+                        return False
+                    if centre:
+                        centre[:] = ndata[:]
+                    else:
+                        centre.append(ndata[0])
+                        centre.append(ndata[1])
+
+                    drawf()
+                    return True
+                else:
+                    return False
+
+            return f
+
+        def f6():
+            def f():
+                ndata = check_err()
+                if ndata != -1:
+                    status.setText('{} {:.2f}%'.format(*ndata))
+                enable()
+                bstop.setEnabled(True)
+            return f
+
+        clistener = CalibListener(self.shared, dataset, centre, radius)
+        clistener.finished.connect(f6())
+
+        def f5():
+            setup_aperture = f4()
+
+            def f():
+                disable()
+                bstop.setEnabled(False)
+
+                ok = True
+                if radius[0] <= 0 or not centre:
+                    ok = setup_aperture()
+
+                if ok and radius[0] > 0 and centre:
+                    status.setText('working...')
+                    clistener.start()
+                else:
+                    enable()
+                    bstop.setEnabled(True)
+
+            return f
+
+        def f2():
+            def f():
+                listener.run = False
+                if not listener.isFinished():
+                    status.setText('stopping...')
+            return f
+
+        def f20():
+            def f(msg):
+                listener.busy = True
+
+                a1 = self.test_axes[0, 0]
+                a2 = self.test_axes[0, 1]
+
+                a1.clear()
+
+                a1.imshow(
+                    self.shared.cam, extent=self.shared.cam_ext,
+                    origin='lower')
+                a1.set_xlabel('mm')
+                if self.shared.cam_sat.value:
+                    a1.set_title('cam SAT')
+                else:
+                    a1.set_title('cam {: 3d} {: 3d}'.format(
+                        self.shared.cam.min(), self.shared.cam.max()))
+
+                if msg[0] == 'OK':
+                    status.setText('{}/{}'.format(msg[1] + 1, msg[2]))
+                elif msg[0] == 'finished':
+                    if dataset:
+                        dataset[0] = msg[1]
+                    else:
+                        dataset.append(msg[1])
+                    status.setText('finished ' + msg[1])
+                    enable()
+                else:
+                    status.setText(msg[0])
+                    enable()
+
+                self.dmplot.draw(a2, self.shared.u)
+                a2.axis('off')
+                a2.set_title('dm')
+                a2.figure.canvas.draw()
+
+                listener.busy = False
+
+            return f
+
+        def f6():
+            def f():
+                clearup(True)
+            return f
+
+        brun.clicked.connect(f1())
+        bstop.clicked.connect(f2())
+        bwavelength.clicked.connect(f0())
+        bplot.clicked.connect(f3())
+        bnext.clicked.connect(f3(1))
+        bprev.clicked.connect(f3(-1))
+        baperture.clicked.connect(f4())
+        bcalibrate.clicked.connect(f5())
+        bclear.clicked.connect(f6())
+
+        listener.sig_update.connect(f20())
+        self.test_nav = NavigationToolbar2QT(self.test_fig, frame)
+        disables.append(self.test_nav)
+
 
 class FakeCamera():
     exp = 0.06675 + 5*0.06675
@@ -1288,6 +1647,7 @@ def run_worker(shared, args):
 
 class Worker:
 
+    calib = None
     dfname = None
     dset = None
 
@@ -1354,6 +1714,8 @@ class Worker:
                 self.run_centre(*cmd[1:])
             elif cmd[0] == 'calibrate':
                 self.run_calibrate(*cmd[1:])
+            elif cmd[0] == 'load_calib':
+                self.run_load_calib(*cmd[1:])
             else:
                 raise NotImplementedError(cmd)
 
@@ -1464,6 +1826,76 @@ class Worker:
             else:
                 print('run_align', 'continue')
 
+    def cam_pull(self):
+        img = cam.grab_image()
+        fimg = ft(img)
+        f3, ext3 = extract_order(
+            fimg, self.ft_grid[0], self.ft_grid[1],
+            self.f0, self.f1, self.P)
+        f4, _, _, _ = repad_order(
+            f3, self.ft_grid[0], self.ft_grid[1])
+        gp = ift(f4)
+        wrapped = np.arctan2(gp.imag, gp.real)
+        unwrapped = call_unwrap(wrapped, self.mask)
+        return unwrapped[np.invert(self.mask)]
+
+    def open_calib(self, dname):
+        if self.calib is None or self.calib != dname:
+            with h5py.File(dname, 'r') as f:
+                if 'calib/H' not in f:
+                    self.shared.oq.put((
+                        dname + ' does not look like a calibration',))
+                    return -1
+
+            try:
+                centre = f['interf/centre'][()]
+                radius = f['interf/radius'][()]
+                ft_grid0 = f['interf/ft_grid0'][()]
+                ft_grid1 = f['interf/ft_grid1'][()]
+                f0 = f['interf/f0'][()]
+                f1 = f['interf/f1'][()]
+                P = f['interf/P'][()]
+                mask = f['interf/mask'][()]
+
+                InterfPars = namedtuple(
+                    'InterfPars',
+                    'centre radius ft_grid0 ft_grid1 f0 f1 P mask')
+                self.interfpars = InterfPars(
+                    centre, radius, ft_grid0, ft_grid1, f0, f1, P, mask)
+
+                CalibPars = namedtuple(
+                    'CalibPars', 'C H phi0 z0')
+                self.interfpars = CalibPars(
+                    centre, radius, ft_grid0, ft_grid1, f0, f1, P, mask)
+
+                img = self.dset['data/images'][0, ...]
+                P = self.dset['cam/pixel_size'][()]
+                shape = img.shape
+                cam_grid = make_cam_grid(shape, P)
+                ft_grid = make_ft_grid(shape, P)
+                fimg = ft(img)
+                logf2 = np.log(np.abs(fimg))
+                f0, f1 = find_orders(ft_grid[0], ft_grid[1], logf2)
+                f3, ext3 = extract_order(
+                    fimg, ft_grid[0], ft_grid[1], f0, f1, P)
+                f4, dd0, dd1, ext4 = repad_order(f3, ft_grid[0], ft_grid[1])
+                gp = ift(f4)
+                mag = np.abs(gp)
+                wrapped = np.arctan2(gp.imag, gp.real)
+                unwrapped = call_unwrap(wrapped)
+            except Exception as e:
+                self.shared.oq.put((str(e),))
+                return -1
+
+            DSetPars = namedtuple(
+                'DSetPars', (
+                    'img P shape cam_grid ft_grid fimg logf2 f0 f1 f3 ' +
+                    'ext3 f4 dd0 dd1 ext4 gp mag wrapped unwrapped'))
+            self.dsetpars = DSetPars(
+                img, P, shape, cam_grid, ft_grid, fimg, logf2, f0, f1, f3,
+                ext3, f4, dd0, dd1, ext4, gp, mag, wrapped, unwrapped)
+            return 0
+
     def open_dset(self, dname):
         if self.dfname is None or self.dfname != dname:
             if self.dset is not None:
@@ -1535,13 +1967,16 @@ class Worker:
 
         return img, mag, ext4, wrapped, unwrapped
 
+    def run_load_calib(self, dname):
+        pass
+
     def run_calibrate(self, dname, centre, radius):
         if self.open_dset(dname):
             return
 
         try:
             print('run_centre', centre, radius, self.dsetpars.dd0.max())
-            H, mvaf, phi0, z0, C, alpha, lambda1, cart = calibrate(
+            H, mvaf, phi0, z0, C, alpha, lambda1, mask, cart = calibrate(
                 self.dsetpars.ft_grid, self.dsetpars.f0, self.dsetpars.f1,
                 self.dsetpars.P, self.dsetpars.dd0, self.dsetpars.dd1,
                 centre, radius, self.dset['data/U'][()],
@@ -1574,6 +2009,9 @@ class Worker:
                 h5f['cam/pixel_size'].attrs['units'] = 'um'
                 h5f['dmplot/txs'] = dmplot_txs
 
+                h5f['interf/centre'] = centre
+                h5f['interf/radius'] = radius
+                h5f['interf/mask'] = mask
                 h5f['interf/img'] = self.dsetpars.img
                 h5f['interf/P'] = self.dsetpars.P
                 h5f['interf/shape'] = self.dsetpars.shape

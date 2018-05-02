@@ -135,4 +135,4 @@ def calibrate(
     else:
         C = np.linalg.pinv(H)
 
-    return H, mvaf, phi0, z0, C, alpha, lambda1, cart
+    return H, mvaf, phi0, z0, C, alpha, lambda1, mask, cart
