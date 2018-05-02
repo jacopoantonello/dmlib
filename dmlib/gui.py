@@ -42,14 +42,6 @@ from interf import (
 from calibrate import calibrate
 
 
-HDF5_options = {
-    'chunks': True,
-    'shuffle': True,
-    'fletcher32': True,
-    'compression': 'gzip',
-    'compression_opts': 9}
-
-
 class Control(QMainWindow):
 
     closing = False
@@ -483,7 +475,7 @@ class Control(QMainWindow):
         status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(status, 2, 0, 1, 3)
 
-        bplot = QPushButton('plot index')
+        bplot = QPushButton('open')
         bprev = QPushButton('prev')
         bnext = QPushButton('next')
         layout.addWidget(bplot, 3, 0)
@@ -494,10 +486,12 @@ class Control(QMainWindow):
         layout.addWidget(baperture, 4, 0)
         bcalibrate = QPushButton('calibrate')
         layout.addWidget(bcalibrate, 4, 1)
+        bclear = QPushButton('clear')
+        layout.addWidget(bclear, 4, 2)
 
         disables = [
             self.toolbox, brun, bwavelength, bplot,
-            bprev, bnext, baperture, bcalibrate]
+            bprev, bnext, baperture, bcalibrate, bclear]
 
         wavelength = []
         dataset = []
@@ -505,6 +499,21 @@ class Control(QMainWindow):
         centre = []
         radius = [.0]
         listener = DataAcqListener(self.shared, wavelength, self.dmplot)
+
+        def clearup(clear_status=False):
+            wavelength.clear()
+            dataset.clear()
+            lastind.clear()
+            centre.clear()
+            radius[0] = .0
+
+            if clear_status:
+                status.setText('')
+                self.dataacq_axes[0, 0].clear()
+                self.dataacq_axes[0, 1].clear()
+                self.dataacq_axes[1, 0].clear()
+                self.dataacq_axes[1, 1].clear()
+                self.dataacq_axes[1, 1].figure.canvas.draw()
 
         def disable():
             ind = self.tabs.indexOf(frame)
@@ -539,11 +548,7 @@ class Control(QMainWindow):
             askwl = f0()
 
             def f():
-                wavelength.clear()
-                dataset.clear()
-                lastind.clear()
-                centre.clear()
-                radius[0] = .0
+                clearup()
 
                 while not wavelength:
                     askwl()
@@ -553,8 +558,6 @@ class Control(QMainWindow):
                 self.dataacq_axes[1, 0].clear()
                 self.dataacq_axes[1, 1].clear()
                 self.dataacq_axes[1, 1].figure.canvas.draw()
-                dataset.clear()
-                lastind.clear()
                 disable()
 
                 listener.run = True
@@ -597,6 +600,7 @@ class Control(QMainWindow):
 
                 ndata = check_err()
                 if ndata == -1:
+                    clearup()
                     return
                 else:
                     self.dmplot.update_txs(ndata[1])
@@ -801,6 +805,11 @@ class Control(QMainWindow):
 
             return f
 
+        def f6():
+            def f():
+                clearup(True)
+            return f
+
         brun.clicked.connect(f1())
         bstop.clicked.connect(f2())
         bwavelength.clicked.connect(f0())
@@ -809,6 +818,7 @@ class Control(QMainWindow):
         bprev.clicked.connect(f3(-1))
         baperture.clicked.connect(f4())
         bcalibrate.clicked.connect(f5())
+        bclear.clicked.connect(f6())
 
         listener.sig_update.connect(f20())
         self.dataacq_nav = NavigationToolbar2QT(self.dataacq_fig, frame)
@@ -885,7 +895,7 @@ class FakeDM():
         print('FakeDM', v)
 
     def get_transform(self):
-        return None
+        return 'v = u'
 
     def get_serial_number(self):
         return 'dm0'
@@ -1461,6 +1471,10 @@ class Worker:
             self.dset = h5py.File(dname, 'r')
             self.dfname = dname
 
+            if 'data/images' not in self.dset:
+                self.shared.oq.put((dname + ' does not look like a dataset',))
+                return -1
+
             try:
                 img = self.dset['data/images'][0, ...]
                 P = self.dset['cam/pixel_size'][()]
@@ -1724,7 +1738,7 @@ class Worker:
             h5f['data/U'].dims[1].label = 'step'
             h5f.create_dataset(
                 'data/images', (U.shape[1],) + cam.shape(),
-                dtype=cam.get_image_dtype(), **HDF5_options)
+                dtype=cam.get_image_dtype())
             h5f['data/images'].dims[0].label = 'step'
             h5f['data/images'].dims[1].label = 'height'
             h5f['data/images'].dims[1].label = 'width'
@@ -1734,7 +1748,7 @@ class Worker:
             h5f['align/U'].dims[1].label = 'step'
             h5f.create_dataset(
                 'align/images', (Ualign.shape[1],) + cam.shape(),
-                dtype=cam.get_image_dtype(), **HDF5_options)
+                dtype=cam.get_image_dtype())
             h5f['align/images'].dims[0].label = 'step'
             h5f['align/images'].dims[1].label = 'height'
             h5f['align/images'].dims[1].label = 'width'
