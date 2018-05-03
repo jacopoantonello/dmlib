@@ -1587,15 +1587,14 @@ class Worker:
         cam = self.cam
         dm = self.dm
         shared = self.shared
-        state = self.run_align_state
         fringe = self.fringe
 
         while True:
             if poke:
                 shared.u[:] = 0.
-                shared.u[state[1]] = .7
-                state[1] += 1
-                state[1] %= shared.u.size
+                shared.u[self.run_align_state[0]] = .7
+                self.run_align_state[0] += 1
+                self.run_align_state[0] %= shared.u.size
                 dm.write(shared.u)
                 time.sleep(sleep)
 
