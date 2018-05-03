@@ -290,7 +290,7 @@ class FringeAnalysis:
 
         f3, self.ext3 = extract_order(
             fimg, self.ft_grid[0], self.ft_grid[1], self.f0f1[0],
-            self.f0f1[0], self.P)
+            self.f0f1[1], self.P)
 
         if store_logf3:
             self.logf3 = np.log(np.abs(f3))

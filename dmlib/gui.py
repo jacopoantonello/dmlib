@@ -36,6 +36,7 @@ from PyQt5.QtWidgets import (  # noqa: F401
 
 import version
 from interf import (
+    FringeAnalysis,
     make_cam_grid, make_ft_grid, ft, ift, find_orders, repad_order,
     extract_order, call_unwrap, estimate_aperture_centre)
 
@@ -826,6 +827,7 @@ class Control(QMainWindow):
         disables.append(self.dataacq_nav)
 
     def make_panel_test(self):
+        return
         frame = QFrame()
         self.test_fig = FigureCanvas(Figure(figsize=(7, 5)))
         layout = QGridLayout()
@@ -1651,8 +1653,8 @@ class Worker:
     dfname = None
     dset = None
 
-    # f0f1, lastpoke
-    run_align_state = [None, 0]
+    # lastpoke
+    run_align_state = [0]
 
     def __init__(self, shared, args):
         cam, dm = open_hardware(args)
@@ -1663,19 +1665,15 @@ class Worker:
         shared.f0f1[0] = 0.
         shared.f0f1[1] = 0.
 
-        P = cam.get_pixel_size()
-        cam_grid = make_cam_grid(cam.shape(), P)
-        ft_grid = make_ft_grid(cam.shape(), P)
+        fringe = FringeAnalysis(cam.shape(), cam.get_pixel_size())
         for i in range(4):
-            shared.cam_ext[i] = cam_grid[2][i]/1000
-            shared.ft_ext[i] = ft_grid[2][i]*1000
+            shared.cam_ext[i] = fringe.cam_grid[2][i]/1000
+            shared.ft_ext[i] = fringe.ft_grid[2][i]*1000
 
         self.cam = cam
         self.dm = dm
         self.shared = shared
-        self.cam_grid = cam_grid
-        self.ft_grid = ft_grid
-        self.P = P
+        self.fringe = fringe
 
     def run(self):
         cam = self.cam
@@ -1730,10 +1728,9 @@ class Worker:
         dm = self.dm
         shared = self.shared
         state = self.run_align_state
+        fringe = self.fringe
 
-        ft_grid = self.ft_grid
-        P = self.P
-
+        import sys, traceback
         while True:
             if poke:
                 shared.u[:] = 0.
@@ -1751,63 +1748,40 @@ class Worker:
                     shared.cam_sat.value = 0
                 shared.cam[:] = img[:]
 
-                fimg = ft(img)
-                logf2 = np.log(np.abs(fimg))
-                shared.ft[:] = logf2[:]
+                try:
+                    fringe.analyse(
+                        img, auto_find_orders=auto, store_logf2=True,
+                        store_logf3=True, store_mag=True,
+                        store_wrapped=True, do_unwrap=unwrap)
+                except ValueError:
+                    shared.oq.put('Failed to find orders')
+                    if repeat:
+                        continue
+                    else:
+                        return
 
-                if state[0] is None or auto:
-                    try:
-                        f0, f1 = find_orders(ft_grid[0], ft_grid[1], logf2)
-                    except ValueError:
-                        shared.oq.put('Failed to find orders')
-                        if repeat:
-                            continue
-                        else:
-                            return
-                else:
-                    f0, f1 = state[0]
-                state[0] = (f0, f1)
-                shared.f0f1[0] = f0
-                shared.f0f1[1] = f1
+                shared.ft[:] = fringe.logf2[:]
+                shared.f0f1[:] = fringe.f0f1[:]
 
-                f3, ext3 = extract_order(
-                    fimg, ft_grid[0], ft_grid[1], f0, f1, P)
+                def f1(dst, src):
+                    dst[:src.nbytes] = src.tobytes()
 
-                logf3 = np.log(np.abs(f3))
-                shared.fstord_buf[:logf3.nbytes] = logf3.tobytes()
+                f1(shared.fstord_buf, fringe.logf3)
                 for i in range(4):
-                    shared.fstord_ext[i] = ext3[i]*1000
-                shared.fstord_shape[:] = logf3.shape[:]
-
-                f4, dd0, dd1, ext4 = repad_order(f3, ft_grid[0], ft_grid[1])
-
-                gp = ift(f4)
-                mag = np.abs(gp)
-                wrapped = np.arctan2(gp.imag, gp.real)
-
-                shared.mag_buf[:mag.nbytes] = mag.tobytes()
-                shared.wrapped_buf[:wrapped.nbytes] = wrapped.tobytes()
+                    shared.fstord_ext[i] = fringe.ext3[i]*1000
+                shared.fstord_shape[:] = fringe.logf3.shape[:]
+                f1(shared.mag_buf, fringe.mag)
+                f1(shared.wrapped_buf, fringe.wrapped)
                 for i in range(4):
-                    shared.mag_ext[i] = ext4[i]/1000
-                shared.mag_shape[:] = mag.shape[:]
+                    shared.mag_ext[i] = fringe.ext4[i]/1000
+                shared.mag_shape[:] = fringe.mag.shape[:]
 
                 if unwrap:
-                    try:
-                        _, edges = np.histogram(mag.ravel(), bins=100)
-                        mask = (mag < edges[1]).reshape(mag.shape)
-                        unwrapped = call_unwrap(wrapped, mask)
-                    except Exception as ex:
-                        shared.oq.put('Failed to unwrap phase: ' + str(ex))
-                        if repeat:
-                            continue
-                        else:
-                            return
-                    shared.unwrapped_buf[:unwrapped.nbytes] = \
-                        unwrapped.tobytes()
+                    f1(shared.unwrapped_buf, fringe.unwrapped)
                 else:
-                    shared.unwrapped_buf[:] = \
-                        np.zeros(shared.totpixs).tobytes()
+                    f1(shared.unwrapped_buf, np.zeros(shared.totpixs))
             except Exception as ex:
+                traceback.print_exc(file=sys.stdout)
                 shared.oq.put('Error: ' + str(ex))
                 if repeat:
                     continue
