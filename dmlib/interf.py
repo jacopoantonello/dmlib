@@ -399,26 +399,26 @@ class FringeAnalysis:
         params['data'] = self.ft_grid[2]
         f.create_dataset(prefix + 'ft_grid2', **params)
 
-        if self.f0f1:
+        if self.f0f1 is not None:
             f.create_dataset(prefix + 'f0f1', **params)
-        if self.img:
+        if self.img is not None:
             f.create_dataset(prefix + 'img', **params)
-        if self.ext3:
+        if self.ext3 is not None:
             f.create_dataset(prefix + 'ext3', **params)
-        if self.dd0:
+        if self.dd0 is not None:
             f.create_dataset(prefix + 'dd0', **params)
-        if self.dd1:
+        if self.dd1 is not None:
             f.create_dataset(prefix + 'dd1', **params)
-        if self.ext4:
+        if self.ext4 is not None:
             f.create_dataset(prefix + 'ext4', **params)
-        if self.gp:
+        if self.gp is not None:
             f.create_dataset(prefix + 'gp', **params)
-        if self.unwrapped:
+        if self.unwrapped is not None:
             f.create_dataset(prefix + 'unwrapped', **params)
 
-        if self.centre:
+        if self.centre is not None:
             f.create_dataset(prefix + 'centre', **params)
-        if self.radius:
+        if self.radius is not None:
             f.create_dataset(prefix + 'radius', **params)
 
     def get_unit_aperture(self):

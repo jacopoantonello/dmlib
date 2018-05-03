@@ -9,7 +9,7 @@ from numpy.linalg import lstsq, pinv
 from scipy.linalg import cholesky, solve_triangular
 from skimage.restoration import unwrap_phase
 
-from interf import ft, ift, repad_order, extract_order, call_unwrap
+from interf import FringeAnalysis
 from sensorless.czernike import RZern
 
 HDF5_options = {
@@ -136,6 +136,7 @@ class WeightedLSCalib:
         else:
             C = np.linalg.pinv(H)
 
+        self.fringe = fringe
         self.cart = cart
         self.zfA1 = zfA1
         self.zfA2 = zfA2
@@ -169,7 +170,8 @@ class WeightedLSCalib:
         if prepend is not None:
             prefix = prepend + prefix
 
-        z.cart = RZern.load_h5py(f, prefix + 'cart')
+        z.cart = RZern.load_h5py(f, prefix + 'cart/')
+        z.fringe = FringeAnalysis.load_h5py(f, prefix + 'fringe/')
         z.zfA1 = f[prefix + 'zfA1'][()]
         z.zfA2 = f[prefix + 'zfA2'][()]
         z.zfm = f[prefix + 'zfm'][()]
@@ -201,7 +203,8 @@ class WeightedLSCalib:
         if prepend is not None:
             prefix = prepend + prefix
 
-        self.cart.save_h5py(f, prefix + 'cart', params=HDF5_options)
+        self.cart.save_h5py(f, prefix + 'cart/', params=HDF5_options)
+        self.fringe.save_h5py(f, prefix + 'fringe/', params=HDF5_options)
 
         params['data'] = self.zfA1
         f.create_dataset(prefix + 'zfA1', **params)
@@ -225,11 +228,11 @@ class WeightedLSCalib:
         f.create_dataset(prefix + 'alpha', data=np.array([self.alpha]))
         f.create_dataset(prefix + 'lambda1', data=np.array([self.lambda1]))
 
-        f['wavelength'] = self.wavelength
-        f['dm_serial'] = self.dm_serial
-        f['dm_transform'] = self.dm_transform
-        f['cam_pixel_size'] = self.cam_pixel_size
-        f['cam_serial'] = self.cam_serial
-        f['dmplot_txs'] = self.dmplot_txs
-        f['dname'] = self.dname
-        f['hash1'] = self.hash1
+        f[prefix + 'wavelength'] = self.wavelength
+        f[prefix + 'dm_serial'] = self.dm_serial
+        f[prefix + 'dm_transform'] = self.dm_transform
+        f[prefix + 'cam_pixel_size'] = self.cam_pixel_size
+        f[prefix + 'cam_serial'] = self.cam_serial
+        f[prefix + 'dmplot_txs'] = self.dmplot_txs
+        f[prefix + 'dname'] = self.dname
+        f[prefix + 'hash1'] = self.hash1

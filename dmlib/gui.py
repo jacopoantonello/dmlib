@@ -725,16 +725,17 @@ class Control(QMainWindow):
             return f
 
         def f6():
-            def f():
-                ndata = check_err()
-                if ndata != -1:
-                    status.setText('{} {:.2f}%'.format(*ndata))
+            def f(reply):
+                if reply[0] == 'OK':
+                    status.setText('{} {:.2f}%'.format(*reply[1:]))
+                else:
+                    status.setText(reply[0])
                 enable()
                 bstop.setEnabled(True)
             return f
 
         clistener = CalibListener(self.shared, dataset, centre, radius)
-        clistener.finished.connect(f6())
+        clistener.sig_update.connect(f6())
 
         def f5():
             setup_aperture = f4()
@@ -1373,6 +1374,7 @@ class AlignListener(QThread):
 
 
 class CalibListener(QThread):
+    sig_update = pyqtSignal(tuple)
 
     def __init__(self, shared, dset, centre, radius):
         super().__init__()
@@ -1383,6 +1385,8 @@ class CalibListener(QThread):
 
     def run(self):
         self.shared.iq.put(('calibrate', self.dset[0], self.radius[0]))
+        self.sig_update.emit(self.shared.oq.get())
+
 
 
 class DataAcqListener(QThread):
