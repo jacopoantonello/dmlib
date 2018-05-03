@@ -709,6 +709,7 @@ class Control(QMainWindow):
                     self.shared.iq.put(('centre', dataset[0]))
                     ndata = check_err()
                     if ndata == -1:
+                        clearup()
                         return False
                     if centre:
                         centre[:] = ndata[:]
@@ -1673,6 +1674,9 @@ class Worker:
 
             if 'data/images' not in self.dset:
                 self.shared.oq.put((dname + ' does not look like a dataset',))
+                self.dset.close()
+                self.dfname = None
+                self.dset = None
                 return -1
 
             try:
@@ -1684,6 +1688,8 @@ class Worker:
                 traceback.print_exc(file=sys.stdout)
                 self.shared.oq.put((str(e),))
                 return -1
+            return 0
+        else:
             return 0
 
     def run_query(self, dname):
