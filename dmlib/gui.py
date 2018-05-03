@@ -1839,7 +1839,7 @@ class Worker:
             img_zero = self.dset['data/images'][0, ...]
             self.fringe.estimate_centre(img_zero, img_centre)
             self.shared.oq.put((
-                'OK', self.fringe.cross[0], self.fringe.cross[1]))
+                'OK', self.fringe.centre[1], self.fringe.centre[0]))
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
             self.shared.oq.put((str(e),))

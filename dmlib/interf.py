@@ -28,7 +28,7 @@ def mgcentroid(xx, yy, img, mythr=0.0):
     mysum1 = np.sum((xx*img).ravel())
     mysum2 = np.sum((yy*img).ravel())
     mymass = np.sum(img.ravel())
-    return mysum1/mymass, mysum2/mymass
+    return mysum2/mymass, mysum1/mymass
 
 
 def make_cam_grid(sh, ps):
@@ -424,7 +424,7 @@ class FringeAnalysis:
     def update_radius(self, radius):
         if radius > 0. and self.centre is not None:
             [xx, yy] = np.meshgrid(
-                self.dd1 - self.centre[0], self.dd0 - self.centre[1])
+                self.dd1 - self.centre[1], self.dd0 - self.centre[0])
             self.mask = np.sqrt(xx**2 + yy**2) >= radius
         else:
             self.mask = None
