@@ -1381,8 +1381,7 @@ class CalibListener(QThread):
         self.radius = radius
 
     def run(self):
-        self.shared.iq.put((
-            'calibrate', self.dset[0], self.centre, self.radius[0]))
+        self.shared.iq.put(('calibrate', self.dset[0], self.radius[0]))
 
 
 class DataAcqListener(QThread):
@@ -1742,12 +1741,13 @@ class Worker:
     def run_load_calib(self, dname):
         pass
 
-    def run_calibrate(self, dname, centre, radius):
+    def run_calibrate(self, dname, radius):
         if self.open_dset(dname):
             return
 
         try:
-            print('run_centre', centre, radius, self.dsetpars.dd0.max())
+            fringe.update_radius(radius)
+
             H, mvaf, phi0, z0, C, alpha, lambda1, mask, cart = calibrate(
                 self.dsetpars.ft_grid, self.dsetpars.f0, self.dsetpars.f1,
                 self.dsetpars.P, self.dsetpars.dd0, self.dsetpars.dd1,

@@ -235,8 +235,8 @@ def estimate_aperture_centre(
     delta[delta < e2[3]] = 0
 
     xx, yy = np.meshgrid(dd1, dd0)
-    cross = np.array(mgcentroid(xx, yy, delta))
-    return cross
+    centre = np.array(mgcentroid(xx, yy, delta))
+    return centre
 
 
 def call_unwrap(phase, mask=None):
@@ -262,7 +262,7 @@ class FringeAnalysis:
     unwrapped = None
     mask = None
 
-    cross = None
+    centre = None
     radius = 0.
 
     def __init__(self, shape, P):
@@ -366,8 +366,8 @@ class FringeAnalysis:
         if prefix + 'unwrapped' in f:
             z.unwrapped = f[prefix + 'unwrapped'][()]
 
-        if prefix + 'cross' in f:
-            z.cross = f[prefix + 'cross'][()]
+        if prefix + 'centre' in f:
+            z.centre = f[prefix + 'centre'][()]
         if prefix + 'radius' in f:
             z.radius = f[prefix + 'radius'][()]
 
@@ -416,15 +416,15 @@ class FringeAnalysis:
         if self.unwrapped:
             f.create_dataset(prefix + 'unwrapped', **params)
 
-        if self.cross:
-            f.create_dataset(prefix + 'cross', **params)
+        if self.centre:
+            f.create_dataset(prefix + 'centre', **params)
         if self.radius:
             f.create_dataset(prefix + 'radius', **params)
 
     def update_radius(self, radius):
-        if radius > 0. and self.cross is not None:
+        if radius > 0. and self.centre is not None:
             [xx, yy] = np.meshgrid(
-                self.dd1 - self.cross[0], self.dd0 - self.cross[1])
+                self.dd1 - self.centre[0], self.dd0 - self.centre[1])
             self.mask = np.sqrt(xx**2 + yy**2) >= radius
         else:
             self.mask = None
@@ -441,7 +441,7 @@ class FringeAnalysis:
         mag_centre = self.mag
         phi_centre = self.unwrapped
 
-        cross = estimate_aperture_centre(
+        centre = estimate_aperture_centre(
             self.dd0, self.dd1, mag_zero, phi_zero,
             mag_centre, phi_centre)
-        self.cross = cross
+        self.centre = centre
