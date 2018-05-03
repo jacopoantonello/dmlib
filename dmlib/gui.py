@@ -37,7 +37,7 @@ from PyQt5.QtWidgets import (  # noqa: F401
 
 import version
 from interf import FringeAnalysis
-from calibrate import calibrate
+from calibrate import WeightedLSCalib
 
 
 class Control(QMainWindow):
@@ -1751,13 +1751,21 @@ class Worker:
             return
 
         try:
-            fringe.update_radius(radius)
+            wavelength = self.dset['wavelength'][()]
+            dm_serial = self.dset['dm/serial'][()]
+            dm_transform = self.dset['dm/transform'][()]
+            cam_pixel_size = self.dset['cam/pixel_size'][()]
+            cam_serial = self.dset['cam/serial'][()]
+            dmplot_txs = self.dset['dmplot/txs'][()]
+            hash1 = version.hash_file(dname)
 
-            H, mvaf, phi0, z0, C, alpha, lambda1, mask, cart = calibrate(
-                self.dsetpars.ft_grid, self.dsetpars.f0, self.dsetpars.f1,
-                self.dsetpars.P, self.dsetpars.dd0, self.dsetpars.dd1,
-                centre, radius, self.dset['data/U'][()],
-                self.dset['data/images'])
+            self.fringe.update_radius(radius)
+            calib = WeightedLSCalib()
+            calib.calibrate(
+                self.dset['data/U'][()], self.dset['data/images'],
+                self.fringe, wavelength, dm_serial, dm_transform,
+                cam_pixel_size, cam_serial, dmplot_txs, dname,
+                hash1)
 
             now = datetime.now(timezone.utc)
             libver = 'latest'
@@ -1765,18 +1773,10 @@ class Worker:
                 path.dirname(dname), path.basename(dname).rstrip('.h5') +
                 '-{:.3f}mm'.format(radius/1000) + '.h5')
 
-            wavelength = self.dset['wavelength'][()]
-            dm_serial = self.dset['dm/serial'][()]
-            dm_transform = self.dset['dm/transform'][()]
-            dm_transform = self.dset['dm/transform'][()]
-            cam_pixel_size = self.dset['cam/pixel_size'][()]
-            cam_serial = self.dset['cam/serial'][()]
-            dmplot_txs = self.dset['dmplot/txs'][()]
             with h5py.File(h5fn, 'w', libver=libver) as h5f:
                 version.write_h5_header(h5f, libver, now)
 
                 h5f['data/name'] = dname
-                h5f['data/md5'] = version.hash_file(dname)
                 h5f['data/wavelength'] = wavelength
                 h5f['data/wavelength'].attrs['units'] = 'nm'
                 h5f['dm/serial'] = dm_serial

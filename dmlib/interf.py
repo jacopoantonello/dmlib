@@ -331,15 +331,15 @@ class FringeAnalysis:
     @classmethod
     def load_h5py(cls, f, prepend=None):
         """Load object contents from an opened HDF5 file object."""
-        z = cls(1)
 
         prefix = cls.__name__ + '/'
 
         if prepend is not None:
             prefix = prepend + prefix
 
-        z.shape = f[prefix + 'shape'][()]
-        z.P = f[prefix + 'P'][()]
+        shape = f[prefix + 'shape'][()]
+        P = f[prefix + 'P'][()]
+        z = cls((shape, P))
         z.cam_grid = (
             f[prefix + 'cam_grid0'][()],
             f[prefix + 'cam_grid1'][()],
@@ -420,6 +420,12 @@ class FringeAnalysis:
             f.create_dataset(prefix + 'centre', **params)
         if self.radius:
             f.create_dataset(prefix + 'radius', **params)
+
+    def get_unit_aperture(self):
+        xx, yy = np.meshgrid(
+            (self.dd1 - self.centre[1])/self.radius,
+            (self.dd0 - self.centre[0])/self.radius)
+        return xx, yy, (self.dd1.size, self.dd0.size)
 
     def update_radius(self, radius):
         if radius > 0. and self.centre is not None:
