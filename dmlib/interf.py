@@ -260,9 +260,10 @@ class FringeAnalysis:
     ext4 = None
     gp = None
     unwrapped = None
+    mask = None
 
     cross = None
-    radius = None
+    radius = 0.
 
     def __init__(self, shape, P):
         self.shape = shape
@@ -274,17 +275,17 @@ class FringeAnalysis:
     def analyse(
             self, img, auto_find_orders=False, store_logf2=False,
             store_logf3=False, store_gp=False, store_mag=False,
-            store_wrapped=False, do_unwrap=True, mask=None):
+            store_wrapped=False, do_unwrap=True, use_mask=True):
 
-        fimg = ft(img)
         self.img = img
+        fimg = ft(img)
 
-        if store_logf2 or auto_find_orders:
+        if store_logf2 or auto_find_orders or self.f0f1 is None:
             self.logf2 = np.log(np.abs(fimg))
         else:
             self.logf2 = None
 
-        if find_orders or self.f0f1 is None:
+        if self.f0f1 is None or auto_find_orders:
             self.f0f1 = find_orders(
                 self.ft_grid[0], self.ft_grid[1], self.logf2)
 
@@ -320,10 +321,11 @@ class FringeAnalysis:
             self.wrapped = None
 
         if do_unwrap:
-            if mask is None:
+            if not use_mask or self.mask is None:
                 _, edges = np.histogram(mag.ravel(), bins=100)
                 mask = (mag < edges[1]).reshape(mag.shape)
-
+            else:
+                mask = self.mask
             self.unwrapped = call_unwrap(wrapped, mask)
 
     @classmethod
@@ -418,3 +420,28 @@ class FringeAnalysis:
             f.create_dataset(prefix + 'cross', **params)
         if self.radius:
             f.create_dataset(prefix + 'radius', **params)
+
+    def update_radius(self, radius):
+        if radius > 0. and self.cross is not None:
+            [xx, yy] = np.meshgrid(
+                self.dd1 - self.cross[0], self.dd0 - self.cross[1])
+            self.mask = np.sqrt(xx**2 + yy**2) >= radius
+        else:
+            self.mask = None
+
+    def estimate_centre(self, img_zero, img_centre):
+        self.analyse(
+            img_zero, auto_find_orders=False, do_unwrap=True, use_mask=False,
+            store_mag=True)
+        mag_zero = self.mag
+        phi_zero = self.unwrapped
+        self.analyse(
+            img_centre, auto_find_orders=False, do_unwrap=True,
+            use_mask=False, store_mag=True)
+        mag_centre = self.mag
+        phi_centre = self.unwrapped
+
+        cross = estimate_aperture_centre(
+            self.dd0, self.dd1, mag_zero, phi_zero,
+            mag_centre, phi_centre)
+        self.cross = cross

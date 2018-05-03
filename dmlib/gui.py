@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import h5py
 import time
 import multiprocessing
+import traceback
 
 from os import path
 from collections import namedtuple
@@ -35,11 +36,7 @@ from PyQt5.QtWidgets import (  # noqa: F401
     )
 
 import version
-from interf import (
-    FringeAnalysis,
-    make_cam_grid, make_ft_grid, ft, ift, find_orders, repad_order,
-    extract_order, call_unwrap, estimate_aperture_centre)
-
+from interf import FringeAnalysis
 from calibrate import calibrate
 
 
@@ -626,8 +623,7 @@ class Control(QMainWindow):
                 else:
                     lastind.append(val)
 
-                self.shared.iq.put((
-                    'plot', dataset[0], val, centre, radius[0]))
+                self.shared.iq.put(('plot', dataset[0], val, radius[0]))
                 if check_err() == -1:
                     return
 
@@ -704,7 +700,7 @@ class Control(QMainWindow):
                 val, ok = QInputDialog.getDouble(
                     self, 'Aperture radius', 'radius in mm', rad, 0.,
                     radmax, 3)
-                if ok and val > 0.:
+                if ok and val >= 0.:
                     if radius:
                         radius[0] = val*1000
                     else:
@@ -906,13 +902,13 @@ class Control(QMainWindow):
                 b.setEnabled(True)
 
         def f1():
-            askwl = f0()
+            # askwl = f0()
 
             def f():
                 clearup()
 
-                while not wavelength:
-                    askwl()
+                # while not wavelength:
+                #     askwl()
 
                 self.test_axes[0, 0].clear()
                 self.test_axes[0, 1].clear()
@@ -921,8 +917,8 @@ class Control(QMainWindow):
                 self.test_axes[1, 1].figure.canvas.draw()
                 disable()
 
-                listener.run = True
-                listener.start()
+                # listener.run = True
+                # listener.start()
             return f
 
         def check_err():
@@ -960,29 +956,29 @@ class Control(QMainWindow):
                 else:
                     self.dmplot.update_txs(ndata[1])
 
-                if offset is None or not lastind:
-                    val, ok = QInputDialog.getInt(
-                        self, 'Select an index to plot',
-                        'time step [{}, {}]'.format(0, ndata[0] - 1),
-                        last, 0, ndata[0] - 1)
-                    if not ok:
-                        return
-                else:
-                    val = lastind[0] + offset
+                # if offset is None or not lastind:
+                #     val, ok = QInputDialog.getInt(
+                #         self, 'Select an index to plot',
+                #         'time step [{}, {}]'.format(0, ndata[0] - 1),
+                #         last, 0, ndata[0] - 1)
+                #     if not ok:
+                #         return
+                # else:
+                #     val = lastind[0] + offset
 
-                if val < 0:
-                    val = 0
-                elif val >= ndata[0]:
-                    val = ndata[0] - 1
-                if lastind:
-                    lastind[0] = val
-                else:
-                    lastind.append(val)
+                # if val < 0:
+                #     val = 0
+                # elif val >= ndata[0]:
+                #     val = ndata[0] - 1
+                # if lastind:
+                #     lastind[0] = val
+                # else:
+                #     lastind.append(val)
 
-                self.shared.iq.put((
-                    'plot', dataset[0], val, centre, radius[0]))
-                if check_err() == -1:
-                    return
+                # self.shared.iq.put((
+                #     'plot', dataset[0], val, centre, radius[0]))
+                # if check_err() == -1:
+                #     return
 
                 a1 = self.test_axes[0, 0]
                 a2 = self.test_axes[0, 1]
@@ -1037,151 +1033,13 @@ class Control(QMainWindow):
 
                 a6.figure.canvas.draw()
 
-                # self.update_dm_gui()
-                status.setText('{} {}/{}'.format(
-                    dataset[0], val, ndata[0] - 1))
-            return f
-
-        def f4():
-            drawf = f3(0)
-
-            def f():
-                if not bootstrap():
-                    return False
-
-                if radius:
-                    rad = radius[0]/1000
-                else:
-                    rad = 2.1
-
-                if self.shared.cam_ext[1] > 0:
-                    radmax = min((
-                        self.shared.cam_ext[1], self.shared.cam_ext[3]))
-                else:
-                    radmax = 10.
-
-                val, ok = QInputDialog.getDouble(
-                    self, 'Aperture radius', 'radius in mm', rad, 0.,
-                    radmax, 3)
-                if ok and val > 0.:
-                    if radius:
-                        radius[0] = val*1000
-                    else:
-                        radius.append(val*1000)
-
-                    self.shared.iq.put(('centre', dataset[0]))
-                    ndata = check_err()
-                    if ndata == -1:
-                        return False
-                    if centre:
-                        centre[:] = ndata[:]
-                    else:
-                        centre.append(ndata[0])
-                        centre.append(ndata[1])
-
-                    drawf()
-                    return True
-                else:
-                    return False
-
-            return f
-
-        def f6():
-            def f():
-                ndata = check_err()
-                if ndata != -1:
-                    status.setText('{} {:.2f}%'.format(*ndata))
-                enable()
-                bstop.setEnabled(True)
-            return f
-
-        clistener = CalibListener(self.shared, dataset, centre, radius)
-        clistener.finished.connect(f6())
-
-        def f5():
-            setup_aperture = f4()
-
-            def f():
-                disable()
-                bstop.setEnabled(False)
-
-                ok = True
-                if radius[0] <= 0 or not centre:
-                    ok = setup_aperture()
-
-                if ok and radius[0] > 0 and centre:
-                    status.setText('working...')
-                    clistener.start()
-                else:
-                    enable()
-                    bstop.setEnabled(True)
-
-            return f
-
-        def f2():
-            def f():
-                listener.run = False
-                if not listener.isFinished():
-                    status.setText('stopping...')
-            return f
-
-        def f20():
-            def f(msg):
-                listener.busy = True
-
-                a1 = self.test_axes[0, 0]
-                a2 = self.test_axes[0, 1]
-
-                a1.clear()
-
-                a1.imshow(
-                    self.shared.cam, extent=self.shared.cam_ext,
-                    origin='lower')
-                a1.set_xlabel('mm')
-                if self.shared.cam_sat.value:
-                    a1.set_title('cam SAT')
-                else:
-                    a1.set_title('cam {: 3d} {: 3d}'.format(
-                        self.shared.cam.min(), self.shared.cam.max()))
-
-                if msg[0] == 'OK':
-                    status.setText('{}/{}'.format(msg[1] + 1, msg[2]))
-                elif msg[0] == 'finished':
-                    if dataset:
-                        dataset[0] = msg[1]
-                    else:
-                        dataset.append(msg[1])
-                    status.setText('finished ' + msg[1])
-                    enable()
-                else:
-                    status.setText(msg[0])
-                    enable()
-
-                self.dmplot.draw(a2, self.shared.u)
-                a2.axis('off')
-                a2.set_title('dm')
-                a2.figure.canvas.draw()
-
-                listener.busy = False
-
-            return f
-
-        def f6():
-            def f():
-                clearup(True)
+                # # self.update_dm_gui()
+                # status.setText('{} {}/{}'.format(
+                #     dataset[0], val, ndata[0] - 1))
             return f
 
         brun.clicked.connect(f1())
-        bstop.clicked.connect(f2())
-        bwavelength.clicked.connect(f0())
-        bplot.clicked.connect(f3())
-        bnext.clicked.connect(f3(1))
-        bprev.clicked.connect(f3(-1))
-        baperture.clicked.connect(f4())
-        bcalibrate.clicked.connect(f5())
-        bclear.clicked.connect(f6())
 
-        listener.sig_update.connect(f20())
         self.test_nav = NavigationToolbar2QT(self.test_fig, frame)
         disables.append(self.test_nav)
 
@@ -1723,6 +1581,9 @@ class Worker:
 
         print('worker', 'STOPPED')
 
+    def fill(self, dst, src):
+        dst[:src.nbytes] = src.tobytes()
+
     def run_align(self, auto, repeat, poke, sleep, unwrap):
         cam = self.cam
         dm = self.dm
@@ -1730,7 +1591,6 @@ class Worker:
         state = self.run_align_state
         fringe = self.fringe
 
-        import sys, traceback
         while True:
             if poke:
                 shared.u[:] = 0.
@@ -1752,7 +1612,8 @@ class Worker:
                     fringe.analyse(
                         img, auto_find_orders=auto, store_logf2=True,
                         store_logf3=True, store_mag=True,
-                        store_wrapped=True, do_unwrap=unwrap)
+                        store_wrapped=True, do_unwrap=unwrap,
+                        use_mask=False)
                 except ValueError:
                     shared.oq.put('Failed to find orders')
                     if repeat:
@@ -1763,26 +1624,23 @@ class Worker:
                 shared.ft[:] = fringe.logf2[:]
                 shared.f0f1[:] = fringe.f0f1[:]
 
-                def f1(dst, src):
-                    dst[:src.nbytes] = src.tobytes()
-
-                f1(shared.fstord_buf, fringe.logf3)
+                self.fill(shared.fstord_buf, fringe.logf3)
                 for i in range(4):
                     shared.fstord_ext[i] = fringe.ext3[i]*1000
                 shared.fstord_shape[:] = fringe.logf3.shape[:]
-                f1(shared.mag_buf, fringe.mag)
-                f1(shared.wrapped_buf, fringe.wrapped)
+                self.fill(shared.mag_buf, fringe.mag)
+                self.fill(shared.wrapped_buf, fringe.wrapped)
                 for i in range(4):
                     shared.mag_ext[i] = fringe.ext4[i]/1000
                 shared.mag_shape[:] = fringe.mag.shape[:]
 
                 if unwrap:
-                    f1(shared.unwrapped_buf, fringe.unwrapped)
+                    self.fill(shared.unwrapped_buf, fringe.unwrapped)
                 else:
-                    f1(shared.unwrapped_buf, np.zeros(shared.totpixs))
+                    self.fill(shared.unwrapped_buf, np.zeros(shared.totpixs))
             except Exception as ex:
-                traceback.print_exc(file=sys.stdout)
                 shared.oq.put('Error: ' + str(ex))
+                traceback.print_exc(file=sys.stdout)
                 if repeat:
                     continue
                 else:
@@ -1802,16 +1660,44 @@ class Worker:
 
     def cam_pull(self):
         img = cam.grab_image()
-        fimg = ft(img)
-        f3, ext3 = extract_order(
-            fimg, self.ft_grid[0], self.ft_grid[1],
-            self.f0, self.f1, self.P)
-        f4, _, _, _ = repad_order(
-            f3, self.ft_grid[0], self.ft_grid[1])
-        gp = ift(f4)
-        wrapped = np.arctan2(gp.imag, gp.real)
-        unwrapped = call_unwrap(wrapped, self.mask)
-        return unwrapped[np.invert(self.mask)]
+        self.fringe.analyse(
+            img, auto_find_orders=False, store_logf2=False,
+            store_logf3=False, store_gp=False, store_mag=False,
+            store_wrapped=False, do_unwrap=True, use_mask=True)
+        return self.fringe.unwrapped[np.invert(self.fringe.mask)]
+
+    def open_dset(self, dname):
+        if self.dfname is None or self.dfname != dname:
+            if self.dset is not None:
+                self.dset.close()
+            self.dset = h5py.File(dname, 'r')
+            self.dfname = dname
+
+            if 'data/images' not in self.dset:
+                self.shared.oq.put((dname + ' does not look like a dataset',))
+                return -1
+
+            try:
+                img = self.dset['data/images'][0, ...]
+                self.fringe.analyse(
+                    img, auto_find_orders=True, do_unwrap=True,
+                    use_mask=False)
+            except Exception as e:
+                traceback.print_exc(file=sys.stdout)
+                self.shared.oq.put((str(e),))
+                return -1
+            return 0
+
+    def run_query(self, dname):
+        if self.open_dset(dname):
+            return
+
+        dmplot_txs = self.dset['dmplot/txs'][()].tolist()
+
+        self.shared.oq.put((
+            'OK',
+            self.dset['align/U'].shape[1] + self.dset['data/U'].shape[1],
+            dmplot_txs))
 
     def open_calib(self, dname):
         if self.calib is None or self.calib != dname:
@@ -1848,80 +1734,10 @@ class Worker:
                         'CalibPars', 'C H phi0 z0 cart')
                     self.calibpars = CalibPars(C, H, phi0, z0, cart)
                 except Exception as e:
+                    traceback.print_exc(file=sys.stdout)
                     self.shared.oq.put((str(e),))
                     return -1
             return 0
-
-    def open_dset(self, dname):
-        if self.dfname is None or self.dfname != dname:
-            if self.dset is not None:
-                self.dset.close()
-            self.dset = h5py.File(dname, 'r')
-            self.dfname = dname
-
-            if 'data/images' not in self.dset:
-                self.shared.oq.put((dname + ' does not look like a dataset',))
-                return -1
-
-            try:
-                img = self.dset['data/images'][0, ...]
-                P = self.dset['cam/pixel_size'][()]
-                shape = img.shape
-                cam_grid = make_cam_grid(shape, P)
-                ft_grid = make_ft_grid(shape, P)
-                fimg = ft(img)
-                logf2 = np.log(np.abs(fimg))
-                f0, f1 = find_orders(ft_grid[0], ft_grid[1], logf2)
-                f3, ext3 = extract_order(
-                    fimg, ft_grid[0], ft_grid[1], f0, f1, P)
-                f4, dd0, dd1, ext4 = repad_order(f3, ft_grid[0], ft_grid[1])
-                gp = ift(f4)
-                mag = np.abs(gp)
-                wrapped = np.arctan2(gp.imag, gp.real)
-                unwrapped = call_unwrap(wrapped)
-            except Exception as e:
-                self.shared.oq.put((str(e),))
-                return -1
-
-            DSetPars = namedtuple(
-                'DSetPars', (
-                    'img P shape cam_grid ft_grid fimg logf2 f0 f1 f3 ' +
-                    'ext3 f4 dd0 dd1 ext4 gp mag wrapped unwrapped'))
-            self.dsetpars = DSetPars(
-                img, P, shape, cam_grid, ft_grid, fimg, logf2, f0, f1, f3,
-                ext3, f4, dd0, dd1, ext4, gp, mag, wrapped, unwrapped)
-            return 0
-
-    def run_query(self, dname):
-        if self.open_dset(dname):
-            return
-
-        dmplot_txs = self.dset['dmplot/txs'][()].tolist()
-
-        self.shared.oq.put((
-            'OK',
-            self.dset['align/U'].shape[1] + self.dset['data/U'].shape[1],
-            dmplot_txs))
-
-    def pull(self, addr, ind, centre=None, radius=.0):
-        img = self.dset[addr + '/images'][ind, ...]
-        fimg = ft(img)
-        f3, ext3 = extract_order(
-            fimg, self.dsetpars.ft_grid[0], self.dsetpars.ft_grid[1],
-            self.dsetpars.f0, self.dsetpars.f1, self.dsetpars.P)
-        f4, dd0, dd1, ext4 = repad_order(
-            f3, self.dsetpars.ft_grid[0], self.dsetpars.ft_grid[1])
-        if radius > 0 and centre:
-            [xx, yy] = np.meshgrid(dd1 - centre[0], dd0 - centre[1])
-            mask = np.sqrt(xx**2 + yy**2) >= radius
-        else:
-            mask = None
-        gp = ift(f4)
-        mag = np.abs(gp)
-        wrapped = np.arctan2(gp.imag, gp.real)
-        unwrapped = call_unwrap(wrapped, mask)
-
-        return img, mag, ext4, wrapped, unwrapped
 
     def run_load_calib(self, dname):
         pass
@@ -2001,6 +1817,7 @@ class Worker:
 
             self.shared.oq.put(('OK', h5fn, mvaf.mean()))
         except Exception as e:
+            traceback.print_exc(file=sys.stdout)
             self.shared.oq.put((str(e),))
 
     def run_centre(self, dname):
@@ -2013,19 +1830,19 @@ class Worker:
             return
 
         try:
-            centre = self.pull('align', names.index('centre'))
-            zero = self.pull('data', 0)
-
-            cross = estimate_aperture_centre(
-                self.dsetpars.dd0, self.dsetpars.dd1,
-                zero[-4], zero[-1], centre[-4], centre[-1])
-            self.shared.oq.put(('OK', cross[0], cross[1]))
+            img_centre = self.dset['align/images'][names.index('centre'), ...]
+            img_zero = self.dset['data/images'][0, ...]
+            self.fringe.estimate_centre(img_zero, img_centre)
+            self.shared.oq.put((
+                'OK', self.fringe.cross[0], self.fringe.cross[1]))
         except Exception as e:
+            traceback.print_exc(file=sys.stdout)
             self.shared.oq.put((str(e),))
 
-    def run_plot(self, dname, ind, centre, radius):
+    def run_plot(self, dname, ind, radius):
         if self.open_dset(dname):
             return
+        fringe = self.fringe
 
         t1 = self.dset['align/U'].shape[1]
         t2 = self.dset['data/U'].shape[1]
@@ -2038,8 +1855,11 @@ class Worker:
             addr = 'data'
             ind -= t1
         try:
-            img, mag, ext4, wrapped, unwrapped = self.pull(
-                addr, ind, centre, radius)
+            img = self.dset[addr + '/images'][ind, ...]
+            fringe.update_radius(radius)
+            fringe.analyse(
+                img, auto_find_orders=False, store_mag=True,
+                store_wrapped=True, do_unwrap=True, use_mask=radius > 0.)
 
             if img.max() == self.cam.get_image_max():
                 self.shared.cam_sat.value = 1
@@ -2047,13 +1867,14 @@ class Worker:
                 self.shared.cam_sat.value = 0
             self.shared.cam[:] = img[:]
             self.shared.u[:] = self.dset[addr + '/U'][:, ind]
-            self.shared.wrapped_buf[:wrapped.nbytes] = wrapped.tobytes()
+            self.fill(self.shared.wrapped_buf, fringe.wrapped)
             for i in range(4):
-                self.shared.mag_ext[i] = ext4[i]/1000
-            self.shared.mag_shape[:] = mag.shape[:]
-            self.shared.unwrapped_buf[:unwrapped.nbytes] = unwrapped.tobytes()
+                self.shared.mag_ext[i] = fringe.ext4[i]/1000
+            self.shared.mag_shape[:] = fringe.mag.shape[:]
+            self.fill(self.shared.unwrapped_buf, fringe.unwrapped)
             self.shared.oq.put(('OK',))
         except Exception as e:
+            traceback.print_exc(file=sys.stdout)
             self.shared.oq.put((str(e),))
 
     def write_h5_header(self, h5f, libver, now):
@@ -2159,6 +1980,7 @@ class Worker:
                         time.sleep(sleep)
                         img = cam.grab_image()
                     except Exception as e:
+                        traceback.print_exc(file=sys.stdout)
                         shared.oq.put((str(e),))
                         return
                     if img.max() == cam.get_image_max():
