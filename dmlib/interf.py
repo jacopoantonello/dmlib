@@ -14,6 +14,14 @@ from skimage.restoration import unwrap_phase
 from scipy.signal import tukey
 
 
+HDF5_options = {
+    'chunks': True,
+    'shuffle': True,
+    'fletcher32': True,
+    'compression': 'gzip',
+    'compression_opts': 9}
+
+
 def mgcentroid(xx, yy, img, mythr=0.0):
     assert(img.dtype == np.float)
 
@@ -244,20 +252,32 @@ def call_unwrap(phase, mask=None):
 
 class FringeAnalysis:
 
+    f0f1 = None
+    img = None
+    ext3 = None
+    dd0 = None
+    dd1 = None
+    ext4 = None
+    gp = None
+    unwrapped = None
+
+    cross = None
+    radius = None
+
     def __init__(self, shape, P):
         self.shape = shape
         self.P = P
 
         self.cam_grid = make_cam_grid(shape, P)
         self.ft_grid = make_ft_grid(shape, P)
-        self.f0f1 = None
 
     def analyse(
             self, img, auto_find_orders=False, store_logf2=False,
             store_logf3=False, store_gp=False, store_mag=False,
-            store_wrapped=False, mask=None):
+            store_wrapped=False, do_unwrap=True, mask=None):
 
         fimg = ft(img)
+        self.img = img
 
         if store_logf2 or auto_find_orders:
             self.logf2 = np.log(np.abs(fimg))
@@ -268,7 +288,7 @@ class FringeAnalysis:
             self.f0f1 = find_orders(
                 self.ft_grid[0], self.ft_grid[1], self.logf2)
 
-        f3, ext3 = extract_order(
+        f3, self.ext3 = extract_order(
             fimg, self.ft_grid[0], self.ft_grid[1], self.f0f1[0],
             self.f0f1[0], self.P)
 
@@ -299,8 +319,102 @@ class FringeAnalysis:
         else:
             self.wrapped = None
 
-        if mask is None:
-            _, edges = np.histogram(mag.ravel(), bins=100)
-            mask = (mag < edges[1]).reshape(mag.shape)
+        if do_unwrap:
+            if mask is None:
+                _, edges = np.histogram(mag.ravel(), bins=100)
+                mask = (mag < edges[1]).reshape(mag.shape)
 
-        self.unwrapped = call_unwrap(wrapped, mask)
+            self.unwrapped = call_unwrap(wrapped, mask)
+
+    @classmethod
+    def load_h5py(cls, f, prepend=None):
+        """Load object contents from an opened HDF5 file object."""
+        z = cls(1)
+
+        prefix = cls.__name__ + '/'
+
+        if prepend is not None:
+            prefix = prepend + prefix
+
+        z.shape = f[prefix + 'shape'][()]
+        z.P = f[prefix + 'P'][()]
+        z.cam_grid = (
+            f[prefix + 'cam_grid0'][()],
+            f[prefix + 'cam_grid1'][()],
+            f[prefix + 'cam_grid2'][()])
+        z.ft_grid = (
+            f[prefix + 'ft_grid0'][()],
+            f[prefix + 'ft_grid1'][()],
+            f[prefix + 'ft_grid2'][()])
+
+        if prefix + 'f0f1' in f:
+            z.f0f1 = f[prefix + 'f0f1'][()]
+        if prefix + 'img' in f:
+            z.img = f[prefix + 'img'][()]
+        if prefix + 'ext3' in f:
+            z.ext3 = f[prefix + 'ext3'][()]
+        if prefix + 'dd0' in f:
+            z.dd0 = f[prefix + 'dd0'][()]
+        if prefix + 'dd1' in f:
+            z.dd1 = f[prefix + 'dd1'][()]
+        if prefix + 'ext4' in f:
+            z.ext4 = f[prefix + 'ext4'][()]
+        if prefix + 'gp' in f:
+            z.gp = f[prefix + 'gp'][()]
+        if prefix + 'unwrapped' in f:
+            z.unwrapped = f[prefix + 'unwrapped'][()]
+
+        if prefix + 'cross' in f:
+            z.cross = f[prefix + 'cross'][()]
+        if prefix + 'radius' in f:
+            z.radius = f[prefix + 'radius'][()]
+
+        return z
+
+    def save_h5py(self, f, prepend=None, params=HDF5_options):
+        """Dump object contents into an opened HDF5 file object."""
+        prefix = self.__class__.__name__ + '/'
+
+        if prepend is not None:
+            prefix = prepend + prefix
+
+        params['data'] = self.shape
+        f.create_dataset(prefix + 'shape', **params)
+        params['data'] = self.P
+        f.create_dataset(prefix + 'P', **params)
+
+        params['data'] = self.cam_grid[0]
+        f.create_dataset(prefix + 'cam_grid0', **params)
+        params['data'] = self.cam_grid[1]
+        f.create_dataset(prefix + 'cam_grid1', **params)
+        params['data'] = self.cam_grid[2]
+        f.create_dataset(prefix + 'cam_grid2', **params)
+
+        params['data'] = self.ft_grid[0]
+        f.create_dataset(prefix + 'ft_grid0', **params)
+        params['data'] = self.ft_grid[1]
+        f.create_dataset(prefix + 'ft_grid1', **params)
+        params['data'] = self.ft_grid[2]
+        f.create_dataset(prefix + 'ft_grid2', **params)
+
+        if self.f0f1:
+            f.create_dataset(prefix + 'f0f1', **params)
+        if self.img:
+            f.create_dataset(prefix + 'img', **params)
+        if self.ext3:
+            f.create_dataset(prefix + 'ext3', **params)
+        if self.dd0:
+            f.create_dataset(prefix + 'dd0', **params)
+        if self.dd1:
+            f.create_dataset(prefix + 'dd1', **params)
+        if self.ext4:
+            f.create_dataset(prefix + 'ext4', **params)
+        if self.gp:
+            f.create_dataset(prefix + 'gp', **params)
+        if self.unwrapped:
+            f.create_dataset(prefix + 'unwrapped', **params)
+
+        if self.cross:
+            f.create_dataset(prefix + 'cross', **params)
+        if self.radius:
+            f.create_dataset(prefix + 'radius', **params)
