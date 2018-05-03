@@ -28,7 +28,7 @@ def mgcentroid(xx, yy, img, mythr=0.0):
     mysum1 = np.sum((xx*img).ravel())
     mysum2 = np.sum((yy*img).ravel())
     mymass = np.sum(img.ravel())
-    return mysum2/mymass, mysum1/mymass
+    return mysum1/mymass, mysum2/mymass
 
 
 def make_cam_grid(sh, ps):
@@ -235,8 +235,8 @@ def estimate_aperture_centre(
     delta[delta < e2[3]] = 0
 
     xx, yy = np.meshgrid(dd1, dd0)
-    centre = np.array(mgcentroid(xx, yy, delta))
-    return centre
+    centre = mgcentroid(xx, yy, delta)
+    return np.array((centre[1], centre[0]))
 
 
 def call_unwrap(phase, mask=None):
@@ -400,26 +400,34 @@ class FringeAnalysis:
         f.create_dataset(prefix + 'ft_grid2', **params)
 
         if self.f0f1 is not None:
+            params['data'] = self.f0f1
             f.create_dataset(prefix + 'f0f1', **params)
         if self.img is not None:
+            params['data'] = self.img
             f.create_dataset(prefix + 'img', **params)
         if self.ext3 is not None:
+            params['data'] = self.ext3
             f.create_dataset(prefix + 'ext3', **params)
         if self.dd0 is not None:
+            params['data'] = self.dd0
             f.create_dataset(prefix + 'dd0', **params)
         if self.dd1 is not None:
+            params['data'] = self.dd1
             f.create_dataset(prefix + 'dd1', **params)
         if self.ext4 is not None:
+            params['data'] = self.ext4
             f.create_dataset(prefix + 'ext4', **params)
         if self.gp is not None:
+            params['data'] = self.gp
             f.create_dataset(prefix + 'gp', **params)
         if self.unwrapped is not None:
+            params['data'] = self.unwrapped
             f.create_dataset(prefix + 'unwrapped', **params)
 
         if self.centre is not None:
-            f.create_dataset(prefix + 'centre', **params)
+            f[prefix + 'centre'] = self.centre
         if self.radius is not None:
-            f.create_dataset(prefix + 'radius', **params)
+            f[prefix + 'radius'] = self.radius
 
     def get_unit_aperture(self):
         xx, yy = np.meshgrid(

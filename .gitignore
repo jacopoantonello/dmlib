@@ -2,5 +2,5 @@ __pycache__/
 .*.swp
 .directory
 *.egg-info/
-*.h5
+/dmlib/*.h5
 *.pyd
