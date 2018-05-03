@@ -65,9 +65,18 @@ class PhaseExtract:
         return unwrapped[np.invert(self.mask)]
 
 
-class Calibration:
+class WeightedLSCalib:
 
-    def __init__(self, H, mvaf, phi0, z0, C, alpha, lambda1, mask, cart):
+    def __init__(self, dd0, dd1, cross, radius, n_radial, interf):
+        dd0 = dd0 - cross[1]
+        dd1 = dd1 - cross[0]
+        dd0 = dd0/radius
+        dd1 = dd1/radius
+        xx, yy = np.meshgrid(dd1, dd0)
+        cart = RZern(n_radial)
+        cart.make_cart_grid(xx, yy)
+
+        self.cart = cart
         self.H = H
         self.mvaf = mvaf
         self.phi0 = phi0
@@ -76,7 +85,27 @@ class Calibration:
         self.alpha = alpha
         self.lambda1 = lambda1
         self.mask = mask
-        self.cart = cart
+
+    def __init2(self):
+        K = self.dd0.size
+        L = self.dd1.size
+        zfm = np.isfinite(self.cart.ZZ[:, 0]).reshape((L, K), order='F')
+        mask = np.invert(zfm)
+        zfA1 = np.zeros((zfm.sum(), self.cart.nk))
+        zfA2 = np.zeros_like(self.cart.ZZ)
+        for i in range(zfA1.shape[1]):
+            tmp = self.cart.ZZ[:, i].reshape((L, K), order='F')
+            zfA1[:, i] = tmp[np.invert(mask)].ravel()
+            zfA2[:, i] = tmp.ravel()
+
+        self.mask = mask
+        self.zfA1 = zfA1
+        self.zfA2 = zfA2
+
+        # TODO remove me
+        xx, yy = np.meshgrid(self.dd1, self.dd0)
+        mask1 = np.sqrt(xx**2 + yy**2) >= 1.
+        assert(np.allclose(mask, mask1))
 
     @classmethod
     def load_h5py(cls, f, prepend=None):
@@ -95,8 +124,10 @@ class Calibration:
         z.C = f[prefix + 'C'][()]
         z.alpha = f[prefix + 'alpha'][()]
         z.lambda1 = f[prefix + 'lambda1'][()]
-        z.mask = f[prefix + 'mask'][()]
         z.cart = RZern.load_h5py(f, prepend='cart/')
+
+        z.__init2()
+
         return z
 
     def save_h5py(self, f, prepend=None, params=HDF5_options):
@@ -118,34 +149,14 @@ class Calibration:
         f.create_dataset(prefix + 'C', **params)
         f.create_dataset(prefix + 'alpha', data=np.array([self.alpha]))
         f.create_dataset(prefix + 'lambda1', data=np.array([self.lambda1]))
-        params['data'] = self.mask
-        f.create_dataset(prefix + 'mask', **params)
         self.cart.save_h5py(f, prepend='cart/')
 
 
 def calibrate(
         ft_grid, f0, f1, P, dd0, dd1, cross, radius, U, images, n_radial=25,
         alpha=.75, lambda1=5e-3):
+
     nu, ns = U.shape
-    dd0 = dd0 - cross[1]
-    dd1 = dd1 - cross[0]
-    dd0 = dd0/radius
-    dd1 = dd1/radius
-    K = dd0.size
-    L = dd1.size
-    xx, yy = np.meshgrid(dd1, dd0)
-    cart = RZern(n_radial)
-    cart.make_cart_grid(xx, yy)
-    zfm = np.isfinite(cart.ZZ[:, 0]).reshape((L, K), order='F')
-    mask = np.invert(zfm)
-    mask1 = np.sqrt(xx**2 + yy**2) >= 1.
-    zfA1 = np.zeros((zfm.sum(), cart.nk))
-    zfA2 = np.zeros_like(cart.ZZ)
-    for i in range(zfA1.shape[1]):
-        tmp = cart.ZZ[:, i].reshape((L, K), order='F')
-        zfA1[:, i] = tmp[np.invert(mask)].ravel()
-        zfA2[:, i] = tmp.ravel()
-    assert(np.allclose(mask, mask1))
 
     with Pool() as p:
         phases = np.array(p.map(PhaseExtract(
