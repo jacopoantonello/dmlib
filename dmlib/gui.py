@@ -7,8 +7,8 @@ import sys
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
-import h5py
 import time
+import h5py
 import multiprocessing
 import traceback
 
@@ -1768,7 +1768,7 @@ class Worker:
             cam_serial = self.dset['cam/serial'][()]
             dmplot_txs = self.dset['dmplot/txs'][()]
             with h5py.File(h5fn, 'w', libver=libver) as h5f:
-                self.write_h5_header(h5f, libver, now)
+                version.write_h5_header(h5f, libver, now)
 
                 h5f['data/name'] = dname
                 h5f['data/md5'] = version.hash_file(dname)
@@ -1877,23 +1877,6 @@ class Worker:
             traceback.print_exc(file=sys.stdout)
             self.shared.oq.put((str(e),))
 
-    def write_h5_header(self, h5f, libver, now):
-        libver = 'latest'
-
-        h5f['datetime'] = now.isoformat()
-
-        # save HDF5 library info
-        h5f['h5py/libver'] = libver
-        h5f['h5py/api_version'] = h5py.version.api_version
-        h5f['h5py/version'] = h5py.version.version
-        h5f['h5py/hdf5_version'] = h5py.version.hdf5_version
-        h5f['h5py/info'] = h5py.version.info
-
-        # save dmlib info
-        h5f['dmlib/__date__'] = version.__date__
-        h5f['dmlib/__version__'] = version.__version__
-        h5f['dmlib/__commit__'] = version.__commit__
-
     def run_dataacq(self, wavelength, dmplot_txs, sleep=.1):
         cam = self.cam
         dm = self.dm
@@ -1926,7 +1909,7 @@ class Worker:
                 ))
 
         with h5py.File(h5fn, 'w', libver=libver) as h5f:
-            self.write_h5_header(h5f, libver, now)
+            version.write_h5_header(h5f, libver, now)
 
             h5f['dmplot/txs'] = dmplot_txs
 
