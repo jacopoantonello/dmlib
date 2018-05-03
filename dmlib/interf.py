@@ -240,3 +240,67 @@ def call_unwrap(phase, mask=None):
         return phi
     else:
         return np.array(unwrap_phase(phase))
+
+
+class FringeAnalysis:
+
+    def __init__(self, shape, P):
+        self.shape = shape
+        self.P = P
+
+        self.cam_grid = make_cam_grid(shape, P)
+        self.ft_grid = make_ft_grid(shape, P)
+        self.f0f1 = None
+
+    def analyse(
+            self, img, auto_find_orders=False, store_logf2=False,
+            store_logf3=False, store_gp=False, store_mag=False,
+            store_wrapped=False, mask=None):
+
+        fimg = ft(img)
+
+        if store_logf2 or auto_find_orders:
+            self.logf2 = np.log(np.abs(fimg))
+        else:
+            self.logf2 = None
+
+        if find_orders or self.f0f1 is None:
+            self.f0f1 = find_orders(
+                self.ft_grid[0], self.ft_grid[1], self.logf2)
+
+        f3, ext3 = extract_order(
+            fimg, self.ft_grid[0], self.ft_grid[1], self.f0f1[0],
+            self.f0f1[0], self.P)
+
+        if store_logf3:
+            self.logf3 = np.log(np.abs(f3))
+        else:
+            self.logf3 = None
+
+        f4, self.dd0, self.dd1, self.ext4 = repad_order(
+            f3, self.ft_grid[0], self.ft_grid[1])
+
+        gp = ift(f4)
+        mag = np.abs(gp)
+        wrapped = np.arctan2(gp.imag, gp.real)
+
+        if store_gp:
+            self.gp = gp
+        else:
+            self.gp = None
+
+        if store_mag:
+            self.mag = mag
+        else:
+            self.mag = None
+
+        if store_wrapped:
+            self.wrapped = wrapped
+        else:
+            self.wrapped = None
+
+        if mask is None:
+            _, edges = np.histogram(mag.ravel(), bins=100)
+            mask = (mag < edges[1]).reshape(mag.shape)
+
+        self.unwrapped = call_unwrap(wrapped, mask)
