@@ -432,8 +432,10 @@ class FringeAnalysis:
             [xx, yy] = np.meshgrid(
                 self.dd1 - self.centre[1], self.dd0 - self.centre[0])
             self.mask = np.sqrt(xx**2 + yy**2) >= radius
+            self.radius = radius
         else:
             self.mask = None
+            self.radius = 0.
 
     def estimate_centre(self, img_zero, img_centre):
         self.analyse(

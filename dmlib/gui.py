@@ -1751,6 +1751,7 @@ class Worker:
             return
 
         try:
+            print(radius)
             wavelength = self.dset['wavelength'][()]
             dm_serial = self.dset['dm/serial'][()]
             dm_transform = self.dset['dm/transform'][()]
@@ -1775,52 +1776,9 @@ class Worker:
 
             with h5py.File(h5fn, 'w', libver=libver) as h5f:
                 version.write_h5_header(h5f, libver, now)
+                calib.save_h5py(h5f)
 
-                h5f['data/name'] = dname
-                h5f['data/wavelength'] = wavelength
-                h5f['data/wavelength'].attrs['units'] = 'nm'
-                h5f['dm/serial'] = dm_serial
-                h5f['dm/transform'] = dm_transform
-                h5f['cam/serial'] = cam_serial
-                h5f['cam/pixel_size'] = cam_pixel_size
-                h5f['cam/pixel_size'].attrs['units'] = 'um'
-                h5f['dmplot/txs'] = dmplot_txs
-
-                h5f['interf/centre'] = centre
-                h5f['interf/radius'] = radius
-                h5f['interf/mask'] = mask
-                h5f['interf/img'] = self.dsetpars.img
-                h5f['interf/P'] = self.dsetpars.P
-                h5f['interf/shape'] = self.dsetpars.shape
-                for k, p in enumerate(self.dsetpars.cam_grid):
-                    h5f['interf/cam_grid{}'.format(k)] = p
-                for k, p in enumerate(self.dsetpars.ft_grid):
-                    h5f['interf/ft_grid{}'.format(k)] = p
-                h5f['interf/fimg'] = self.dsetpars.fimg
-                h5f['interf/logf2'] = self.dsetpars.logf2
-                h5f['interf/f0'] = self.dsetpars.f0
-                h5f['interf/f1'] = self.dsetpars.f1
-                h5f['interf/f3'] = self.dsetpars.f3
-                h5f['interf/ext3'] = self.dsetpars.ext3
-                h5f['interf/f4'] = self.dsetpars.f4
-                h5f['interf/dd0'] = self.dsetpars.dd0
-                h5f['interf/dd1'] = self.dsetpars.dd1
-                h5f['interf/ext4'] = self.dsetpars.ext4
-                h5f['interf/gp'] = self.dsetpars.gp
-                h5f['interf/mag'] = self.dsetpars.mag
-                h5f['interf/wrapped'] = self.dsetpars.wrapped
-                h5f['interf/unwrapped'] = self.dsetpars.unwrapped
-
-                h5f['calib/H'] = H
-                h5f['calib/mvaf'] = mvaf
-                h5f['calib/phi0'] = phi0
-                h5f['calib/z0'] = z0
-                h5f['calib/C'] = C
-                h5f['calib/alpha'] = alpha
-                h5f['calib/lambda1'] = lambda1
-                cart.save_h5py(h5f, 'cart')
-
-            self.shared.oq.put(('OK', h5fn, mvaf.mean()))
+            self.shared.oq.put(('OK', h5fn, calib.mvaf.mean()))
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
             self.shared.oq.put((str(e),))
