@@ -12,6 +12,13 @@ from skimage.restoration import unwrap_phase
 from interf import ft, ift, repad_order, extract_order, call_unwrap
 from sensorless.czernike import RZern
 
+HDF5_options = {
+    'chunks': True,
+    'shuffle': True,
+    'fletcher32': True,
+    'compression': 'gzip',
+    'compression_opts': 9}
+
 
 def fix_principal_val(U, phases):
     ns = phases.shape[0]
@@ -56,6 +63,64 @@ class PhaseExtract:
         wrapped = np.arctan2(gp.imag, gp.real)
         unwrapped = call_unwrap(wrapped, self.mask)
         return unwrapped[np.invert(self.mask)]
+
+
+class Calibration:
+
+    def __init__(self, H, mvaf, phi0, z0, C, alpha, lambda1, mask, cart):
+        self.H = H
+        self.mvaf = mvaf
+        self.phi0 = phi0
+        self.z0 = z0
+        self.C = C
+        self.alpha = alpha
+        self.lambda1 = lambda1
+        self.mask = mask
+        self.cart = cart
+
+    @classmethod
+    def load_h5py(cls, f, prepend=None):
+        """Load object contents from an opened HDF5 file object."""
+        z = cls(1)
+
+        prefix = cls.__name__ + '/'
+
+        if prepend is not None:
+            prefix = prepend + prefix
+
+        z.H = f[prefix + 'H'][()]
+        z.mvaf = f[prefix + 'mvaf'][()]
+        z.phi0 = f[prefix + 'phi0'][()]
+        z.z0 = f[prefix + 'z0'][()]
+        z.C = f[prefix + 'C'][()]
+        z.alpha = f[prefix + 'alpha'][()]
+        z.lambda1 = f[prefix + 'lambda1'][()]
+        z.mask = f[prefix + 'mask'][()]
+        z.cart = RZern.load_h5py(f, prepend='cart/')
+        return z
+
+    def save_h5py(self, f, prepend=None, params=HDF5_options):
+        """Dump object contents into an opened HDF5 file object."""
+        prefix = self.__class__.__name__ + '/'
+
+        if prepend is not None:
+            prefix = prepend + prefix
+
+        params['data'] = self.H
+        f.create_dataset(prefix + 'H', **params)
+        params['data'] = self.mvaf
+        f.create_dataset(prefix + 'mvaf', **params)
+        params['data'] = self.phi0
+        f.create_dataset(prefix + 'phi0', **params)
+        params['data'] = self.z0
+        f.create_dataset(prefix + 'z0', **params)
+        params['data'] = self.C
+        f.create_dataset(prefix + 'C', **params)
+        f.create_dataset(prefix + 'alpha', data=np.array([self.alpha]))
+        f.create_dataset(prefix + 'lambda1', data=np.array([self.lambda1]))
+        params['data'] = self.mask
+        f.create_dataset(prefix + 'mask', **params)
+        self.cart.save_h5py(f, prepend='cart/')
 
 
 def calibrate(
@@ -135,4 +200,4 @@ def calibrate(
     else:
         C = np.linalg.pinv(H)
 
-    return H, mvaf, phi0, z0, C, alpha, lambda1, mask, cart
+    return Calibration(H, mvaf, phi0, z0, C, alpha, lambda1, mask, cart)

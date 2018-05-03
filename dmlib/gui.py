@@ -1844,56 +1844,38 @@ class Worker:
             with h5py.File(dname, 'r') as f:
                 if 'calib/H' not in f:
                     self.shared.oq.put((
-                        dname + ' does not look like a calibration',))
+                        dname + ' does not look like a calibration file',))
                     return -1
 
-            try:
-                centre = f['interf/centre'][()]
-                radius = f['interf/radius'][()]
-                ft_grid0 = f['interf/ft_grid0'][()]
-                ft_grid1 = f['interf/ft_grid1'][()]
-                f0 = f['interf/f0'][()]
-                f1 = f['interf/f1'][()]
-                P = f['interf/P'][()]
-                mask = f['interf/mask'][()]
+                try:
+                    centre = f['interf/centre'][()]
+                    radius = f['interf/radius'][()]
+                    ft_grid0 = f['interf/ft_grid0'][()]
+                    ft_grid1 = f['interf/ft_grid1'][()]
+                    f0 = f['interf/f0'][()]
+                    f1 = f['interf/f1'][()]
+                    P = f['interf/P'][()]
+                    mask = f['interf/mask'][()]
 
-                InterfPars = namedtuple(
-                    'InterfPars',
-                    'centre radius ft_grid0 ft_grid1 f0 f1 P mask')
-                self.interfpars = InterfPars(
-                    centre, radius, ft_grid0, ft_grid1, f0, f1, P, mask)
+                    InterfPars = namedtuple(
+                        'InterfPars',
+                        'centre radius ft_grid0 ft_grid1 f0 f1 P mask')
+                    self.interfpars = InterfPars(
+                        centre, radius, ft_grid0, ft_grid1, f0, f1, P, mask)
 
-                CalibPars = namedtuple(
-                    'CalibPars', 'C H phi0 z0')
-                self.interfpars = CalibPars(
-                    centre, radius, ft_grid0, ft_grid1, f0, f1, P, mask)
+                    C = f['calib/C'][()]
+                    H = f['calib/H'][()]
+                    phi0 = f['calib/phi0'][()]
+                    z0 = f['calib/z0'][()]
 
-                img = self.dset['data/images'][0, ...]
-                P = self.dset['cam/pixel_size'][()]
-                shape = img.shape
-                cam_grid = make_cam_grid(shape, P)
-                ft_grid = make_ft_grid(shape, P)
-                fimg = ft(img)
-                logf2 = np.log(np.abs(fimg))
-                f0, f1 = find_orders(ft_grid[0], ft_grid[1], logf2)
-                f3, ext3 = extract_order(
-                    fimg, ft_grid[0], ft_grid[1], f0, f1, P)
-                f4, dd0, dd1, ext4 = repad_order(f3, ft_grid[0], ft_grid[1])
-                gp = ift(f4)
-                mag = np.abs(gp)
-                wrapped = np.arctan2(gp.imag, gp.real)
-                unwrapped = call_unwrap(wrapped)
-            except Exception as e:
-                self.shared.oq.put((str(e),))
-                return -1
+                    cart = RZern.load_h5py(f, prepend='cart/')
 
-            DSetPars = namedtuple(
-                'DSetPars', (
-                    'img P shape cam_grid ft_grid fimg logf2 f0 f1 f3 ' +
-                    'ext3 f4 dd0 dd1 ext4 gp mag wrapped unwrapped'))
-            self.dsetpars = DSetPars(
-                img, P, shape, cam_grid, ft_grid, fimg, logf2, f0, f1, f3,
-                ext3, f4, dd0, dd1, ext4, gp, mag, wrapped, unwrapped)
+                    CalibPars = namedtuple(
+                        'CalibPars', 'C H phi0 z0 cart')
+                    self.calibpars = CalibPars(C, H, phi0, z0, cart)
+                except Exception as e:
+                    self.shared.oq.put((str(e),))
+                    return -1
             return 0
 
     def open_dset(self, dname):
