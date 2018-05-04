@@ -36,7 +36,7 @@ from PyQt5.QtWidgets import (  # noqa: F401
 
 import version
 from interf import FringeAnalysis
-from calibrate import WeightedLSCalib
+from calibration import WeightedLSCalib
 
 
 class Control(QMainWindow):
