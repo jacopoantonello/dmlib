@@ -7,63 +7,6 @@ import numpy as np
 from numpy.random import normal
 from numpy.linalg import norm, matrix_rank
 
-from czernike import RZern
-
-
-class DMCalib:
-
-    flatOn = 1.
-
-    def __init__(self, matfile):
-        self.matfile = loadmat(matfile)
-        self.uflat = self.matfile['u_flat_ls'].ravel()
-        self.calibration_lambda = self.matfile['calibration_lambda'][0, 0]
-        self.rad_to_nm = (self.calibration_lambda/1e-9)/(2*np.pi)
-
-        self.Hf = np.ascontiguousarray(self.matfile['Hf'])
-        self.Cf = np.ascontiguousarray(self.matfile['Cf'])
-        self.H1 = np.ascontiguousarray(self.matfile['H1'])
-        self.C1 = np.ascontiguousarray(self.matfile['C1'])
-
-        self.noll_indices = set(range(1, self.Hf.shape[0] + 1))
-
-    def rad_to_nm(self, rad):
-        return rad*self.rad_to_nm
-
-    def add_flat_to_u(self, u):
-        u = self.flatOn*self.uflat + u
-        return u
-
-    def set_zernike_indices(self, noll_indices):
-        # stored in Noll - 1
-        if not isinstance(noll_indices, np.ndarray):
-            noll_indices = np.array(noll_indices, dtype=np.int)
-        self.zernike_indices = noll_indices - 1
-
-    def zernike_to_u(self, x):
-        assert(self.zernike_indices.size == x.size)
-        xf = np.zeros((self.Cf.shape[1],))
-        xf[self.zernike_indices] = x
-        return np.dot(self.Cf, xf)
-
-    def rotate_pupil(self, rad):
-        if rad != 0.:
-            T = self.make_rot_matrix(self.Hf.shape[0], rad)
-            self.Hf = np.dot(T, self.Hf)
-            self.Cf = np.dot(self.Cf, T.T)
-
-    def flip_pupil(self, xflip, yflip):
-        if xflip:
-            T = self.make_xflip_matrix(self.Hf.shape[0])
-            self.Hf = np.dot(T, self.Hf)
-            self.Cf = np.dot(self.Cf, T)
-        if yflip:
-            T = self.make_yflip_matrix(self.Hf.shape[0])
-            self.Hf = np.dot(T, self.Hf)
-            self.Cf = np.dot(self.Cf, T)
-
-zernike_indices = get_zernike_indeces_from_args(args)
-
 
 class ZernikeControl:
 
@@ -236,8 +179,7 @@ class ZernikeControl:
         return R
 
 
-
-control_classes = [Zernike]
+control_classes = [ZernikeControl]
 control_names = [c.__name__ for c in control_classes]
 
 

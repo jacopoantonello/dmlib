@@ -339,7 +339,7 @@ class FringeAnalysis:
 
         shape = f[prefix + 'shape'][()]
         P = f[prefix + 'P'][()]
-        z = cls((shape, P))
+        z = cls(shape, P)
         z.cam_grid = (
             f[prefix + 'cam_grid0'][()],
             f[prefix + 'cam_grid1'][()],
