@@ -160,6 +160,9 @@ class WeightedLSCalib:
         self.dname = dname
         self.hash1 = hash1
 
+    def get_rzern(self):
+        return self.cart
+
     @classmethod
     def load_h5py(cls, f, prepend=None):
         """Load object contents from an opened HDF5 file object."""

@@ -13,7 +13,6 @@ import multiprocessing
 import traceback
 
 from os import path
-from collections import namedtuple
 from multiprocessing import Process, Queue, Array, Value
 from datetime import datetime, timezone
 from numpy.linalg import norm
@@ -825,7 +824,6 @@ class Control(QMainWindow):
         disables.append(self.dataacq_nav)
 
     def make_panel_test(self):
-        return
         frame = QFrame()
         self.test_fig = FigureCanvas(Figure(figsize=(7, 5)))
         layout = QGridLayout()
@@ -1388,7 +1386,6 @@ class CalibListener(QThread):
         self.sig_update.emit(self.shared.oq.get())
 
 
-
 class DataAcqListener(QThread):
 
     busy = False
@@ -1511,9 +1508,11 @@ def run_worker(shared, args):
 
 class Worker:
 
-    calib = None
     dfname = None
     dset = None
+
+    calib_name = None
+    calib = None
 
     # lastpoke
     run_align_state = [0]
@@ -1574,8 +1573,8 @@ class Worker:
                 self.run_centre(*cmd[1:])
             elif cmd[0] == 'calibrate':
                 self.run_calibrate(*cmd[1:])
-            elif cmd[0] == 'load_calib':
-                self.run_load_calib(*cmd[1:])
+            elif cmd[0] == 'query_calib':
+                self.run_query_calib(*cmd[1:])
             else:
                 raise NotImplementedError(cmd)
 
@@ -1707,49 +1706,6 @@ class Worker:
             self.dset['align/U'].shape[1] + self.dset['data/U'].shape[1],
             dmplot_txs))
 
-    def open_calib(self, dname):
-        if self.calib is None or self.calib != dname:
-            with h5py.File(dname, 'r') as f:
-                if 'calib/H' not in f:
-                    self.shared.oq.put((
-                        dname + ' does not look like a calibration file',))
-                    return -1
-
-                try:
-                    centre = f['interf/centre'][()]
-                    radius = f['interf/radius'][()]
-                    ft_grid0 = f['interf/ft_grid0'][()]
-                    ft_grid1 = f['interf/ft_grid1'][()]
-                    f0 = f['interf/f0'][()]
-                    f1 = f['interf/f1'][()]
-                    P = f['interf/P'][()]
-                    mask = f['interf/mask'][()]
-
-                    InterfPars = namedtuple(
-                        'InterfPars',
-                        'centre radius ft_grid0 ft_grid1 f0 f1 P mask')
-                    self.interfpars = InterfPars(
-                        centre, radius, ft_grid0, ft_grid1, f0, f1, P, mask)
-
-                    C = f['calib/C'][()]
-                    H = f['calib/H'][()]
-                    phi0 = f['calib/phi0'][()]
-                    z0 = f['calib/z0'][()]
-
-                    cart = RZern.load_h5py(f, prepend='cart/')
-
-                    CalibPars = namedtuple(
-                        'CalibPars', 'C H phi0 z0 cart')
-                    self.calibpars = CalibPars(C, H, phi0, z0, cart)
-                except Exception as e:
-                    traceback.print_exc(file=sys.stdout)
-                    self.shared.oq.put((str(e),))
-                    return -1
-            return 0
-
-    def run_load_calib(self, dname):
-        pass
-
     def run_calibrate(self, dname, radius):
         if self.open_dset(dname):
             return
@@ -1786,6 +1742,37 @@ class Worker:
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
             self.shared.oq.put((str(e),))
+
+    def open_calib(self, dname):
+        if self.calib_name is None or self.calib_name != dname:
+            with h5py.File(dname, 'r') as f:
+                if 'WeightedLSCalib' not in f:
+                    self.shared.oq.put((
+                        dname + ' does not look like a calibration',))
+                    return -1
+                else:
+                    self.calib = WeightedLSCalib.load_h5py(f)
+                    self.calib_name = dname
+                    return 0
+        else:
+            return 0
+
+    def run_query_calib(self, dname):
+        if self.open_calib(dname):
+            return
+
+        self.shared.oq.put(('OK', self.calib.get_rzern().n))
+
+    def run_set_zernike(self, dname, z):
+        if self.open_calib(dname):
+            return
+
+        if z.size != self.calib.get_nz():
+            self.shared.oq.put((
+                'Zernike vector must have {} elements'.format(
+                    self.calib.get_nz())))
+        else:
+            pass
 
     def run_centre(self, dname):
         if self.open_dset(dname):
