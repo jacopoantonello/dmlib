@@ -63,8 +63,7 @@ class ZernikeControl:
             self.h5f['ZernikeControl/' + where] = what
 
     def write(self, x):
-        self.z[self.indices - 1] = x[:]
-        self.z += self.ab
+        self.z[self.indices - 1] = x[:] + self.ab[:]
         if self.P is not None:
             np.dot(self.P, self.z, self.z1)
         else:
@@ -79,10 +78,10 @@ class ZernikeControl:
             self.h5_append('x', x)
             self.h5_append('u', self.u)
 
-        def trim(u, what):
+        def trim(u):
             if norm(u, np.inf) > 1:
                 logging.warn(
-                    'Saturation {} {}'.format(what, str(np.abs(u).max())))
+                    'Saturation {}'.format(str(np.abs(u).max())))
                 u[u > 1.] = 1.
                 u[u < -1.] = -1.
 
@@ -117,7 +116,10 @@ class ZernikeControl:
         if tot.size == 1:
             return
         else:
-            np.dot(tot, self.P.copy(), self.P)
+            if self.P is None:
+                self.P = tot
+            else:
+                np.dot(tot, self.P.copy(), self.P)
 
         if self.h5f:
             self.h5f['P'][:] = self.P[:]
