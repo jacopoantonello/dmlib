@@ -1,41 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""dmcontrol - code to control the DM using Zernike polynomials
-
-TODO merge high-NA defocus code
-
-author: J. Antonello <jacopo.antonello@dpag.ox.ac.uk>
-date: Wed Oct  4 12:16:36 BST 2017
-
-"""
-
 import logging
 import numpy as np
 
 from numpy.random import normal
 from numpy.linalg import norm, matrix_rank
-from scipy.io import loadmat
 
 from czernike import RZern
-from bmcs import BMC
-
-# LabView convertion u to voltage:
-# d = dmax*(u + 1)/2
-# V = (-b + sqrt(b**2 + 4*a*D))/(2*a)
-
-# MATLAB calibration
-# d_f = f1(v_f)
-# d_t = d_f + d
-# u_t = 2*d_t/f1(300) - 1
-# v_t = f2(d_t)
-
-# SIGNAL VS VOL. DATABASE (Voltage vs Signal_Data Engine_V1)
-# 1: 13RW018#054 Upper DM in optsys
-# 0: 13RW023#017 Lower DM in optsys
-# 0: 247.8239, 0.060365, -0.83694, 3500
-# 1: 294.658, 0.03945, 0.2539, 3500
-# Vmax, a, b, dmax
 
 
 class DMCalib:
@@ -90,10 +62,125 @@ class DMCalib:
             self.Hf = np.dot(T, self.Hf)
             self.Cf = np.dot(self.Cf, T)
 
-    def make_rot_matrix(self, nz, alpha):
-        # nz = (n + 1)*(n + 2)/2 = 1/2*n**2 + 3/2*n + 1
-        n = int(-(3/2) + np.sqrt((3/2)**2 - 4/2*(1 - nz)))
-        cz = RZern(n)
+zernike_indices = get_zernike_indeces_from_args(args)
+
+
+class ZernikeControl:
+
+    def __init__(self, dm, calib, indices=None, h5f=None):
+        nz = calib.H.shape[0]
+        nu = calib.H.shape[1]
+
+        if indices is None:
+            indices = np.arange(2, nz + 1)
+        assert(calib.get_rzern().nk == nz)
+        ndof = indices.size
+
+        self.nz = nz
+        self.nu = nu
+        self.ndof = ndof
+
+        self.dm = dm
+        self.calib = calib
+        self.indices = indices
+        self.h5f = h5f
+
+        self.h5_save('uflat', calib.uflat)
+        self.h5_save('indices', indices)
+        self.h5_save('rad_to_nm', calib.get_rad_to_nm())
+        self.P = None
+
+        self.z = np.zeros((nz,))
+        self.z1 = np.zeros((nz,))
+        self.ab = np.zeros((ndof,))
+        self.u = np.zeros((nu,))
+
+        self.flat_on = 1
+        self.scale_z = 1
+
+        def make_empty(name, shape):
+            h5f.create_dataset(
+                name, shape + (0,), maxshape=shape + (None,),
+                dtype=np.float)
+        if h5f:
+            make_empty('x', (ndof,))
+            make_empty('u', (nu,))
+
+        self.h5_save('ab', self.ab)
+        self.h5_save('P', np.eye(nz, nz))
+
+    def h5_append(self, name, what):
+        if self.h5f:
+            self.h5f[name].resize((
+                self.h5f[name].shape[0], self.h5f[name].shape[1] + 1))
+            self.h5f[name][:, -1] = what
+
+    def h5_save(self, where, what):
+        if self.h5f:
+            self.h5f['ZernikeControl/' + where] = what
+
+    def write(self, x):
+        self.z[self.indices - 1] = x[:]
+        self.z += self.ab
+        if self.P is not None:
+            np.dot(self.P, self.z, self.z1)
+        else:
+            self.z1[:] = self.z[:]
+        self.z1 *= self.scale_z
+
+        np.dot(self.calib.C, self.z1, self.u)
+        if self.flat_on:
+            self.u += self.calib.uflat
+
+        if self.h5f:
+            self.h5_append('x', x)
+            self.h5_append('u', self.u)
+
+        def trim(u, what):
+            if norm(u, np.inf) > 1:
+                logging.warn(
+                    'Saturation {} {}'.format(what, str(np.abs(u).max())))
+                u[u > 1.] = 1.
+                u[u < -1.] = -1.
+
+        trim(self.u)
+        assert(norm(self.u, np.inf) <= 1.)
+
+        self.dm.write(self.u)
+
+    def set_random_ab(self, rms=1.0):
+        self.ab[:] = normal(size=self.ab.size)
+        self.ab[:] /= norm(self.ab.size)
+        if self.h5f:
+            self.h5f['ab'][:] = self.ab[:]
+
+    def transform_pupil(self, alpha=0., flipx=False, flipy=False):
+        if alpha != 0.:
+            R = self.make_rot_matrix(alpha)
+        else:
+            R = 1
+
+        if flipx:
+            Fx = self.make_xflip_matrix()
+        else:
+            Fx = 1
+
+        if flipy:
+            Fy = self.make_yflip_matrix()
+        else:
+            Fy = 1
+
+        tot = np.dot(Fy, np.dot(Fx, R))
+        if tot.size == 1:
+            return
+        else:
+            np.dot(tot, self.P.copy(), self.P)
+
+        if self.h5f:
+            self.h5f['P'][:] = self.P[:]
+
+    def make_rot_matrix(self, alpha):
+        cz = self.calib.get_rzern()
         nml = list(zip(cz.ntab.tolist(), cz.mtab.tolist()))
         R = np.zeros((cz.nk, cz.nk))
         for i, nm in enumerate(nml):
@@ -113,9 +200,8 @@ class DMCalib:
         assert(norm((np.dot(R.T, R) - np.eye(cz.nk)).ravel()) < 1e-11)
         return R
 
-    def make_yflip_matrix(self, nz):
-        n = int(-(3/2) + np.sqrt((3/2)**2 - 4/2*(1 - nz)))
-        cz = RZern(n)
+    def make_yflip_matrix(self):
+        cz = self.calib.get_rzern()
         nml = list(zip(cz.ntab.tolist(), cz.mtab.tolist()))
         R = np.zeros((cz.nk, cz.nk))
         for i, nm in enumerate(nml):
@@ -131,9 +217,8 @@ class DMCalib:
         assert(norm((np.dot(R.T, R) - np.eye(cz.nk)).ravel()) < 1e-11)
         return R
 
-    def make_xflip_matrix(self, nz):
-        n = int(-(3/2) + np.sqrt((3/2)**2 - 4/2*(1 - nz)))
-        cz = RZern(n)
+    def make_xflip_matrix(self):
+        cz = self.calib.get_rzern()
         nml = list(zip(cz.ntab.tolist(), cz.mtab.tolist()))
         R = np.zeros((cz.nk, cz.nk))
         for i, nm in enumerate(nml):
@@ -150,94 +235,6 @@ class DMCalib:
         assert(norm((np.dot(R.T, R) - np.eye(cz.nk)).ravel()) < 1e-11)
         return R
 
-
-class Zernike:
-
-    def __init__(self, optsys, args):
-        self.optsys = optsys
-        self.dm0 = DMCalib('calibration.mat')
-
-        zernike_indices = get_zernike_indeces_from_args(args)
-
-        if optsys.h5f:
-            optsys.h5f['dmcontrol/zernike_indices'] = zernike_indices
-            optsys.h5f['dmcontrol/rad_to_nm'] = self.dm0.rad_to_nm
-
-        logging.info('dmcontrol: lambda = {} nm'.format(
-            self.dm0.matfile['calibration_lambda'][0, 0]/1e-9))
-        logging.info('dmcontrol: rad_to_nm = {}'.format(self.dm0.rad_to_nm))
-
-        self.flag_dm0 = 1.0
-        self.dm0.set_zernike_indices(zernike_indices)
-        self.ndof0 = self.dm0.zernike_indices.size
-        self.ndof = self.ndof0
-
-        # initial DM aberration
-        if args.dm_ab != 0.0:
-            self.set_random_dm_ab_calib_rad(args.dm_ab)
-        else:
-            self.set_random_dm_ab_calib_rad(0.0)
-
-        if optsys.h5f:
-            optsys.h5f['dmcontrol/dm_ab_calib_rad'] = self.dm_ab_calib_rad
-
-        self.log_write_count = 0
-
-        self.bmc = BMC()
-        self.bmc.open('aaaaaaaaaaa')
-
-    def get_ndof(self):
-        return self.ndof
-
-    def set_random_dm_ab_calib_rad(self, rms=0.5):
-        ab = normal(size=(self.ndof,))
-        ab = (rms/norm(ab))*ab
-        self.dm_ab_calib_rad = ab
-
-    def write_settings(self, x):
-        x = x.copy()
-
-        if self.dm_ab_calib_rad is not None:
-            x += self.dm_ab_calib_rad
-
-        def trim(u, what):
-            if norm(u, np.inf) > 1:
-                logging.warn(
-                    'Saturation {} {}'.format(what, str(np.abs(u).max())))
-                u[u > 1.] = .99
-                u[u < -1.] = -.99
-            assert(norm(u, np.inf) <= 1.)
-            return u
-
-        u0 = trim(self.dm0.zernike_to_u(x), 'u0')
-        u1 = trim(self.dm0.add_flat_to_u(u0), 'u1')
-        v = np.sqrt((u1 + 1.0)/2.0)
-        assert(np.all(np.isfinite(u0)))
-        assert(np.all(np.isfinite(u1)))
-        assert(np.all(np.isfinite(v)))
-
-        if self.optsys.h5f:
-            self.optsys.h5f['dmcontrol/x/{:09d}'.format(
-                self.log_write_count)] = x
-            self.optsys.h5f['dmcontrol/u/{:09d}'.format(
-                self.log_write_count)] = u0
-            self.optsys.h5f['dmcontrol/v/{:09d}'.format(
-                self.log_write_count)] = v
-
-        self.bmc.write(v)
-        self.optsys.write_settings(x)
-
-        # self.optsys.write_settings(
-        #     self.dm0.add_flat_to_u(dm0),
-        #     self.dm1.add_flat_to_u(dm1),
-        #     zcomp)
-
-        self.log_write_count += 1
-
-    def close(self):
-        if self.bmc:
-            self.bmc.close()
-            self.bmc = None
 
 
 control_classes = [Zernike]
