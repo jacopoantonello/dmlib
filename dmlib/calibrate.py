@@ -135,6 +135,7 @@ class WeightedLSCalib:
             C = np.dot(pinv(lambda1*np.diag(1 - stds) + np.dot(H.T, H)), H.T)
         else:
             C = np.linalg.pinv(H)
+        uflat = -np.dot(C, z0)
 
         self.fringe = fringe
         self.cart = cart
@@ -147,6 +148,7 @@ class WeightedLSCalib:
         self.mvaf = mvaf
         self.phi0 = phi0
         self.z0 = z0
+        self.uflat = uflat
         self.C = C
         self.alpha = alpha
         self.lambda1 = lambda1
@@ -184,6 +186,7 @@ class WeightedLSCalib:
         z.mvaf = f[prefix + 'mvaf'][()]
         z.phi0 = f[prefix + 'phi0'][()]
         z.z0 = f[prefix + 'z0'][()]
+        z.uflat = f[prefix + 'uflat'][()]
         z.C = f[prefix + 'C'][()]
         z.alpha = f[prefix + 'alpha'][()][0]
         z.lambda1 = f[prefix + 'lambda1'][()][0]
@@ -226,6 +229,8 @@ class WeightedLSCalib:
         f.create_dataset(prefix + 'phi0', **params)
         params['data'] = self.z0
         f.create_dataset(prefix + 'z0', **params)
+        params['data'] = self.uflat
+        f.create_dataset(prefix + 'uflat', **params)
         params['data'] = self.C
         f.create_dataset(prefix + 'C', **params)
         f.create_dataset(prefix + 'alpha', data=np.array([self.alpha]))
