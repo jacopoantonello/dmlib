@@ -833,17 +833,15 @@ class Control(QMainWindow):
 
         self.tabs.addTab(frame, 'test')
 
-        self.test_axes = self.test_fig.figure.subplots(2, 3)
+        self.test_axes = self.test_fig.figure.subplots(2, 2)
         self.test_fig.figure.subplots_adjust(
             left=.125, right=.9,
             bottom=.1, top=.9,
             wspace=0.45, hspace=0.45)
-        self.test_axes[0, 0].set_title('cam')
-        self.test_axes[0, 1].set_title('dm')
-        self.test_axes[0, 2].set_title('dm')
-        self.test_axes[1, 0].set_title('phi set')
-        self.test_axes[1, 1].set_title('phi meas')
-        self.test_axes[1, 2].set_title('phi err')
+        self.test_axes[0, 0].set_title('dm')
+        self.test_axes[0, 1].set_title('z err')
+        self.test_axes[1, 0].set_title('phi meas')
+        self.test_axes[1, 1].set_title('phi err')
 
         brun = QPushButton('run')
         bstop = QPushButton('stop')
@@ -853,24 +851,22 @@ class Control(QMainWindow):
         status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(status, 2, 0, 1, 3)
 
-        bplot = QPushButton('open')
         bzernike = QPushButton('Zernike')
-        layout.addWidget(bplot, 3, 0)
-        layout.addWidget(bzernike, 3, 1)
+        layout.addWidget(bzernike, 3, 0)
 
         bflat = QCheckBox('flat')
         bflat.setChecked(True)
-        layout.addWidget(bflat, 4, 0)
-        layout.addWidget(bflat, 4, 0)
+        layout.addWidget(bflat, 3, 1)
         bloop = QCheckBox('closed-loop')
         bloop.setChecked(True)
-        layout.addWidget(bloop, 4, 1)
+        layout.addWidget(bloop, 3, 2)
         bclear = QPushButton('clear')
         layout.addWidget(bclear, 4, 2)
 
         disables = [
-            self.toolbox, brun, bplot, bflat, bzernike, bloop, bclear,
+            self.toolbox, brun, bflat, bzernike, bloop, bclear,
             bzernike]
+        llistener = LoopListener()
         zernike = [None]
         calib = []
 
@@ -884,10 +880,8 @@ class Control(QMainWindow):
                 status.setText('')
                 self.test_axes[0, 0].clear()
                 self.test_axes[0, 1].clear()
-                self.test_axes[0, 2].clear()
                 self.test_axes[1, 0].clear()
                 self.test_axes[1, 1].clear()
-                self.test_axes[1, 2].clear()
                 self.test_axes[1, 1].figure.canvas.draw()
 
         def disable():
@@ -927,13 +921,15 @@ class Control(QMainWindow):
 
         def f2():
             def cb(z):
-                nmax = min(self.shared.z.size, z.size)
-                self.shared.z[:nmax] = z[:nmax]
+                nmax = min(self.shared.z_sp.size, z.size)
+                self.shared.z_sp[:nmax] = z[:nmax]
 
             def f():
                 disable()
                 if not calib or len(calib) == 0:
-                    bootstrap()
+                    if not bootstrap():
+                        enable()
+                        return
                 shared.iq.put(('query_calib', calib[0]))
                 ndata = check_err()
                 if ndata == -1:
@@ -948,8 +944,49 @@ class Control(QMainWindow):
 
         def f3():
             def f():
-                clearup()
+                clearup(True)
             return f
+
+        def f1():
+            def f():
+                if not calib or len(calib) == 0:
+                    if not bootstrap():
+                        return
+                llistener.calib = calib[0]
+                llistener.flat = bflat.isChecked()
+                llistener.closed_loop = bloop.isChecked()
+                llistener.start()
+            return f
+
+        def make_cb():
+            def f():
+                ax1 = self.test_axes[0, 0]
+                ax1.imshow(self.dmplot.compute_gauss(self.shared.u))
+                ax1.axis('off')
+
+                ax2 = self.test_axes[0, 1]
+                ax2.plot(self.shared.z_err, 'marker', '.')
+
+                data = self.shared.get_phase()
+                cldata = self.shared.get_cl_data()
+
+                ax3 = self.test_axes[1, 0]
+                ax3.imshow(
+                    data[-1], extent=self.shared.mag_ext, origin='lower')
+                ax3.set_xlabel('mm')
+                ax3.set_title('unwrapped phi')
+
+                ax4 = self.test_axes[1, 1]
+                ax4.imshow(
+                    cldata[0], extent=self.shared.mag_ext, origin='lower')
+                ax4.set_xlabel('mm')
+                ax4.set_title('unwrapped phi')
+
+                ax4.figure.canvas.draw()
+
+            return f
+
+        llistener.sig_update.connect(make_cb())
 
         def f4(offset=None):
             def f():
@@ -1047,7 +1084,7 @@ class Control(QMainWindow):
                 #     calib[0], val, ndata[0] - 1))
             return f
 
-        # brun.clicked.connect(f1())
+        brun.clicked.connect(f1())
         bzernike.clicked.connect(f2())
         bclear.clicked.connect(f3())
 
@@ -1429,6 +1466,38 @@ class DataAcqListener(QThread):
                 return
 
 
+class LoopListener(QThread):
+
+    busy = False
+    run = True
+    calib = False
+    flat = True
+    closed_loop = True
+    sig_update = pyqtSignal(tuple)
+
+    def __init__(self, shared):
+        super().__init__()
+
+    def run(self):
+        self.shared.iq.put(('loop', self.calib, self.flat, self.closed_loop))
+        while True:
+            result = self.shared.oq.get()
+            print('listener result', result)
+            if result[0] == 'OK':
+                self.shared.iq.put(('stopcmd', not self.run))
+                self.shared.oq.get()
+                if not self.run:
+                    self.sig_update.emit(('stopped',))
+                    print('LoopListener stopped')
+                    return
+                elif not self.busy:
+                    self.sig_update.emit(result)
+            else:
+                self.sig_update.emit(result)
+                print('LoopListener terminates')
+                return
+
+
 def open_hardware(args):
     if args.cam == 'sim':
         cam = FakeCamera()
@@ -1479,6 +1548,7 @@ class Shared:
         self.mag_buf = Array('c', dbl_dtsize*totpixs, lock=False)
         self.wrapped_buf = Array('c', dbl_dtsize*totpixs, lock=False)
         self.unwrapped_buf = Array('c', dbl_dtsize*totpixs, lock=False)
+        self.phi_err_buf = Array('c', dbl_dtsize*totpixs, lock=False)
         self.mag_ext = Array('d', 4, lock=False)
         self.mag_shape = Array('i', 2, lock=False)
 
@@ -1488,13 +1558,17 @@ class Shared:
         self.dm_size = dm.size()
 
         self.dm = Array('d', dm.size(), lock=False)
-        self.z_buf = Array('d', 1024, lock=False)
+        self.z_sp_buf = Array('d', 1024, lock=False)
+        self.z_ms_buf = Array('d', 1024, lock=False)
+        self.z_er_buf = Array('d', 1024, lock=False)
         self.iq = Queue()
         self.oq = Queue()
 
     def make_static(self):
         self.u = np.frombuffer(self.dm, np.float)
-        self.z = np.frombuffer(self.z_buf, np.float)
+        self.z_sp = np.frombuffer(self.z_sp_buf, np.float)
+        self.z_ms = np.frombuffer(self.z_ms_buf, np.float)
+        self.z_er = np.frombuffer(self.z_er_buf, np.float)
         self.cam = np.frombuffer(
             self.cam_buf, self.cam_dtype).reshape(self.cam_shape)
         self.ft = np.frombuffer(
@@ -1512,6 +1586,12 @@ class Shared:
         unwrapped = np.frombuffer(
             self.unwrapped_buf, np.float, count=nsum2).reshape(self.mag_shape)
         return fstord, mag, wrapped, unwrapped
+
+    def get_cl_data(self):
+        nsum2 = self.mag_shape[0]*self.mag_shape[1]
+        phi_err = np.frombuffer(
+            self.phi_err_buf, np.float, count=nsum2).reshape(self.mag_shape)
+        return phi_err,
 
 
 def run_worker(shared, args):
@@ -1588,6 +1668,8 @@ class Worker:
                 self.run_calibrate(*cmd[1:])
             elif cmd[0] == 'query_calib':
                 self.run_query_calib(*cmd[1:])
+            elif cmd[0] == 'loop':
+                self.run_loop(*cmd[1:])
             else:
                 raise NotImplementedError(cmd)
 
@@ -1778,17 +1860,6 @@ class Worker:
             'OK', self.calib.wavelength, self.calib.get_rzern().n,
             self.calib.get_radius()))
 
-    def run_set_zernike(self, dname, z):
-        if self.open_calib(dname):
-            return
-
-        if z.size != self.calib.get_nz():
-            self.shared.oq.put((
-                'Zernike vector must have {} elements'.format(
-                    self.calib.get_nz())))
-        else:
-            pass
-
     def run_centre(self, dname):
         if self.open_dset(dname):
             return
@@ -1962,6 +2033,49 @@ class Worker:
                     count[0] += 1
 
         print('run_dataacq', 'finished')
+        shared.oq.put(('finished', h5fn))
+
+    def run_loop(self, flat, closed_loop, sleep=.1):
+        cam = self.cam
+        dm = self.dm
+        shared = self.shared
+
+        while True:
+            try:
+                dm.write(U1[:, i])
+                time.sleep(sleep)
+                img = cam.grab_image()
+            except Exception as e:
+                traceback.print_exc(file=sys.stdout)
+                shared.oq.put((str(e),))
+                return
+            if img.max() == cam.get_image_max():
+                shared.cam_sat.value = 1
+            else:
+                shared.cam_sat.value = 0
+            h5f[imaddr][i, ...] = img
+            shared.u[:] = U1[:, i]
+            shared.cam[:] = img
+            shared.oq.put(('OK', count[0], tot))
+            print('run_loop', 'iteration')
+
+            stopcmd = shared.iq.get()[1]
+            shared.oq.put('')
+
+            if stopcmd:
+                print('run_loop', 'stopcmd')
+                h5f.close()
+                try:
+                    os.remove(h5fn)
+                except OSError:
+                    pass
+                return
+            else:
+                print('run_loop', 'continue')
+
+            count[0] += 1
+
+        print('run_loop', 'finished')
         shared.oq.put(('finished', h5fn))
 
 
