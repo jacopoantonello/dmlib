@@ -28,6 +28,7 @@ from sensorless.czernike import RZern
 
 class ZernikePanel(QWidget):
 
+    nmodes = 1
     units = 'rad'
     status = None
     mul = 1.0
@@ -61,6 +62,7 @@ class ZernikePanel(QWidget):
         self.rzern.make_cart_grid(xv, yv)
         self.z = np.zeros((self.rzern.nk,))
         self.rad_to_nm = wavelength/(2*np.pi)
+        self.nmodes = min((21, self.rzern.nk))
 
         if settings:
             self.settings = {**self.settings, **settings}
@@ -86,10 +88,10 @@ class ZernikePanel(QWidget):
         top = QGroupBox('Zernike')
         toplay = QGridLayout()
         top.setLayout(toplay)
-        labzm = QLabel('max radial order')
-        lezm = QLineEdit(str(self.rzern.n))
+        labzm = QLabel('shown modes')
+        lezm = QLineEdit(str(self.nmodes))
         lezm.setMaximumWidth(50)
-        lezm.setValidator(QIntValidator(1, 255))
+        lezm.setValidator(QIntValidator(1, self.rzern.nk))
 
         brad = QCheckBox('rad')
         brad.setChecked(True)
@@ -116,7 +118,6 @@ class ZernikePanel(QWidget):
                 slider.blockSignals(False)
 
                 self.z[ind] = r
-                # TODO UPDATE HERE
                 self.update_gui()
             return f
 
@@ -167,7 +168,7 @@ class ZernikePanel(QWidget):
             tick_interval = 20
             single_step = 0.01
 
-            mynk = self.rzern.nk
+            mynk = self.nmodes
             ntab = self.rzern.ntab
             mtab = self.rzern.mtab
             if len(zernike_rows) < mynk:
@@ -249,31 +250,24 @@ class ZernikePanel(QWidget):
                 assert(len(zernike_rows) == mynk)
 
         def reset_fun():
+            self.z *= 0.
             for t in zernike_rows:
                 t[2].setValue(0.0)
+            self.update_gui()
 
-        def change_radial():
+        def change_nmodes():
             try:
                 ival = int(lezm.text())
+                assert(ival > 1)
+                assert(ival <= self.rzern.nk)
             except Exception as exp:
-                lezm.setText(str(self.rzern.n))
+                lezm.setText(str(self.nmodes))
                 return
-            n = (ival + 1)*(ival + 2)//2
-            newab = np.zeros((n,))
-            minn = min((n, self.rzern.n))
-            newab[:minn] = self.z[:minn]
-            self.z = newab
-            update_zernike_rows()
-            # TODO update here
-            # self.set_aberration(newab)
-            # slm.update()
-            # phase_display.update_phase(slm.rzern.n, slm.aberration)
-            # phase_display.update()
-            lezm.setText(str(self.rzern.n))
 
-        # TODO update here
-        # phase_display.update_phase(slm.rzern.n, slm.aberration)
-        update_zernike_rows()
+            self.nmodes = ival
+            update_zernike_rows()
+            self.update_gui()
+            lezm.setText(str(self.nmodes))
 
         def f2():
             def f(b):
@@ -286,9 +280,11 @@ class ZernikePanel(QWidget):
                 self.update_gui()
             return f
 
+        update_zernike_rows()
+
         brad.stateChanged.connect(f2())
         reset.clicked.connect(reset_fun)
-        lezm.editingFinished.connect(change_radial)
+        lezm.editingFinished.connect(change_nmodes)
 
         l1 = QGridLayout()
         l1.addWidget(top1, 0, 0)
