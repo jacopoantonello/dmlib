@@ -28,6 +28,7 @@ from sensorless.czernike import RZern
 
 class ZernikePanel(QWidget):
 
+    callback = None
     nmodes = 1
     units = 'rad'
     status = None
@@ -53,8 +54,13 @@ class ZernikePanel(QWidget):
         self.im.set_clim(inner.min(), inner.max())
         self.fig.figure.canvas.draw()
 
-    def __init__(self, wavelength=650, n_radial=5, settings=None):
-        super().__init__()
+        if self.callback:
+            self.callback(self.z)
+
+    def __init__(
+            self, wavelength, n_radial, callback=None, settings=None,
+            parent=None):
+        super().__init__(parent=parent)
 
         self.rzern = RZern(n_radial)
         dd = np.linspace(-1, 1, self.shape[0])
@@ -294,6 +300,6 @@ class ZernikePanel(QWidget):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    zp = ZernikePanel()
+    zp = ZernikePanel(wavelength=650, n_radial=5)
     zp.show()
     sys.exit(app.exec_())

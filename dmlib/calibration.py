@@ -165,6 +165,9 @@ class WeightedLSCalib:
     def get_rzern(self):
         return self.cart
 
+    def get_radius(self):
+        return self.fringe.radius
+
     def get_rad_to_nm(self):
         return (self.wavelength/1e-9)/(2*np.pi)
 

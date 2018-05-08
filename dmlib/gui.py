@@ -35,6 +35,7 @@ from PyQt5.QtWidgets import (  # noqa: F401
     )
 
 import version
+from zpanel import ZernikePanel
 from interf import FringeAnalysis
 from calibration import WeightedLSCalib
 
@@ -853,7 +854,7 @@ class Control(QMainWindow):
         layout.addWidget(status, 2, 0, 1, 3)
 
         bplot = QPushButton('open')
-        bzernike = QPushButton('zernike')
+        bzernike = QPushButton('Zernike')
         layout.addWidget(bplot, 3, 0)
         layout.addWidget(bzernike, 3, 1)
 
@@ -867,12 +868,17 @@ class Control(QMainWindow):
         bclear = QPushButton('clear')
         layout.addWidget(bclear, 4, 2)
 
-        disables = [self.toolbox, brun, bplot, bflat, bzernike, bloop, bclear]
-
-        dataset = []
+        disables = [
+            self.toolbox, brun, bplot, bflat, bzernike, bloop, bclear,
+            bzernike]
+        zernike = [None]
+        calib = []
 
         def clearup(clear_status=False):
-            dataset.clear()
+            calib.clear()
+            if zernike[0]:
+                zernike[0].close()
+                zernike[0] = None
 
             if clear_status:
                 status.setText('')
@@ -898,26 +904,6 @@ class Control(QMainWindow):
             for b in disables:
                 b.setEnabled(True)
 
-        def f1():
-            # askwl = f0()
-
-            def f():
-                clearup()
-
-                # while not wavelength:
-                #     askwl()
-
-                self.test_axes[0, 0].clear()
-                self.test_axes[0, 1].clear()
-                self.test_axes[1, 0].clear()
-                self.test_axes[1, 1].clear()
-                self.test_axes[1, 1].figure.canvas.draw()
-                disable()
-
-                # listener.run = True
-                # listener.start()
-            return f
-
         def check_err():
             reply = self.shared.oq.get()
             if reply[0] != 'OK':
@@ -927,24 +913,50 @@ class Control(QMainWindow):
                 return reply[1:]
 
         def bootstrap():
-            if not dataset:
+            if not calib:
                 fileName, _ = QFileDialog.getOpenFileName(
                     self, 'Select a calibration', '',
                     'H5 (*.h5);;All Files (*)')
                 if not fileName:
                     return False
                 else:
-                    dataset.append(fileName)
+                    calib.append(fileName)
                     return True
             else:
                 return True
 
-        def f3(offset=None):
+        def f2():
+            def cb(z):
+                nmax = min(self.shared.z.size, z.size)
+                self.shared.z[:nmax] = z[:nmax]
+
+            def f():
+                disable()
+                if not calib or len(calib) == 0:
+                    bootstrap()
+                shared.iq.put(('query_calib', calib[0]))
+                ndata = check_err()
+                if ndata == -1:
+                    clearup()
+                else:
+                    zernike[0] = ZernikePanel(ndata[0], ndata[1], cb)
+                    zernike[0].show()
+                    status.setText('{} {:.3f} mm'.format(
+                        calib[0], ndata[2]/1000))
+                enable()
+            return f
+
+        def f3():
+            def f():
+                clearup()
+            return f
+
+        def f4(offset=None):
             def f():
                 if not bootstrap():
                     return
 
-                self.shared.iq.put(('load_calib', dataset[0]))
+                self.shared.iq.put(('load_calib', calib[0]))
 
                 ndata = check_err()
                 if ndata == -1:
@@ -973,7 +985,7 @@ class Control(QMainWindow):
                 #     lastind.append(val)
 
                 # self.shared.iq.put((
-                #     'plot', dataset[0], val, centre, radius[0]))
+                #     'plot', calib[0], val, centre, radius[0]))
                 # if check_err() == -1:
                 #     return
 
@@ -1032,10 +1044,12 @@ class Control(QMainWindow):
 
                 # # self.update_dm_gui()
                 # status.setText('{} {}/{}'.format(
-                #     dataset[0], val, ndata[0] - 1))
+                #     calib[0], val, ndata[0] - 1))
             return f
 
-        brun.clicked.connect(f1())
+        # brun.clicked.connect(f1())
+        bzernike.clicked.connect(f2())
+        bclear.clicked.connect(f3())
 
         self.test_nav = NavigationToolbar2QT(self.test_fig, frame)
         disables.append(self.test_nav)
@@ -1474,11 +1488,13 @@ class Shared:
         self.dm_size = dm.size()
 
         self.dm = Array('d', dm.size(), lock=False)
+        self.z_buf = Array('d', 1024, lock=False)
         self.iq = Queue()
         self.oq = Queue()
 
     def make_static(self):
         self.u = np.frombuffer(self.dm, np.float)
+        self.z = np.frombuffer(self.z_buf, np.float)
         self.cam = np.frombuffer(
             self.cam_buf, self.cam_dtype).reshape(self.cam_shape)
         self.ft = np.frombuffer(
@@ -1758,7 +1774,9 @@ class Worker:
         if self.open_calib(dname):
             return
 
-        self.shared.oq.put(('OK', self.calib.get_rzern().n))
+        self.shared.oq.put((
+            'OK', self.calib.wavelength, self.calib.get_rzern().n,
+            self.calib.get_radius()))
 
     def run_set_zernike(self, dname, z):
         if self.open_calib(dname):
