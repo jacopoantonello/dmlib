@@ -66,7 +66,7 @@ class ZernikePanel(QWidget):
             self.settings = {**self.settings, **settings}
 
         zernike_rows = list()
-        multiplier = 100
+        fto100mul = 100
 
         top1 = QGroupBox('phase')
         toplay1 = QGridLayout()
@@ -107,9 +107,9 @@ class ZernikePanel(QWidget):
 
         def fto100(f, amp):
             maxrad = float(amp.text())
-            return int((f + maxrad)/(2*maxrad)*multiplier)
+            return int((f + maxrad)/(2*maxrad)*fto100mul)
 
-        def update_coeff(slider, ind, amp):
+        def make_hand_spinbox(slider, ind, amp):
             def f(r):
                 slider.blockSignals(True)
                 slider.setValue(fto100(r, amp))
@@ -120,7 +120,7 @@ class ZernikePanel(QWidget):
                 self.update_gui()
             return f
 
-        def update_amp(spinbox, slider, le, i):
+        def make_hand_amp(spinbox, slider, le, i):
             def f():
                 amp = float(le.text())
                 spinbox.setRange(-amp, amp)
@@ -128,15 +128,15 @@ class ZernikePanel(QWidget):
                 slider.setValue(fto100(self.z[i], le))
             return f
 
-        def update_zlabel(le, settings, i):
+        def make_hand_lab(le, settings, i):
             def f():
                 settings['zernike_labels'][str(i)] = le.text()
             return f
 
-        def update_spinbox(s, amp):
+        def make_hand_slider(s, amp):
             def f(t):
                 maxrad = float(amp.text())
-                s.setValue(t/multiplier*(2*maxrad) - maxrad)
+                s.setValue(t/fto100mul*(2*maxrad) - maxrad)
             return f
 
         def default_zernike_name(i, n, m):
@@ -192,7 +192,7 @@ class ZernikePanel(QWidget):
                     amp.setValidator(val)
 
                     slider.setMinimum(0)
-                    slider.setMaximum(multiplier)
+                    slider.setMaximum(fto100mul)
                     slider.setFocusPolicy(Qt.StrongFocus)
                     slider.setTickPosition(QSlider.TicksBothSides)
                     slider.setTickInterval(tick_interval)
@@ -202,14 +202,15 @@ class ZernikePanel(QWidget):
                     spinbox.setSingleStep(single_step)
                     spinbox.setValue(self.z[i])
 
-                    hand1 = update_spinbox(spinbox, amp)
-                    hand2 = update_coeff(slider, i, amp)
-                    hand3 = update_amp(spinbox, slider, amp, i)
-                    hand4 = update_zlabel(lbn, self.settings, i)
-                    slider.valueChanged.connect(hand1)
-                    spinbox.valueChanged.connect(hand2)
-                    amp.editingFinished.connect(hand3)
-                    lbn.editingFinished.connect(hand4)
+                    hand_slider = make_hand_slider(spinbox, amp)
+                    hand_spinbox = make_hand_spinbox(slider, i, amp)
+                    hand_amp = make_hand_amp(spinbox, slider, amp, i)
+                    hand_lab = make_hand_lab(lbn, self.settings, i)
+
+                    slider.valueChanged.connect(hand_slider)
+                    spinbox.valueChanged.connect(hand_spinbox)
+                    amp.editingFinished.connect(hand_amp)
+                    lbn.editingFinished.connect(hand_lab)
 
                     scrollLayout.addWidget(lab, i, 0)
                     scrollLayout.addWidget(lbn, i, 1)
@@ -218,8 +219,8 @@ class ZernikePanel(QWidget):
                     scrollLayout.addWidget(amp, i, 4)
 
                     zernike_rows.append((
-                        lab, slider, spinbox, hand1, hand2, amp,
-                        hand3, lbn, hand4))
+                        lab, slider, spinbox, hand_slider, hand_spinbox, amp,
+                        hand_amp, lbn, hand_lab))
 
                 assert(len(zernike_rows) == mynk)
 
