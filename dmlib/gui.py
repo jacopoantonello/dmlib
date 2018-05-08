@@ -972,7 +972,10 @@ class Control(QMainWindow):
                 ax1 = self.test_axes[0, 0]
                 ax1.imshow(self.dmplot.compute_gauss(self.shared.u))
                 ax1.axis('off')
-                ax1.set_title('dm')
+                if self.shared.dm_sat:
+                    ax1.set_title('dm SAT')
+                else:
+                    ax1.set_title('dm')
 
                 ax2 = self.test_axes[0, 1]
                 ax2.clear()
@@ -1560,6 +1563,7 @@ class Shared:
         self.cam_buf = Array('c', cam_dtsize*totpixs, lock=False)
         self.cam_ext = Array('d', 4, lock=False)
         self.cam_sat = Value('i', lock=False)
+        self.dm_sat = Value('i', lock=False)
 
         self.ft_buf = Array('d', totpixs, lock=False)
         self.ft_ext = Array('d', 4, lock=False)
@@ -2084,6 +2088,10 @@ class Worker:
 
                 dm.write(self.shared.z_sp[:dm.ndof])
                 self.shared.u[:] = dm.u[:]
+                if dm.saturation:
+                    self.shared.dm_sat.value = 1
+                else:
+                    self.shared.dm_sat.value = 0
                 time.sleep(sleep)
                 img = cam.grab_image()
 

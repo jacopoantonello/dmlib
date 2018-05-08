@@ -10,6 +10,8 @@ from numpy.linalg import norm, matrix_rank
 
 class ZernikeControl:
 
+    saturation = 0
+
     def __init__(self, dm, calib, indices=None, h5f=None):
         nz = calib.H.shape[0]
         nu = calib.H.shape[1]
@@ -78,14 +80,15 @@ class ZernikeControl:
             self.h5_append('x', x)
             self.h5_append('u', self.u)
 
-        def trim(u):
-            if norm(u, np.inf) > 1:
-                logging.warn(
-                    'Saturation {}'.format(str(np.abs(u).max())))
-                u[u > 1.] = 1.
-                u[u < -1.] = -1.
+        if norm(self.u, np.inf) > 1:
+            logging.warn(
+                'Saturation {}'.format(str(np.abs(self.u).max())))
+            self.u[self.u > 1.] = 1.
+            self.u[self.u < -1.] = -1.
+            self.saturation = 1
+        else:
+            self.saturation = 0
 
-        trim(self.u)
         assert(norm(self.u, np.inf) <= 1.)
 
         self.dm.write(self.u)
