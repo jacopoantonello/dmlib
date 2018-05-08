@@ -5,6 +5,7 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt  # noqa:
 
+from numpy.linalg import norm
 from matplotlib import ticker
 from matplotlib.backends.backend_qt5agg import FigureCanvas  # noqa:
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT  # noqa:
@@ -27,6 +28,9 @@ from sensorless.czernike import RZern
 
 class ZernikePanel(QWidget):
 
+    units = 'rad'
+    status = None
+    mul = 1.0
     fig = None
     ax = None
     im = None
@@ -35,13 +39,20 @@ class ZernikePanel(QWidget):
     settings = {'zernike_labels': {}}
 
     def update_gui(self):
-        phi = self.rzern.eval_grid(self.z).reshape(self.shape, order='F')
+        phi = self.mul*self.rzern.eval_grid(self.z).reshape(
+            self.shape, order='F')
         inner = phi[np.isfinite(phi)]
+        min1 = inner.min()
+        max1 = inner.max()
+        rms = self.mul*norm(self.z)
+        self.status.setText(
+            '{} [{: 03.2f} {: 03.2f}] {: 03.2f} PV {: 03.2f} RMS'.format(
+                self.units, min1, max1, max1 - min1, rms))
         self.im.set_data(phi)
         self.im.set_clim(inner.min(), inner.max())
         self.fig.figure.canvas.draw()
 
-    def __init__(self, n_radial=5, settings=None):
+    def __init__(self, wavelength=650, n_radial=5, settings=None):
         super().__init__()
 
         self.rzern = RZern(n_radial)
@@ -49,6 +60,7 @@ class ZernikePanel(QWidget):
         xv, yv = np.meshgrid(dd, dd)
         self.rzern.make_cart_grid(xv, yv)
         self.z = np.zeros((self.rzern.nk,))
+        self.rad_to_nm = wavelength/(2*np.pi)
 
         if settings:
             self.settings = {**self.settings, **settings}
@@ -67,7 +79,9 @@ class ZernikePanel(QWidget):
         self.cb.locator = ticker.MaxNLocator(nbins=5)
         self.cb.update_ticks()
         self.ax.axis('off')
-        toplay1.addWidget(self.fig)
+        self.status = QLabel('')
+        toplay1.addWidget(self.fig, 0, 0)
+        toplay1.addWidget(self.status, 1, 0)
 
         top = QGroupBox('Zernike')
         toplay = QGridLayout()
@@ -77,9 +91,12 @@ class ZernikePanel(QWidget):
         lezm.setMaximumWidth(50)
         lezm.setValidator(QIntValidator(1, 255))
 
+        brad = QCheckBox('rad')
+        brad.setChecked(True)
         reset = QPushButton('reset')
         toplay.addWidget(labzm, 0, 0)
         toplay.addWidget(lezm, 0, 1)
+        toplay.addWidget(brad, 0, 2)
         toplay.addWidget(reset, 0, 3)
 
         scroll = QScrollArea()
@@ -101,10 +118,6 @@ class ZernikePanel(QWidget):
                 self.z[ind] = r
                 # TODO UPDATE HERE
                 self.update_gui()
-                # slm.set_aberration(slm.aberration)
-                # slm.update()
-                # phase_display.update_phase(slm.rzern.n, slm.aberration)
-                # phase_display.update()
             return f
 
         def update_amp(spinbox, slider, le, i):
@@ -151,6 +164,9 @@ class ZernikePanel(QWidget):
                 return ''
 
         def update_zernike_rows():
+            tick_interval = 20
+            single_step = 0.01
+
             mynk = self.rzern.nk
             ntab = self.rzern.ntab
             mtab = self.rzern.mtab
@@ -179,11 +195,11 @@ class ZernikePanel(QWidget):
                     slider.setMaximum(multiplier)
                     slider.setFocusPolicy(Qt.StrongFocus)
                     slider.setTickPosition(QSlider.TicksBothSides)
-                    slider.setTickInterval(20)
-                    slider.setSingleStep(0.01)
+                    slider.setTickInterval(tick_interval)
+                    slider.setSingleStep(single_step)
                     slider.setValue(fto100(self.z[i], amp))
                     spinbox.setRange(-maxamp, maxamp)
-                    spinbox.setSingleStep(0.01)
+                    spinbox.setSingleStep(single_step)
                     spinbox.setValue(self.z[i])
 
                     hand1 = update_spinbox(spinbox, amp)
@@ -258,6 +274,18 @@ class ZernikePanel(QWidget):
         # phase_display.update_phase(slm.rzern.n, slm.aberration)
         update_zernike_rows()
 
+        def f2():
+            def f(b):
+                if b:
+                    self.units = 'rad'
+                    self.mul = 1.0
+                else:
+                    self.units = 'nm'
+                    self.mul = self.rad_to_nm
+                self.update_gui()
+            return f
+
+        brad.stateChanged.connect(f2())
         reset.clicked.connect(reset_fun)
         lezm.editingFinished.connect(change_radial)
 
