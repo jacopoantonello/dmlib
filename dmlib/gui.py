@@ -936,6 +936,7 @@ class Control(QMainWindow):
                 if ndata == -1:
                     clearup()
                 else:
+                    self.dmplot.update_txs(ndata[3])
                     zernike[0] = ZernikePanel(ndata[0], ndata[1], cb)
                     zernike[0].show()
                     status.setText('{} {:.3f} mm'.format(
@@ -1882,7 +1883,7 @@ class Worker:
 
         self.shared.oq.put((
             'OK', self.calib.wavelength, self.calib.get_rzern().n,
-            self.calib.get_radius()))
+            self.calib.get_radius(), self.calib.dmplot_txs))
 
     def run_centre(self, dname):
         if self.open_dset(dname):
