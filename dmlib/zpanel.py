@@ -5,6 +5,7 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt  # noqa:
 
+from matplotlib import ticker
 from matplotlib.backends.backend_qt5agg import FigureCanvas  # noqa:
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT  # noqa:
 from matplotlib.figure import Figure  # noqa:
@@ -26,18 +27,49 @@ from sensorless.czernike import RZern
 
 class ZernikePanel(QWidget):
 
+    fig = None
+    ax = None
+    im = None
+    cb = None
+    shape = (128, 128)
     settings = {'zernike_labels': {}}
+
+    def update_gui(self):
+        phi = self.rzern.eval_grid(self.z).reshape(self.shape, order='F')
+        inner = phi[np.isfinite(phi)]
+        self.im.set_data(phi)
+        self.im.set_clim(inner.min(), inner.max())
+        self.fig.figure.canvas.draw()
 
     def __init__(self, n_radial=5, settings=None):
         super().__init__()
 
         self.rzern = RZern(n_radial)
+        dd = np.linspace(-1, 1, self.shape[0])
+        xv, yv = np.meshgrid(dd, dd)
+        self.rzern.make_cart_grid(xv, yv)
         self.z = np.zeros((self.rzern.nk,))
+
+        if settings:
+            self.settings = {**self.settings, **settings}
 
         zernike_rows = list()
         multiplier = 100
 
-        top = QGroupBox('Zernike aberrations')
+        top1 = QGroupBox('phase')
+        toplay1 = QGridLayout()
+        top1.setLayout(toplay1)
+        self.fig = FigureCanvas(Figure(figsize=(2, 2)))
+        self.ax = self.fig.figure.add_subplot(1, 1, 1)
+        phi = self.rzern.eval_grid(self.z).reshape(self.shape, order='F')
+        self.im = self.ax.imshow(phi)
+        self.cb = self.fig.figure.colorbar(self.im)
+        self.cb.locator = ticker.MaxNLocator(nbins=5)
+        self.cb.update_ticks()
+        self.ax.axis('off')
+        toplay1.addWidget(self.fig)
+
+        top = QGroupBox('Zernike')
         toplay = QGridLayout()
         top.setLayout(toplay)
         labzm = QLabel('max radial order')
@@ -68,6 +100,7 @@ class ZernikePanel(QWidget):
 
                 self.z[ind] = r
                 # TODO UPDATE HERE
+                self.update_gui()
                 # slm.set_aberration(slm.aberration)
                 # slm.update()
                 # phase_display.update_phase(slm.rzern.n, slm.aberration)
@@ -128,7 +161,7 @@ class ZernikePanel(QWidget):
                             i + 1, ntab[i], mtab[i]))
                     slider = QSlider(Qt.Horizontal)
                     spinbox = QDoubleSpinBox()
-                    maxamp = max((4, self.z[i]))
+                    maxamp = max((8, self.z[i]))
                     if str(i) in self.settings['zernike_labels'].keys():
                         zname = self.settings['zernike_labels'][str(i)]
                     else:
@@ -209,9 +242,10 @@ class ZernikePanel(QWidget):
                 lezm.setText(str(self.rzern.n))
                 return
             n = (ival + 1)*(ival + 2)//2
-            newab = np.zeros((n, 1))
+            newab = np.zeros((n,))
             minn = min((n, self.rzern.n))
-            newab[:minn, 0] = self.z[:minn]
+            newab[:minn] = self.z[:minn]
+            self.z = newab
             update_zernike_rows()
             # TODO update here
             # self.set_aberration(newab)
@@ -228,7 +262,8 @@ class ZernikePanel(QWidget):
         lezm.editingFinished.connect(change_radial)
 
         l1 = QGridLayout()
-        l1.addWidget(top)
+        l1.addWidget(top1, 0, 0)
+        l1.addWidget(top, 1, 0)
         self.setLayout(l1)
 
 

@@ -846,31 +846,28 @@ class Control(QMainWindow):
 
         brun = QPushButton('run')
         bstop = QPushButton('stop')
-        bwavelength = QPushButton('wavelength')
         layout.addWidget(brun, 1, 0)
         layout.addWidget(bstop, 1, 1)
-        layout.addWidget(bwavelength, 1, 2)
         status = QLabel('')
         status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(status, 2, 0, 1, 3)
 
         bplot = QPushButton('open')
-        bprev = QPushButton('prev')
-        bnext = QPushButton('next')
+        bzernike = QPushButton('zernike')
         layout.addWidget(bplot, 3, 0)
-        layout.addWidget(bprev, 3, 1)
-        layout.addWidget(bnext, 3, 2)
+        layout.addWidget(bzernike, 3, 1)
 
-        baperture = QPushButton('aperture')
-        layout.addWidget(baperture, 4, 0)
-        bcalibrate = QPushButton('calibrate')
-        layout.addWidget(bcalibrate, 4, 1)
+        bflat = QCheckBox('flat')
+        bflat.setChecked(True)
+        layout.addWidget(bflat, 4, 0)
+        layout.addWidget(bflat, 4, 0)
+        bloop = QCheckBox('closed-loop')
+        bloop.setChecked(True)
+        layout.addWidget(bloop, 4, 1)
         bclear = QPushButton('clear')
         layout.addWidget(bclear, 4, 2)
 
-        disables = [
-            self.toolbox, brun, bwavelength, bplot,
-            bprev, bnext, baperture, bcalibrate, bclear]
+        disables = [self.toolbox, brun, bplot, bflat, bzernike, bloop, bclear]
 
         dataset = []
 
