@@ -993,6 +993,8 @@ class Control(QMainWindow):
                 ax4.set_xlabel('mm')
                 ax4.set_title('phi err')
 
+                self.update_dm_gui()
+
                 ax4.figure.canvas.draw()
 
                 llistener.busy = False
