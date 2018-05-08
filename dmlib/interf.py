@@ -366,10 +366,19 @@ class FringeAnalysis:
         if prefix + 'unwrapped' in f:
             z.unwrapped = f[prefix + 'unwrapped'][()]
 
+        make_mask = 1
         if prefix + 'centre' in f:
             z.centre = f[prefix + 'centre'][()]
+            make_mask *= 1
+        else:
+            make_mask *= 0
         if prefix + 'radius' in f:
             z.radius = f[prefix + 'radius'][()]
+            make_mask *= 1
+        else:
+            make_mask *= 0
+        if make_mask:
+            z.update_radius(z.radius)
 
         return z
 

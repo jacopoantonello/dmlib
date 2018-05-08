@@ -2077,7 +2077,7 @@ class Worker:
                 time.sleep(sleep)
                 img = cam.grab_image()
 
-                fringe.analyse(img)
+                fringe.analyse(img, use_mask=True)
                 self.fill(self.shared.unwrapped_buf, fringe.unwrapped)
             except Exception as e:
                 traceback.print_exc(file=sys.stdout)
