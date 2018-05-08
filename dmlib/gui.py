@@ -966,6 +966,8 @@ class Control(QMainWindow):
 
         def make_cb():
             def f():
+                llistener.busy = True
+
                 ax1 = self.test_axes[0, 0]
                 ax1.imshow(self.dmplot.compute_gauss(self.shared.u))
                 ax1.axis('off')
@@ -983,16 +985,17 @@ class Control(QMainWindow):
                 ax3.imshow(
                     data[-1], extent=self.shared.mag_ext, origin='lower')
                 ax3.set_xlabel('mm')
-                ax3.set_title('unwrapped phi')
+                ax3.set_title('phi meas')
 
                 ax4 = self.test_axes[1, 1]
                 ax4.imshow(
                     cldata[0], extent=self.shared.mag_ext, origin='lower')
                 ax4.set_xlabel('mm')
-                ax4.set_title('unwrapped phi')
+                ax4.set_title('phi err')
 
                 ax4.figure.canvas.draw()
 
+                llistener.busy = False
             return f
 
         def f4():
@@ -1509,6 +1512,8 @@ class LoopListener(QThread):
                     return
                 elif not self.busy:
                     self.sig_update.emit(result)
+                else:
+                    print('LoopListener throttling')
             else:
                 self.sig_update.emit(result)
                 print('LoopListener terminates')

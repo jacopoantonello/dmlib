@@ -15,7 +15,7 @@ class ZernikeControl:
         nu = calib.H.shape[1]
 
         if indices is None:
-            indices = np.arange(2, nz + 1)
+            indices = np.arange(1, nz + 1)
         assert(calib.get_rzern().nk == nz)
         ndof = indices.size
 
