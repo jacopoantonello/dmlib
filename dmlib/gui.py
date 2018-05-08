@@ -2062,6 +2062,8 @@ class Worker:
         dm = ZernikeControl(self.dm, calib)
         shared = self.shared
 
+        dm.flat_on = flat
+
         count = 0
 
         for i in range(4):

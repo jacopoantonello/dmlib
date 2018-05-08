@@ -69,6 +69,7 @@ class ZernikePanel(QWidget):
         self.z = np.zeros((self.rzern.nk,))
         self.rad_to_nm = wavelength/(2*np.pi)
         self.nmodes = min((21, self.rzern.nk))
+        self.callback = callback
 
         if settings:
             self.settings = {**self.settings, **settings}
