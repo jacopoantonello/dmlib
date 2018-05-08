@@ -83,7 +83,7 @@ class ZernikePanel(QWidget):
         self.fig = FigureCanvas(Figure(figsize=(2, 2)))
         self.ax = self.fig.figure.add_subplot(1, 1, 1)
         phi = self.rzern.eval_grid(self.z).reshape(self.shape, order='F')
-        self.im = self.ax.imshow(phi)
+        self.im = self.ax.imshow(phi, origin='lower')
         self.cb = self.fig.figure.colorbar(self.im)
         self.cb.locator = ticker.MaxNLocator(nbins=5)
         self.cb.update_ticks()
