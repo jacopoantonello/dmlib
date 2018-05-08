@@ -38,6 +38,7 @@ import version
 from zpanel import ZernikePanel
 from interf import FringeAnalysis
 from calibration import WeightedLSCalib
+from control import ZernikeControl
 
 
 class Control(QMainWindow):
@@ -866,7 +867,7 @@ class Control(QMainWindow):
         disables = [
             self.toolbox, brun, bflat, bzernike, bloop, bclear,
             bzernike]
-        llistener = LoopListener()
+        llistener = LoopListener(self.shared)
         zernike = [None]
         calib = []
 
@@ -949,9 +950,14 @@ class Control(QMainWindow):
 
         def f1():
             def f():
+                disable()
                 if not calib or len(calib) == 0:
                     if not bootstrap():
+                        enable()
                         return
+                self.shared.z_sp *= 0
+                llistener.busy = False
+                llistener.run = True
                 llistener.calib = calib[0]
                 llistener.flat = bflat.isChecked()
                 llistener.closed_loop = bloop.isChecked()
@@ -963,9 +969,12 @@ class Control(QMainWindow):
                 ax1 = self.test_axes[0, 0]
                 ax1.imshow(self.dmplot.compute_gauss(self.shared.u))
                 ax1.axis('off')
+                ax1.set_title('dm')
 
                 ax2 = self.test_axes[0, 1]
-                ax2.plot(self.shared.z_err, 'marker', '.')
+                ax2.clear()
+                ax2.plot(self.shared.z_er, marker='.')
+                ax2.set_title('z err')
 
                 data = self.shared.get_phase()
                 cldata = self.shared.get_cl_data()
@@ -986,9 +995,15 @@ class Control(QMainWindow):
 
             return f
 
+        def f4():
+            def f():
+                llistener.run = False
+                enable()
+            return f
+
         llistener.sig_update.connect(make_cb())
 
-        def f4(offset=None):
+        def f5(offset=None):
             def f():
                 if not bootstrap():
                     return
@@ -1085,6 +1100,7 @@ class Control(QMainWindow):
             return f
 
         brun.clicked.connect(f1())
+        bstop.clicked.connect(f4())
         bzernike.clicked.connect(f2())
         bclear.clicked.connect(f3())
 
@@ -1477,6 +1493,7 @@ class LoopListener(QThread):
 
     def __init__(self, shared):
         super().__init__()
+        self.shared = shared
 
     def run(self):
         self.shared.iq.put(('loop', self.calib, self.flat, self.closed_loop))
@@ -2035,28 +2052,39 @@ class Worker:
         print('run_dataacq', 'finished')
         shared.oq.put(('finished', h5fn))
 
-    def run_loop(self, flat, closed_loop, sleep=.1):
+    def run_loop(self, dname, flat, closed_loop, sleep=.1):
+        if self.open_calib(dname):
+            return
+
+        calib = self.calib
+        fringe = self.calib.fringe
         cam = self.cam
-        dm = self.dm
+        dm = ZernikeControl(self.dm, calib)
         shared = self.shared
 
+        count = 0
+
+        for i in range(4):
+            self.shared.mag_ext[i] = fringe.ext4[i]/1000
+        shared.mag_shape[:] = fringe.unwrapped.shape[:]
         while True:
             try:
-                dm.write(U1[:, i])
+                print('run_loop', count, self.shared.z_sp[:10])
+                count += 1
+
+                dm.write(self.shared.z_sp[:dm.ndof])
+                self.shared.u[:] = dm.u[:]
                 time.sleep(sleep)
                 img = cam.grab_image()
+
+                fringe.analyse(img)
+                self.fill(self.shared.unwrapped_buf, fringe.unwrapped)
             except Exception as e:
                 traceback.print_exc(file=sys.stdout)
                 shared.oq.put((str(e),))
                 return
-            if img.max() == cam.get_image_max():
-                shared.cam_sat.value = 1
-            else:
-                shared.cam_sat.value = 0
-            h5f[imaddr][i, ...] = img
-            shared.u[:] = U1[:, i]
-            shared.cam[:] = img
-            shared.oq.put(('OK', count[0], tot))
+
+            shared.oq.put(('OK',))
             print('run_loop', 'iteration')
 
             stopcmd = shared.iq.get()[1]
@@ -2064,19 +2092,12 @@ class Worker:
 
             if stopcmd:
                 print('run_loop', 'stopcmd')
-                h5f.close()
-                try:
-                    os.remove(h5fn)
-                except OSError:
-                    pass
                 return
             else:
                 print('run_loop', 'continue')
 
-            count[0] += 1
-
         print('run_loop', 'finished')
-        shared.oq.put(('finished', h5fn))
+        shared.oq.put(('finished',))
 
 
 if __name__ == '__main__':
