@@ -815,7 +815,7 @@ class Control(QMainWindow):
 
             return f
 
-        def f6():
+        def f7():
             def f():
                 clearup(True)
             return f
@@ -828,7 +828,7 @@ class Control(QMainWindow):
         bprev.clicked.connect(f3(-1))
         baperture.clicked.connect(f4())
         bcalibrate.clicked.connect(f5())
-        bclear.clicked.connect(f6())
+        bclear.clicked.connect(f7())
 
         listener.sig_update.connect(f20())
         self.dataacq_nav = NavigationToolbar2QT(self.dataacq_fig, frame)
@@ -849,14 +849,14 @@ class Control(QMainWindow):
             bottom=.1, top=.9,
             wspace=0.45, hspace=0.45)
         self.test_axes[0, 0].set_title('dm')
-        self.test_axes[0, 1].set_title('z')
+        self.test_axes[0, 1].set_title('Zernike')
         self.test_axes[1, 0].set_title('phi meas')
         self.test_axes[1, 1].set_title('phi err')
 
         brun = QPushButton('run')
         bstop = QPushButton('stop')
         bsleep = QPushButton('sleep')
-        bzsize = QPushButton('z size')
+        bzsize = QPushButton('# Zernike')
         layout.addWidget(brun, 1, 0)
         layout.addWidget(bstop, 1, 1)
         layout.addWidget(bsleep, 1, 2)
@@ -875,7 +875,7 @@ class Control(QMainWindow):
         bloop.setChecked(True)
         layout.addWidget(bloop, 3, 2)
         bclear = QPushButton('clear')
-        layout.addWidget(bclear, 4, 2)
+        layout.addWidget(bclear, 4, 3)
 
         disables = [
             self.toolbox, brun, bflat, bzernike, bloop, bclear,
@@ -1057,102 +1057,6 @@ class Control(QMainWindow):
             return f
 
         llistener.sig_update.connect(make_cb())
-
-        def f5(offset=None):
-            def f():
-                if not bootstrap():
-                    return
-
-                self.shared.iq.put(('load_calib', calib[0]))
-
-                ndata = check_err()
-                if ndata == -1:
-                    clearup()
-                    return
-                else:
-                    self.dmplot.update_txs(ndata[1])
-
-                # if offset is None or not lastind:
-                #     val, ok = QInputDialog.getInt(
-                #         self, 'Select an index to plot',
-                #         'time step [{}, {}]'.format(0, ndata[0] - 1),
-                #         last, 0, ndata[0] - 1)
-                #     if not ok:
-                #         return
-                # else:
-                #     val = lastind[0] + offset
-
-                # if val < 0:
-                #     val = 0
-                # elif val >= ndata[0]:
-                #     val = ndata[0] - 1
-                # if lastind:
-                #     lastind[0] = val
-                # else:
-                #     lastind.append(val)
-
-                # self.shared.iq.put((
-                #     'plot', calib[0], val, centre, radius[0]))
-                # if check_err() == -1:
-                #     return
-
-                a1 = self.test_axes[0, 0]
-                a2 = self.test_axes[0, 1]
-                a3 = self.test_axes[0, 2]
-                a4 = self.test_axes[1, 0]
-                a5 = self.test_axes[1, 1]
-                a6 = self.test_axes[1, 2]
-
-                a1.clear()
-                a2.clear()
-                a3.clear()
-                a4.clear()
-
-                a1.imshow(
-                    self.shared.cam, extent=self.shared.cam_ext,
-                    origin='lower')
-                a1.set_xlabel('mm')
-                if self.shared.cam_sat.value:
-                    a1.set_title('cam SAT')
-                else:
-                    a1.set_title('cam {: 3d} {: 3d}'.format(
-                        self.shared.cam.min(), self.shared.cam.max()))
-
-                data = self.shared.get_phase()
-                wrapped, unwrapped = data[2:]
-
-                self.dmplot.draw(a2, self.shared.u)
-                a2.axis('off')
-                a2.set_title('dm')
-
-                self.dmplot.draw(a3, self.shared.u)
-                a3.axis('off')
-                a3.set_title('dm')
-
-                a4.imshow(
-                    wrapped, extent=self.shared.mag_ext,
-                    origin='lower')
-                a4.set_xlabel('mm')
-                a4.set_title('phi set')
-
-                a5.imshow(
-                    unwrapped, extent=self.shared.mag_ext,
-                    origin='lower')
-                a5.set_xlabel('mm')
-                a5.set_title('phi meas')
-
-                a6.imshow(
-                    unwrapped, extent=self.shared.mag_ext,
-                    origin='lower')
-                a6.set_xlabel('mm')
-                a6.set_title('phi err')
-
-                a6.figure.canvas.draw()
-
-                # # self.update_dm_gui()
-                # status.setText('{} {}/{}'.format(
-                #     calib[0], val, ndata[0] - 1))
-            return f
 
         def fs1():
             def f():
