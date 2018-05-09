@@ -165,6 +165,18 @@ class WeightedLSCalib:
     def get_rzern(self):
         return self.cart
 
+    def zernike_eval(self, z):
+        return np.dot(self.zfA2, z).reshape(self.shape)
+
+    def zernike_fit(self, phi):
+        return lstsq(
+            np.dot(self.zfA1.T, self.zfA1),
+            np.dot(self.zfA1.T, phi[self.zfm]), rcond=None)[0]
+
+    def apply_aperture_mask(self, phi):
+        phi[np.invert(self.zfm)] = -np.inf
+        phi[self.zfm] -= phi[self.zfm].mean()
+
     def get_radius(self):
         return self.fringe.radius
 

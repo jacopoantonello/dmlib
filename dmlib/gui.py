@@ -848,7 +848,7 @@ class Control(QMainWindow):
             bottom=.1, top=.9,
             wspace=0.45, hspace=0.45)
         self.test_axes[0, 0].set_title('dm')
-        self.test_axes[0, 1].set_title('z err')
+        self.test_axes[0, 1].set_title('z')
         self.test_axes[1, 0].set_title('phi meas')
         self.test_axes[1, 1].set_title('phi err')
 
@@ -948,6 +948,8 @@ class Control(QMainWindow):
                     clearup()
                 else:
                     self.dmplot.update_txs(ndata[3])
+                    if self.zernikePanel:
+                        self.zernikePanel.close()
                     self.zernikePanel = ZernikePanel(ndata[0], ndata[1], cb)
                     self.zernikePanel.show()
                     status.setText('{} {:.3f} mm'.format(
@@ -977,6 +979,8 @@ class Control(QMainWindow):
             return f
 
         def make_cb():
+            zx = range(1, self.shared.z_sp.size + 1)
+
             def f():
                 llistener.busy = True
 
@@ -990,8 +994,9 @@ class Control(QMainWindow):
 
                 ax2 = self.test_axes[0, 1]
                 ax2.clear()
-                ax2.plot(self.shared.z_er, marker='.')
-                ax2.set_title('z err')
+                ax2.plot(zx, self.shared.z_sp, zx,  self.shared.z_ms)
+                ax2.set_title('z {:.2f}'.format(norm(
+                    self.shared.z_sp - self.shared.z_ms)))
 
                 data = self.shared.get_phase()
                 cldata = self.shared.get_cl_data()
@@ -2119,7 +2124,15 @@ class Worker:
                 img = cam.grab_image()
 
                 fringe.analyse(img, use_mask=True)
-                self.fill(self.shared.unwrapped_buf, fringe.unwrapped)
+                self.fill(shared.unwrapped_buf, fringe.unwrapped)
+
+                phi_sp = calib.zernike_eval(shared.z_sp[:dm.ndof])
+                shared.z_ms[:dm.ndof] = calib.zernike_fit(fringe.unwrapped)
+                shared.z_ms[0] = 0
+
+                phi_err = np.abs(fringe.unwrapped - phi_sp)
+                calib.apply_aperture_mask(phi_err)
+                self.fill(shared.phi_err_buf, phi_err)
             except Exception as e:
                 traceback.print_exc(file=sys.stdout)
                 shared.oq.put((str(e),))
