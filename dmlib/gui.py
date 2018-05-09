@@ -43,7 +43,7 @@ from control import ZernikeControl
 
 class Control(QMainWindow):
 
-    closing = False
+    can_close = True
 
     def __init__(self, worker, shared, settings={}, parent=None):
         super().__init__()
@@ -68,6 +68,12 @@ class Control(QMainWindow):
         central.addWidget(self.tabs)
 
         self.setCentralWidget(central)
+
+    def closeEvent(self, event):
+        if self.can_close:
+            event.accept()
+        else:
+            event.ignore()
 
     def make_toolbox(self):
         self.make_tool_cam()
@@ -290,6 +296,25 @@ class Control(QMainWindow):
         bunwrap.setChecked(True)
         layout.addWidget(bunwrap, 5, 0)
 
+        disables = [
+            self.toolbox, brun, bauto, brepeat, bpoke, bsleep, bunwrap]
+
+        def disable():
+            self.can_close = False
+            ind = self.tabs.indexOf(frame)
+            for i in range(self.tabs.count()):
+                if i != ind:
+                    self.tabs.setTabEnabled(i, False)
+            for b in disables:
+                b.setEnabled(False)
+
+        def enable():
+            for i in range(self.tabs.count()):
+                self.tabs.setTabEnabled(i, True)
+            for b in disables:
+                b.setEnabled(True)
+            self.can_close = True
+
         def f1():
             def f():
                 val, ok = QInputDialog.getDouble(
@@ -315,19 +340,8 @@ class Control(QMainWindow):
 
         def f1():
             def f():
+                disable()
                 status.setText('working...')
-                ind = self.tabs.indexOf(frame)
-                for i in range(self.tabs.count()):
-                    if i != ind:
-                        self.tabs.setTabEnabled(i, False)
-                self.toolbox.setEnabled(False)
-                brun.setEnabled(False)
-                bauto.setEnabled(False)
-                brepeat.setEnabled(False)
-                bpoke.setEnabled(False)
-                bsleep.setEnabled(False)
-                bunwrap.setEnabled(False)
-                self.align_nav.setEnabled(False)
                 listener.repeat = brepeat.isChecked()
                 listener.start()
             return f
@@ -350,18 +364,6 @@ class Control(QMainWindow):
             return f
 
         def f20():
-            def finish():
-                for i in range(self.tabs.count()):
-                    self.tabs.setTabEnabled(i, True)
-                self.toolbox.setEnabled(True)
-                brun.setEnabled(True)
-                bauto.setEnabled(True)
-                brepeat.setEnabled(True)
-                bpoke.setEnabled(True)
-                bsleep.setEnabled(True)
-                bunwrap.setEnabled(True)
-                self.align_nav.setEnabled(True)
-
             def f(msg):
                 a1 = self.align_axes[0, 0]
                 a2 = self.align_axes[0, 1]
@@ -395,7 +397,7 @@ class Control(QMainWindow):
 
                 if msg != 'OK':
                     status.setText(msg)
-                    finish()
+                    enable()
                     a2.figure.canvas.draw()
                     return
 
@@ -435,7 +437,7 @@ class Control(QMainWindow):
 
                 if not listener.repeat:
                     status.setText('stopped')
-                    finish()
+                    enable()
 
             return f
 
@@ -445,6 +447,7 @@ class Control(QMainWindow):
         bauto.stateChanged.connect(f2())
         brepeat.stateChanged.connect(f3())
         self.align_nav = NavigationToolbar2QT(self.align_fig, frame)
+        disables.append(self.align_nav)
 
     def make_panel_dataacq(self):
         frame = QFrame()
