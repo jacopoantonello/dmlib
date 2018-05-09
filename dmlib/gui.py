@@ -43,6 +43,7 @@ from control import ZernikeControl
 
 class Control(QMainWindow):
 
+    zernikePanel = None
     can_close = True
 
     def __init__(self, worker, shared, settings={}, parent=None):
@@ -71,6 +72,8 @@ class Control(QMainWindow):
 
     def closeEvent(self, event):
         if self.can_close:
+            if self.zernikePanel:
+                self.zernikePanel.close()
             event.accept()
         else:
             event.ignore()
@@ -851,8 +854,10 @@ class Control(QMainWindow):
 
         brun = QPushButton('run')
         bstop = QPushButton('stop')
+        bsleep = QPushButton('sleep')
         layout.addWidget(brun, 1, 0)
         layout.addWidget(bstop, 1, 1)
+        layout.addWidget(bsleep, 1, 2)
         status = QLabel('')
         status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(status, 2, 0, 1, 3)
@@ -871,16 +876,15 @@ class Control(QMainWindow):
 
         disables = [
             self.toolbox, brun, bflat, bzernike, bloop, bclear,
-            bzernike]
+            bzernike, bsleep]
         llistener = LoopListener(self.shared)
-        zernike = [None]
         calib = []
 
         def clearup(clear_status=False):
             calib.clear()
-            if zernike[0]:
-                zernike[0].close()
-                zernike[0] = None
+            if self.zernikePanel:
+                self.zernikePanel.close()
+                self.zernikePanel = None
 
             if clear_status:
                 status.setText('')
@@ -944,8 +948,8 @@ class Control(QMainWindow):
                     clearup()
                 else:
                     self.dmplot.update_txs(ndata[3])
-                    zernike[0] = ZernikePanel(ndata[0], ndata[1], cb)
-                    zernike[0].show()
+                    self.zernikePanel = ZernikePanel(ndata[0], ndata[1], cb)
+                    self.zernikePanel.show()
                     status.setText('{} {:.3f} mm'.format(
                         calib[0], ndata[2]/1000))
                 enable()
@@ -1115,10 +1119,20 @@ class Control(QMainWindow):
                 #     calib[0], val, ndata[0] - 1))
             return f
 
+        def fs1():
+            def f():
+                val, ok = QInputDialog.getDouble(
+                    self, 'Delay', 'write/read delay [s]',
+                    llistener.sleep, decimals=4)
+                if ok:
+                    llistener.sleep = val
+            return f
+
         brun.clicked.connect(f1())
         bstop.clicked.connect(f4())
         bzernike.clicked.connect(f2())
         bclear.clicked.connect(f3())
+        bsleep.clicked.connect(fs1())
 
         self.test_nav = NavigationToolbar2QT(self.test_fig, frame)
         disables.append(self.test_nav)
@@ -1500,6 +1514,7 @@ class DataAcqListener(QThread):
 
 class LoopListener(QThread):
 
+    sleep = .1
     busy = False
     run = True
     calib = False
@@ -1512,7 +1527,8 @@ class LoopListener(QThread):
         self.shared = shared
 
     def run(self):
-        self.shared.iq.put(('loop', self.calib, self.flat, self.closed_loop))
+        self.shared.iq.put((
+            'loop', self.calib, self.flat, self.closed_loop, self.sleep))
         while True:
             result = self.shared.oq.get()
             print('listener result', result)
@@ -2071,7 +2087,7 @@ class Worker:
         print('run_dataacq', 'finished')
         shared.oq.put(('finished', h5fn))
 
-    def run_loop(self, dname, flat, closed_loop, sleep=.1):
+    def run_loop(self, dname, flat, closed_loop, sleep):
         if self.open_calib(dname):
             return
 
