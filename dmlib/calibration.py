@@ -162,6 +162,9 @@ class WeightedLSCalib:
         self.dname = dname
         self.hash1 = hash1
 
+        self.zfA1TzfA1 = np.dot(self.zfA1.T, self.zfA1)
+        self.chzfA1TzfA1 = cholesky(self.zfA1TzfA1, lower=False)
+
     def get_rzern(self):
         return self.cart
 
@@ -169,9 +172,17 @@ class WeightedLSCalib:
         return np.dot(self.zfA2, z).reshape(self.shape)
 
     def zernike_fit(self, phi):
-        return lstsq(
-            np.dot(self.zfA1.T, self.zfA1),
-            np.dot(self.zfA1.T, phi[self.zfm]), rcond=None)[0]
+        Y = solve_triangular(
+            self.chzfA1TzfA1, np.dot(self.zfA1.T, phi[self.zfm]),
+            trans='T', lower=False)
+        s2 = solve_triangular(self.chzfA1TzfA1, Y, trans='N', lower=False)
+
+        # s1 = lstsq(
+        #     self.zfA1TzfA1,
+        #     np.dot(self.zfA1.T, phi[self.zfm]), rcond=None)[0]
+        # assert(np.allclose(s1, s2))
+
+        return s2
 
     def apply_aperture_mask(self, phi):
         phi[np.invert(self.zfm)] = -np.inf
@@ -217,6 +228,9 @@ class WeightedLSCalib:
         z.dmplot_txs = f[prefix + 'dmplot_txs'][()]
         z.dname = f[prefix + 'dname'][()]
         z.hash1 = f[prefix + 'hash1'][()]
+
+        z.zfA1TzfA1 = np.dot(z.zfA1.T, z.zfA1)
+        z.chzfA1TzfA1 = cholesky(z.zfA1TzfA1, lower=False)
 
         return z
 
