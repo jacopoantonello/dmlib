@@ -865,7 +865,7 @@ class Control(QMainWindow):
         status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(status, 2, 0, 1, 3)
 
-        bzernike = QPushButton('Zernike')
+        bzernike = QPushButton('open')
         layout.addWidget(bzernike, 3, 0)
 
         bflat = QCheckBox('flat')
@@ -886,9 +886,11 @@ class Control(QMainWindow):
         arts = []
 
         def clearup(clear_status=False):
+            for c in arts:
+                c[1].remove()
+            arts.clear()
             calib.clear()
             zsize[0] = 1024
-            arts.clear()
             if self.zernikePanel:
                 self.zernikePanel.close()
                 self.zernikePanel = None
