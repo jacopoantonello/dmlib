@@ -519,6 +519,7 @@ class Control(QMainWindow):
                 self.dataacq_axes[1, 1].figure.canvas.draw()
 
         def disable():
+            self.can_close = False
             ind = self.tabs.indexOf(frame)
             for i in range(self.tabs.count()):
                 if i != ind:
@@ -531,6 +532,7 @@ class Control(QMainWindow):
                 self.tabs.setTabEnabled(i, True)
             for b in disables:
                 b.setEnabled(True)
+            self.can_close = True
 
         def f0():
             def f():
@@ -889,6 +891,7 @@ class Control(QMainWindow):
                 self.test_axes[1, 1].figure.canvas.draw()
 
         def disable():
+            self.can_close = False
             ind = self.tabs.indexOf(frame)
             for i in range(self.tabs.count()):
                 if i != ind:
@@ -901,6 +904,7 @@ class Control(QMainWindow):
                 self.tabs.setTabEnabled(i, True)
             for b in disables:
                 b.setEnabled(True)
+            self.can_close = True
 
         def check_err():
             reply = self.shared.oq.get()
