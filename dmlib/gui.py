@@ -855,9 +855,11 @@ class Control(QMainWindow):
         brun = QPushButton('run')
         bstop = QPushButton('stop')
         bsleep = QPushButton('sleep')
+        bzsize = QPushButton('z size')
         layout.addWidget(brun, 1, 0)
         layout.addWidget(bstop, 1, 1)
         layout.addWidget(bsleep, 1, 2)
+        layout.addWidget(bzsize, 1, 3)
         status = QLabel('')
         status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(status, 2, 0, 1, 3)
@@ -876,12 +878,14 @@ class Control(QMainWindow):
 
         disables = [
             self.toolbox, brun, bflat, bzernike, bloop, bclear,
-            bzernike, bsleep]
+            bzernike, bsleep, bzsize]
         llistener = LoopListener(self.shared)
         calib = []
+        zsize = [1024]
 
         def clearup(clear_status=False):
             calib.clear()
+            zsize[0] = 1024
             if self.zernikePanel:
                 self.zernikePanel.close()
                 self.zernikePanel = None
@@ -979,10 +983,11 @@ class Control(QMainWindow):
             return f
 
         def make_cb():
-            zx = range(1, self.shared.z_sp.size + 1)
-
             def f():
                 llistener.busy = True
+
+                nz = min((self.shared.z_size.value, zsize[0]))
+                zx = range(1, nz + 1)
 
                 ax1 = self.test_axes[0, 0]
                 ax1.imshow(self.dmplot.compute_gauss(self.shared.u))
@@ -994,9 +999,9 @@ class Control(QMainWindow):
 
                 ax2 = self.test_axes[0, 1]
                 ax2.clear()
-                ax2.plot(zx, self.shared.z_sp, zx,  self.shared.z_ms)
+                ax2.plot(zx, self.shared.z_sp[:nz], zx,  self.shared.z_ms[:nz])
                 ax2.set_title('z {:.2f}'.format(norm(
-                    self.shared.z_sp - self.shared.z_ms)))
+                    self.shared.z_sp[:nz] - self.shared.z_ms[:nz])))
 
                 data = self.shared.get_phase()
                 cldata = self.shared.get_cl_data()
@@ -1133,11 +1138,22 @@ class Control(QMainWindow):
                     llistener.sleep = val
             return f
 
+        def fs2():
+            def f():
+                val, ok = QInputDialog.getInt(
+                    self, 'Maximum Zernike index', 'Maximum Zernike index',
+                    zsize[0], 1, self.shared.z_sp.size)
+                if ok:
+                    if val > 1:
+                        zsize[0] = val
+            return f
+
         brun.clicked.connect(f1())
         bstop.clicked.connect(f4())
         bzernike.clicked.connect(f2())
         bclear.clicked.connect(f3())
         bsleep.clicked.connect(fs1())
+        bzsize.clicked.connect(fs2())
 
         self.test_nav = NavigationToolbar2QT(self.test_fig, frame)
         disables.append(self.test_nav)
@@ -1592,6 +1608,7 @@ class Shared:
         self.cam_ext = Array('d', 4, lock=False)
         self.cam_sat = Value('i', lock=False)
         self.dm_sat = Value('i', lock=False)
+        self.z_size = Value('i', lock=False)
 
         self.ft_buf = Array('d', totpixs, lock=False)
         self.ft_ext = Array('d', 4, lock=False)
@@ -2101,38 +2118,48 @@ class Worker:
         cam = self.cam
         dm = ZernikeControl(self.dm, calib)
         shared = self.shared
+        shared.z_size.value = dm.ndof
 
         dm.flat_on = flat
-
-        count = 0
 
         for i in range(4):
             self.shared.mag_ext[i] = fringe.ext4[i]/1000
         shared.mag_shape[:] = fringe.unwrapped.shape[:]
         while True:
             try:
-                print('run_loop', count, self.shared.z_sp[:10])
-                count += 1
-
+                t1 = time.time()
                 dm.write(self.shared.z_sp[:dm.ndof])
                 self.shared.u[:] = dm.u[:]
                 if dm.saturation:
                     self.shared.dm_sat.value = 1
                 else:
                     self.shared.dm_sat.value = 0
+                t2 = time.time()
+
                 time.sleep(sleep)
                 img = cam.grab_image()
 
+                t3 = time.time()
                 fringe.analyse(img, use_mask=True)
                 self.fill(shared.unwrapped_buf, fringe.unwrapped)
+                t4 = time.time()
 
+                t5 = time.time()
                 phi_sp = calib.zernike_eval(shared.z_sp[:dm.ndof])
                 shared.z_ms[:dm.ndof] = calib.zernike_fit(fringe.unwrapped)
                 shared.z_ms[0] = 0
+                t6 = time.time()
 
+                t7 = time.time()
                 phi_err = np.abs(fringe.unwrapped - phi_sp)
                 calib.apply_aperture_mask(phi_err)
                 self.fill(shared.phi_err_buf, phi_err)
+                t8 = time.time()
+
+                print((
+                    'run_loop s:{:.3f} ' +
+                    'h:{:.3f} u:{:.3f} p1:{:.3f} p1:{:.3f}').format(
+                        sleep, t2 - t1, t4 - t3, t6 - t5, t8 - t7))
             except Exception as e:
                 traceback.print_exc(file=sys.stdout)
                 shared.oq.put((str(e),))
