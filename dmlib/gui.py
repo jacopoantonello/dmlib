@@ -12,6 +12,7 @@ import h5py
 import multiprocessing
 import traceback
 
+from matplotlib import ticker
 from os import path
 from multiprocessing import Process, Queue, Array, Value
 from datetime import datetime, timezone
@@ -882,10 +883,12 @@ class Control(QMainWindow):
         llistener = LoopListener(self.shared)
         calib = []
         zsize = [1024]
+        arts = []
 
         def clearup(clear_status=False):
             calib.clear()
             zsize[0] = 1024
+            arts.clear()
             if self.zernikePanel:
                 self.zernikePanel.close()
                 self.zernikePanel = None
@@ -1003,24 +1006,46 @@ class Control(QMainWindow):
                 ax2.set_title('z {:.2f}'.format(norm(
                     self.shared.z_sp[:nz] - self.shared.z_ms[:nz])))
 
-                data = self.shared.get_phase()
-                cldata = self.shared.get_cl_data()
+                phi_ms = self.shared.get_phase()[-1]
+                phi_er = self.shared.get_cl_data()[0]
 
-                ax3 = self.test_axes[1, 0]
-                ax3.imshow(
-                    data[-1], extent=self.shared.mag_ext, origin='lower')
-                ax3.set_xlabel('mm')
-                ax3.set_title('phi meas')
+                if len(arts) != 2:
+                    ax3 = self.test_axes[1, 0]
+                    im = ax3.imshow(
+                        phi_ms, extent=self.shared.mag_ext, origin='lower')
+                    ax3.set_xlabel('mm')
+                    ax3.set_title('phi meas')
+                    cb = ax3.figure.colorbar(im, ax=ax3)
+                    cb.locator = ticker.MaxNLocator(nbins=5)
+                    cb.update_ticks()
+                    arts.append((im, cb))
+                else:
+                    what = phi_ms
+                    m1 = what[np.isfinite(what)].min()
+                    m2 = what[np.isfinite(what)].max()
+                    arts[0][0].set_data(what)
+                    arts[0][0].set_clim(m1, m2)
 
-                ax4 = self.test_axes[1, 1]
-                ax4.imshow(
-                    cldata[0], extent=self.shared.mag_ext, origin='lower')
-                ax4.set_xlabel('mm')
-                ax4.set_title('phi err')
+                if len(arts) != 2:
+                    ax4 = self.test_axes[1, 1]
+                    im = ax4.imshow(
+                        phi_er, extent=self.shared.mag_ext, origin='lower')
+                    ax4.set_xlabel('mm')
+                    ax4.set_title('phi err')
+                    cb = ax4.figure.colorbar(im, ax=ax4)
+                    cb.locator = ticker.MaxNLocator(nbins=5)
+                    cb.update_ticks()
+                    arts.append((im, cb))
+                else:
+                    what = phi_er
+                    m1 = what[np.isfinite(what)].min()
+                    m2 = what[np.isfinite(what)].max()
+                    arts[1][0].set_data(what)
+                    arts[1][0].set_clim(m1, m2)
 
                 self.update_dm_gui()
 
-                ax4.figure.canvas.draw()
+                ax1.figure.canvas.draw()
 
                 llistener.busy = False
             return f
@@ -1749,7 +1774,7 @@ class Worker:
 
         print('worker', 'STOP CMD')
         while not shared.iq.empty():
-            print(shared.iq.get())
+            print('worker flushing', shared.iq.get())
 
         print('worker', 'STOPPED')
 
@@ -1880,7 +1905,6 @@ class Worker:
             return
 
         try:
-            print(radius)
             wavelength = self.dset['wavelength'][()]
             dm_serial = self.dset['dm/serial'][()]
             dm_transform = self.dset['dm/transform'][()]
@@ -2141,25 +2165,31 @@ class Worker:
 
                 t3 = time.time()
                 fringe.analyse(img, use_mask=True)
-                self.fill(shared.unwrapped_buf, fringe.unwrapped)
+                unwrapped = fringe.unwrapped
+                calib.apply_aperture_mask(unwrapped)
+                self.fill(shared.unwrapped_buf, unwrapped)
                 t4 = time.time()
 
                 t5 = time.time()
                 phi_sp = calib.zernike_eval(shared.z_sp[:dm.ndof])
-                shared.z_ms[:dm.ndof] = calib.zernike_fit(fringe.unwrapped)
-                shared.z_ms[0] = 0
                 t6 = time.time()
 
                 t7 = time.time()
-                phi_err = np.abs(fringe.unwrapped - phi_sp)
-                calib.apply_aperture_mask(phi_err)
-                self.fill(shared.phi_err_buf, phi_err)
+                shared.z_ms[:dm.ndof] = calib.zernike_fit(unwrapped)
+                shared.z_ms[0] = 0
                 t8 = time.time()
+
+                t9 = time.time()
+                phi_er = phi_sp - unwrapped
+                calib.apply_aperture_mask(phi_er)
+                self.fill(shared.phi_err_buf, phi_er)
+                t10 = time.time()
 
                 print((
                     'run_loop s:{:.3f} ' +
-                    'h:{:.3f} u:{:.3f} p1:{:.3f} p1:{:.3f}').format(
-                        sleep, t2 - t1, t4 - t3, t6 - t5, t8 - t7))
+                    'h:{:.3f} u:{:.3f} p1:{:.3f} p2:{:.3f} p3:{:.3f}').format(
+                        sleep,
+                        t2 - t1, t4 - t3, t6 - t5, t8 - t7, t10 - t9))
             except Exception as e:
                 traceback.print_exc(file=sys.stdout)
                 shared.oq.put((str(e),))
