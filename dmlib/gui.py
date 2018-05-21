@@ -708,8 +708,9 @@ class Control(QMainWindow):
                     radmax = 10.
 
                 val, ok = QInputDialog.getDouble(
-                    self, 'Aperture radius', 'radius in mm', rad, 0.,
-                    radmax, 3)
+                        self, 'Aperture radius',
+                        'radius in mm [0, {:.3f}]'.format(radmax), rad, 0.,
+                        radmax, 3)
                 if ok and val >= 0.:
                     if radius:
                         radius[0] = val*1000
@@ -759,7 +760,7 @@ class Control(QMainWindow):
                     ok = setup_aperture()
 
                 if ok and radius[0] > 0 and centre:
-                    status.setText('working...')
+                    status.setText('working for a couple of minutes...')
                     clistener.start()
                 else:
                     enable()
@@ -950,11 +951,13 @@ class Control(QMainWindow):
                 if not calib or len(calib) == 0:
                     if not bootstrap():
                         enable()
-                        return
+                        return False
                 shared.iq.put(('query_calib', calib[0]))
                 ndata = check_err()
                 if ndata == -1:
                     clearup()
+                    enable()
+                    return False
                 else:
                     self.dmplot.update_txs(ndata[3])
                     if self.zernikePanel:
@@ -963,7 +966,8 @@ class Control(QMainWindow):
                     self.zernikePanel.show()
                     status.setText('{} {:.3f} mm'.format(
                         calib[0], ndata[2]/1000))
-                enable()
+                    enable()
+                    return True
             return f
 
         def f3():
@@ -972,10 +976,12 @@ class Control(QMainWindow):
             return f
 
         def f1():
+            redo = f2()
+
             def f():
                 disable()
                 if not calib or len(calib) == 0:
-                    if not bootstrap():
+                    if not redo():
                         enable()
                         return
                 self.shared.z_sp *= 0
