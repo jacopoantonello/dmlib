@@ -979,11 +979,10 @@ class Control(QMainWindow):
             redo = f2()
 
             def f():
-                disable()
                 if not calib or len(calib) == 0:
                     if not redo():
-                        enable()
                         return
+                disable()
                 self.shared.z_sp *= 0
                 llistener.busy = False
                 llistener.run = True

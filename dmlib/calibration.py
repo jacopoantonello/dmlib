@@ -17,7 +17,7 @@ HDF5_options = {
     'shuffle': True,
     'fletcher32': True,
     'compression': 'gzip',
-    'compression_opts': 9}
+    'compression_opts': 6}
 
 
 def fix_principal_val(U, phases):
