@@ -3,24 +3,18 @@
 
 import sys
 import numpy as np
-import matplotlib.pyplot as plt  # noqa:
 
 from numpy.linalg import norm
 from matplotlib import ticker
-from matplotlib.backends.backend_qt5agg import FigureCanvas  # noqa:
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT  # noqa:
-from matplotlib.figure import Figure  # noqa:
+from matplotlib.backends.backend_qt5agg import FigureCanvas
+from matplotlib.figure import Figure
 
-from PyQt5.QtCore import Qt, QThread, pyqtSignal  # noqa:
-from PyQt5.QtGui import (  # noqa:
-    QImage, QPainter, QDoubleValidator, QIntValidator, QKeySequence,
-    )
-from PyQt5.QtWidgets import (  # noqa:
-    QMainWindow, QDialog, QTabWidget, QLabel, QLineEdit, QPushButton,
-    QComboBox, QGroupBox, QGridLayout, QCheckBox, QVBoxLayout, QFrame,
-    QApplication, QShortcut, QSlider, QDoubleSpinBox, QToolBox,
-    QWidget, QFileDialog, QScrollArea, QMessageBox, QSplitter,
-    QInputDialog, QStyleFactory, QSizePolicy, QErrorMessage,
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QIntValidator, QDoubleValidator
+from PyQt5.QtWidgets import (
+    QWidget, QFileDialog, QGroupBox, QGridLayout, QLabel, QPushButton,
+    QLineEdit, QCheckBox, QScrollArea, QSlider, QDoubleSpinBox,
+    QErrorMessage, QApplication,
     )
 
 from sensorless.czernike import RZern
@@ -300,7 +294,47 @@ class ZernikePanel(QWidget):
 
 
 if __name__ == '__main__':
+    import json
+    from os import path
+    from pathlib import Path
+    from h5py import File
+
+    from calibration import WeightedLSCalib
+    # from control import ZernikeControl
+
     app = QApplication(sys.argv)
-    zp = ZernikePanel(wavelength=650, n_radial=5)
-    zp.show()
-    sys.exit(app.exec_())
+
+    savepath = path.join(Path.home(), '.zpanel.json')
+    try:
+        with open(savepath, 'r') as f:
+            settings = json.load(f)
+    except Exception:
+        settings = {}
+
+    def quit(str1):
+        e = QErrorMessage()
+        e.showMessage(str1)
+        sys.exit(app.exec_())
+
+    if 'calibration' not in settings:
+        fileName, _ = QFileDialog.getOpenFileName(
+            None, 'Select a calibration', '', 'H5 (*.h5);;All Files (*)')
+        if not fileName:
+            sys.exit()
+        else:
+            settings['calibration'] = fileName
+
+    try:
+        with File(fileName, 'r') as f:
+            if 'WeightedLSCalib' not in f:
+                quit(
+                    fileName +
+                    ' does not seem like a calibration file')
+            else:
+                calib = WeightedLSCalib.load_h5py(f)
+    except Exception as e:
+        quit(str(e) + ' loading ' + fileName)
+
+    # control = ZernikeControl(self.dm, calib)
+
+    sys.exit()
