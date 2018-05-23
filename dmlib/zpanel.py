@@ -294,15 +294,23 @@ class ZernikePanel(QWidget):
 
 
 if __name__ == '__main__':
+    import argparse
     import json
     from os import path
     from pathlib import Path
     from h5py import File
 
+    from core import add_dm_parameters, open_dm
     from calibration import WeightedLSCalib
     # from control import ZernikeControl
 
     app = QApplication(sys.argv)
+    args = app.arguments()
+    parser = argparse.ArgumentParser(
+        description='Zernike DM control',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    add_dm_parameters(parser)
+    args = parser.parse_args(args[1:])
 
     savepath = path.join(Path.home(), '.zpanel.json')
     try:
@@ -335,6 +343,10 @@ if __name__ == '__main__':
     except Exception as e:
         quit(str(e) + ' loading ' + fileName)
 
+    if args.dm_name is None:
+        args.dm_name = calib.dm_serial
+
+    dm = open_dm(app, args, calib.dm_transform)
     # control = ZernikeControl(self.dm, calib)
 
     sys.exit()

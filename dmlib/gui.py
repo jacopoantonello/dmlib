@@ -36,7 +36,7 @@ from zpanel import ZernikePanel
 from interf import FringeAnalysis
 from calibration import WeightedLSCalib
 from control import ZernikeControl
-from sim import FakeDM, FakeCamera, VoltageTransform
+from core import FakeDM, FakeCamera, VoltageTransform
 
 
 class Control(QMainWindow):

@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
 from numpy.linalg import norm
 from numpy.random import uniform
+
+from PyQt5.QtWidgets import QErrorMessage, QInputDialog
 
 
 class VoltageTransform():
@@ -175,3 +178,63 @@ class FakeDM():
         else:
             raise NotImplementedError(name)
         return u
+
+
+def choose_device(app, args, dev, name, def1, set1):
+    devs = dev.get_devices()
+    if len(devs) == 0:
+        e = QErrorMessage()
+        e.showMessage('no {} found'.format(name))
+        sys.exit(app.exec_())
+    elif def1 is None or def1 not in devs:
+        if len(devs) == 1:
+            set1(devs[0])
+        else:
+            item, ok = QInputDialog.getItem(
+                None, '', 'select ' + name + ':', devs, 0, False)
+            if ok and item:
+                set1(item)
+            else:
+                sys.exit(0)
+
+
+def open_dm(app, args, dm_transform=None):
+
+    # choose driver
+    if args.dm == 'sim':
+        dm = FakeDM()
+    elif args.dm == 'bmc':
+        from bmc import BMC
+        dm = BMC()
+    elif args.dm == 'ciusb':
+        from ciusb import CIUsb
+        dm = CIUsb()
+        dm.open(args.dm_index)
+    else:
+        raise NotImplementedError(args.dm)
+
+    # choose device
+    def set_dm(t):
+        args.dm_name = t
+
+    choose_device(app, args, dm, 'dm', args.dm_name, set_dm)
+
+    # open device
+    dm.open(args.dm_name)
+
+    if dm_transform is None:
+        dm = VoltageTransform(dm)
+    elif dm_transform == 'v = 2*np.sqrt((u + 1.0)/2.0) - 1.':
+        dm = VoltageTransform(dm)
+    elif dm_transform == 'v = u':
+        pass
+    else:
+        raise NotImplementedError('unknown dm transform')
+
+    return dm
+
+
+def add_dm_parameters(parser):
+    parser.add_argument(
+        '--dm', choices=['sim', 'bmc', 'ciusb'], default='sim')
+    parser.add_argument('--dm-name', type=str, default=None)
