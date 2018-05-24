@@ -332,6 +332,7 @@ class ZernikeWindow(QMainWindow):
 
         ax, ima, img, fig = self.make_figs()
         lab = QLabel()
+        lab2 = QLabel(self.settings['calibration'])
 
         def f1():
             def f2(z):
@@ -341,7 +342,8 @@ class ZernikeWindow(QMainWindow):
                     tmp = 'SAT'
                 else:
                     tmp = 'OK'
-                lab.setText('u [{:+0.3f} {:+0.3f}] {}'.format(
+                lab.setText('DM {} u [{:+0.3f} {:+0.3f}] {}'.format(
+                    control.dm.get_serial_number(),
                     control.u.min(), control.u.max(), tmp))
 
                 ima.set_data(self.dmplot.compute_pattern(control.u))
@@ -359,11 +361,15 @@ class ZernikeWindow(QMainWindow):
         split.addWidget(zpanel)
         split.addWidget(fig)
 
+        bopen = QPushButton('open')
+
         central = QFrame()
         layout = QGridLayout()
         central.setLayout(layout)
-        layout.addWidget(split, 0, 0, 1, 0)
-        layout.addWidget(lab, 1, 0)
+        layout.addWidget(split, 0, 0, 1, 4)
+        layout.addWidget(lab, 1, 0, 1, 4)
+        layout.addWidget(lab2, 2, 0, 1, 4)
+        layout.addWidget(bopen, 3, 0)
 
         self.setCentralWidget(central)
 
