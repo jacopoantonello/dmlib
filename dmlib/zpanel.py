@@ -39,6 +39,11 @@ class ZernikePanel(QWidget):
     shape = (128, 128)
     settings = {'zernike_labels': {}}
 
+    def save_settings(self, merge={}):
+        d = {**merge, **self.settings}
+        d['z'] = self.z.tolist()
+        return d
+
     def update_gui(self):
         phi = self.mul*self.rzern.eval_grid(self.z).reshape(
             self.shape, order='F')
@@ -72,10 +77,13 @@ class ZernikePanel(QWidget):
         self.nmodes = min((21, self.rzern.nk))
         self.callback = callback
 
-        if 'z' not in self.settings:
-            self.z = np.zeros((self.rzern.nk,))
-        else:
-            self.z = np.array(self.settings['z'])
+        self.z = np.zeros((self.rzern.nk,))
+        if 'z' in self.settings:
+            try:
+                min1 = min(self.z.size, len(self.settings['z']))
+                self.z[:min1] = np.array(self.settings['z'])[:min1]
+            except Exception:
+                pass
 
         zernike_rows = list()
         fto100mul = 100
@@ -331,10 +339,6 @@ class ZernikeWindow(QMainWindow):
         self.dmplot = DMPlot()
         self.dmplot.update_txs(calib.dmplot_txs)
 
-        ax, ima, img, fig = self.make_figs()
-        lab = QLabel()
-        lab2 = QLabel(self.settings['calibration'])
-
         def f1():
             def f2(z):
                 control.write(z)
@@ -354,12 +358,17 @@ class ZernikeWindow(QMainWindow):
                 ax[0].figure.canvas.draw()
             return f2
 
-        zpanel = ZernikePanel(
+        self.zpanel = ZernikePanel(
             control.calib.wavelength, control.calib.get_rzern().n,
             callback=f1(), settings=settings['ZernikePanel'])
 
+        control.write(self.zpanel.z)
+        ax, ima, img, fig = self.make_figs()
+        lab = QLabel()
+        lab2 = QLabel(self.settings['calibration'])
+
         split = QSplitter(Qt.Horizontal)
-        split.addWidget(zpanel)
+        split.addWidget(self.zpanel)
         split.addWidget(fig)
 
         def abort(str1):
@@ -396,6 +405,16 @@ class ZernikeWindow(QMainWindow):
         layout.addWidget(bopen, 3, 0)
 
         self.setCentralWidget(central)
+
+    def save_settings(self, merge={}):
+        self.settings['ZernikePanel'] = self.zpanel.save_settings()
+        d = {**merge, **self.settings}
+        return d
+
+    def closeEvent(self, event):
+        with open(path.join(Path.home(), '.zpanel.json'), 'w') as f:
+            json.dump(self.save_settings(), f)
+        event.accept()
 
 
 if __name__ == '__main__':
