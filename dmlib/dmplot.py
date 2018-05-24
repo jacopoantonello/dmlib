@@ -130,4 +130,4 @@ class DMPlot():
         ax.figure.canvas.callbacks.connect('button_press_event', f)
 
     def draw(self, ax, u):
-        ax.imshow(self.compute_pattern(u), vmin=self.floor, vmax=1)
+        return ax.imshow(self.compute_pattern(u), vmin=self.floor, vmax=1)

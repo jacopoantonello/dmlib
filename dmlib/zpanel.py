@@ -10,14 +10,18 @@ from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.figure import Figure
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIntValidator, QDoubleValidator
+from PyQt5.QtGui import QIntValidator, QDoubleValidator, QKeySequence
 from PyQt5.QtWidgets import (
     QWidget, QFileDialog, QGroupBox, QGridLayout, QLabel, QPushButton,
     QLineEdit, QCheckBox, QScrollArea, QSlider, QDoubleSpinBox,
-    QErrorMessage, QApplication,
+    QErrorMessage, QApplication, QMainWindow, QSplitter, QShortcut,
     )
 
 from sensorless.czernike import RZern
+
+from dmplot import DMPlot
+
+import version
 
 
 class ZernikePanel(QWidget):
@@ -56,17 +60,21 @@ class ZernikePanel(QWidget):
             parent=None):
         super().__init__(parent=parent)
 
+        if settings:
+            self.settings = {**self.settings, **settings}
+
         self.rzern = RZern(n_radial)
         dd = np.linspace(-1, 1, self.shape[0])
         xv, yv = np.meshgrid(dd, dd)
         self.rzern.make_cart_grid(xv, yv)
-        self.z = np.zeros((self.rzern.nk,))
         self.rad_to_nm = wavelength/(2*np.pi)
         self.nmodes = min((21, self.rzern.nk))
         self.callback = callback
 
-        if settings:
-            self.settings = {**self.settings, **settings}
+        if 'z' not in self.settings:
+            self.z = np.zeros((self.rzern.nk,))
+        else:
+            self.z = np.array(self.settings['z'])
 
         zernike_rows = list()
         fto100mul = 100
@@ -293,6 +301,57 @@ class ZernikePanel(QWidget):
         self.setLayout(l1)
 
 
+class ZernikeWindow(QMainWindow):
+
+    settings = {}
+
+    def make_figs(self):
+        fig = FigureCanvas(Figure(figsize=(2, 2)))
+        ax = fig.figure.subplots(2, 1)
+        ima = self.dmplot.draw(ax[0], control.u)
+        img = ax[1].imshow(self.dmplot.compute_gauss(control.u))
+        ax[0].axis('off')
+        ax[1].axis('off')
+
+        return ax, ima, img, fig
+
+    def __init__(self, control, settings={}, parent=None):
+        super().__init__()
+
+        self.setWindowTitle('ZernikeWindow ' + version.__version__)
+        QShortcut(QKeySequence("Ctrl+Q"), self, self.close)
+
+        if settings:
+            self.settings = {**self.settings, **settings}
+
+        if 'ZernikePanel' not in settings:
+            settings['ZernikePanel'] = {}
+
+        self.dmplot = DMPlot()
+        self.dmplot.update_txs(calib.dmplot_txs)
+
+        ax, ima, img, fig = self.make_figs()
+
+        def f1():
+            def f2(z):
+                g = self.dmplot.compute_gauss(control.u)
+                ima.set_data(self.dmplot.compute_pattern(control.u))
+                img.set_data(g)
+                img.set_clim(g.min(), g.max())
+                ax[0].figure.canvas.draw()
+                control.write(z)
+            return f2
+
+        zpanel = ZernikePanel(
+            control.calib.wavelength, control.calib.get_rzern().n,
+            callback=f1(), settings=settings['ZernikePanel'])
+
+        central = QSplitter(Qt.Horizontal)
+        central.addWidget(zpanel)
+        central.addWidget(fig)
+        self.setCentralWidget(central)
+
+
 if __name__ == '__main__':
     import argparse
     import json
@@ -302,7 +361,7 @@ if __name__ == '__main__':
 
     from core import add_dm_parameters, open_dm
     from calibration import WeightedLSCalib
-    # from control import ZernikeControl
+    from control import ZernikeControl
 
     app = QApplication(sys.argv)
     args = app.arguments()
@@ -347,6 +406,9 @@ if __name__ == '__main__':
         args.dm_name = calib.dm_serial
 
     dm = open_dm(app, args, calib.dm_transform)
-    # control = ZernikeControl(self.dm, calib)
+    control = ZernikeControl(dm, calib)
 
-    sys.exit()
+    zwindow = ZernikeWindow(control, settings)
+    zwindow.show()
+
+    sys.exit(app.exec_())
