@@ -3,6 +3,7 @@
 
 import sys
 import numpy as np
+import subprocess
 
 from numpy.linalg import norm
 from matplotlib import ticker
@@ -361,7 +362,30 @@ class ZernikeWindow(QMainWindow):
         split.addWidget(zpanel)
         split.addWidget(fig)
 
+        def abort(str1):
+            e = QErrorMessage()
+            e.showMessage(str1)
+
+        def f3():
+            def f():
+                self.setDisabled(True)
+                fileName, _ = QFileDialog.getOpenFileName(
+                    None, 'Select a calibration', '',
+                    'H5 (*.h5);;All Files (*)')
+                if not fileName:
+                    self.setDisabled(False)
+                    return
+                else:
+                    self.close()
+                    control.dm.close()
+                    myargs = list(sys.argv)
+                    myargs.append('--calibration')
+                    myargs.append(fileName)
+                    subprocess.Popen([sys.executable, *myargs])
+            return f
+
         bopen = QPushButton('open')
+        bopen.clicked.connect(f3())
 
         central = QFrame()
         layout = QGridLayout()
@@ -391,6 +415,8 @@ if __name__ == '__main__':
         description='Zernike DM control',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     add_dm_parameters(parser)
+    parser.add_argument(
+        '--calibration', type=argparse.FileType('rb'), default=None)
     args = parser.parse_args(args[1:])
 
     savepath = path.join(Path.home(), '.zpanel.json')
@@ -405,6 +431,10 @@ if __name__ == '__main__':
         e.showMessage(str1)
         sys.exit(app.exec_())
 
+    if args.calibration:
+        args.calibration.close()
+        settings['calibration'] = args.calibration.name
+
     if 'calibration' not in settings:
         fileName, _ = QFileDialog.getOpenFileName(
             None, 'Select a calibration', '', 'H5 (*.h5);;All Files (*)')
@@ -414,15 +444,15 @@ if __name__ == '__main__':
             settings['calibration'] = fileName
 
     try:
-        with File(fileName, 'r') as f:
+        with File(settings['calibration'], 'r') as f:
             if 'WeightedLSCalib' not in f:
                 quit(
-                    fileName +
+                    settings['calibration'] +
                     ' does not seem like a calibration file')
             else:
                 calib = WeightedLSCalib.load_h5py(f)
     except Exception as e:
-        quit(str(e) + ' loading ' + fileName)
+        quit(str(e) + ' loading ' + settings['calibration'])
 
     if args.dm_name is None:
         args.dm_name = calib.dm_serial
