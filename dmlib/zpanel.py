@@ -13,7 +13,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIntValidator, QDoubleValidator, QKeySequence
 from PyQt5.QtWidgets import (
     QWidget, QFileDialog, QGroupBox, QGridLayout, QLabel, QPushButton,
-    QLineEdit, QCheckBox, QScrollArea, QSlider, QDoubleSpinBox,
+    QLineEdit, QCheckBox, QScrollArea, QSlider, QDoubleSpinBox, QFrame,
     QErrorMessage, QApplication, QMainWindow, QSplitter, QShortcut,
     )
 
@@ -331,24 +331,40 @@ class ZernikeWindow(QMainWindow):
         self.dmplot.update_txs(calib.dmplot_txs)
 
         ax, ima, img, fig = self.make_figs()
+        lab = QLabel()
 
         def f1():
             def f2(z):
-                g = self.dmplot.compute_gauss(control.u)
+                control.write(z)
+
+                if control.saturation:
+                    tmp = 'SAT'
+                else:
+                    tmp = 'OK'
+                lab.setText('u [{:+0.3f} {:+0.3f}] {}'.format(
+                    control.u.min(), control.u.max(), tmp))
+
                 ima.set_data(self.dmplot.compute_pattern(control.u))
+                g = self.dmplot.compute_gauss(control.u)
                 img.set_data(g)
                 img.set_clim(g.min(), g.max())
                 ax[0].figure.canvas.draw()
-                control.write(z)
             return f2
 
         zpanel = ZernikePanel(
             control.calib.wavelength, control.calib.get_rzern().n,
             callback=f1(), settings=settings['ZernikePanel'])
 
-        central = QSplitter(Qt.Horizontal)
-        central.addWidget(zpanel)
-        central.addWidget(fig)
+        split = QSplitter(Qt.Horizontal)
+        split.addWidget(zpanel)
+        split.addWidget(fig)
+
+        central = QFrame()
+        layout = QGridLayout()
+        central.setLayout(layout)
+        layout.addWidget(split, 0, 0, 1, 0)
+        layout.addWidget(lab, 1, 0)
+
         self.setCentralWidget(central)
 
 
