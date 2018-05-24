@@ -105,8 +105,11 @@ class FakeCamera():
 
 class FakeDM():
 
+    def open(self, name):
+        print('FakeDM ' + name)
+
     def get_devices(self):
-        return ['dm0']
+        return ['dm0', 'C17W005#050']
 
     def size(self):
         return 140
@@ -186,7 +189,11 @@ def choose_device(app, args, dev, name, def1, set1):
         e = QErrorMessage()
         e.showMessage('no {} found'.format(name))
         sys.exit(app.exec_())
-    elif def1 is None or def1 not in devs:
+    elif def1 is not None and def1 not in devs:
+        e = QErrorMessage()
+        e.showMessage('{} {} not detected'.format(name, def1))
+        sys.exit(app.exec_())
+    elif def1 is None:
         if len(devs) == 1:
             set1(devs[0])
         else:
