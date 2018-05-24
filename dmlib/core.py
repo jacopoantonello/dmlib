@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import types
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,43 +12,50 @@ from numpy.random import uniform
 from PyQt5.QtWidgets import QErrorMessage, QInputDialog
 
 
-class VoltageTransform():
+def apply_voltage_transform(what):
 
-    def __init__(self, dm):
-        self.dm = dm
+    def f():
 
-    def size(self):
-        return self.dm.size()
+        def write(self, u):
+            assert(np.all(np.isfinite(u)))
 
-    def write(self, u):
-        assert(np.all(np.isfinite(u)))
+            if norm(u, np.inf) > 1.:
+                print('Saturation')
+                u[u > 1.] = 1.
+                u[u < -1.] = -1.
+            assert(norm(u, np.inf) <= 1.)
 
-        if norm(u, np.inf) > 1.:
-            print('Saturation')
-            u[u > 1.] = 1.
-            u[u < -1.] = -1.
-        assert(norm(u, np.inf) <= 1.)
+            v = 2*np.sqrt((u + 1.0)/2.0) - 1.
+            assert(np.all(np.isfinite(v)))
+            assert(norm(v, np.inf) <= 1.)
+            del u
 
-        v = 2*np.sqrt((u + 1.0)/2.0) - 1.
-        assert(np.all(np.isfinite(v)))
-        assert(norm(v, np.inf) <= 1.)
-        del u
+            self.write_raw(v)
 
-        self.dm.write(v)
+        def get_transform(self):
+            return 'v = 2*np.sqrt((u + 1.0)/2.0) - 1.'
 
-    def get_transform(self):
-        return 'v = 2*np.sqrt((u + 1.0)/2.0) - 1.'
+        return write, get_transform
 
-    def get_serial_number(self):
-        return self.dm.get_serial_number()
+    w, g = f()
 
-    def preset(self, name, mag=0.7):
-        return self.dm.preset(name, mag)
+    what.write_raw = what.write
+    what.write = types.MethodType(w, what)
+    what.get_transform = types.MethodType(g, what)
 
 
-class FakeCamera():
+class FakeCam():
     exp = 0.06675 + 5*0.06675
     fps = 4
+
+    name = None
+
+    def open(self, name):
+        self.name = name
+        print('FakeCam open ' + name)
+
+    def close(self):
+        print('FakeCam close ' + self.name)
 
     def grab_image(self):
         img = plt.imread('../test/data/int3.tif')
@@ -96,17 +104,20 @@ class FakeCamera():
     def get_image_max(self):
         return 0xff
 
-    def close(self):
-        pass
-
     def get_devices(self):
         return ['cam0']
 
 
 class FakeDM():
 
+    name = None
+
     def open(self, name):
-        print('FakeDM ' + name)
+        self.name = name
+        print('FakeDM open ' + name)
+
+    def close(self):
+        print('FakeDM close ' + self.name)
 
     def get_devices(self):
         return ['dm0', 'C17W005#050']
@@ -122,9 +133,6 @@ class FakeDM():
 
     def get_serial_number(self):
         return 'dm0'
-
-    def close(self):
-        pass
 
     def preset(self, name, mag=0.7):
         u = np.zeros((140,))
@@ -186,23 +194,56 @@ class FakeDM():
 def choose_device(app, args, dev, name, def1, set1):
     devs = dev.get_devices()
     if len(devs) == 0:
-        e = QErrorMessage()
-        e.showMessage('no {} found'.format(name))
-        sys.exit(app.exec_())
+        if app:
+            e = QErrorMessage()
+            e.showMessage('no {} found'.format(name))
+            sys.exit(app.exec_())
+        else:
+            raise ValueError('no {} found'.format(name))
     elif def1 is not None and def1 not in devs:
-        e = QErrorMessage()
-        e.showMessage('{} {} not detected'.format(name, def1))
-        sys.exit(app.exec_())
+        if app:
+            e = QErrorMessage()
+            e.showMessage('{} {} not detected'.format(name, def1))
+            sys.exit(app.exec_())
+        else:
+            raise ValueError('{} {} not detected'.format(name, def1))
     elif def1 is None:
         if len(devs) == 1:
             set1(devs[0])
         else:
-            item, ok = QInputDialog.getItem(
-                None, '', 'select ' + name + ':', devs, 0, False)
-            if ok and item:
-                set1(item)
+            if app:
+                item, ok = QInputDialog.getItem(
+                    None, '', 'select ' + name + ':', devs, 0, False)
+                if ok and item:
+                    set1(item)
+                else:
+                    sys.exit(0)
             else:
-                sys.exit(0)
+                raise ValueError('must specify a device name')
+
+
+def open_cam(app, args):
+
+    # choose driver
+    if args.cam == 'sim':
+        cam = FakeCam()
+    elif args.cam == 'thorcam':
+        from thorcam import ThorCam
+        cam = ThorCam()
+        cam.open(args.cam_name)
+    else:
+        raise NotImplementedError(args.cam)
+
+    # choose device
+    def set_cam(t):
+        args.cam_name = t
+
+    choose_device(app, args, cam, 'cam', args.cam_name, set_cam)
+
+    # open device
+    cam.open(args.cam_name)
+
+    return cam
 
 
 def open_dm(app, args, dm_transform=None):
@@ -230,9 +271,9 @@ def open_dm(app, args, dm_transform=None):
     dm.open(args.dm_name)
 
     if dm_transform is None:
-        dm = VoltageTransform(dm)
+        apply_voltage_transform(dm)
     elif dm_transform == 'v = 2*np.sqrt((u + 1.0)/2.0) - 1.':
-        dm = VoltageTransform(dm)
+        apply_voltage_transform(dm)
     elif dm_transform == 'v = u':
         pass
     else:
@@ -245,3 +286,9 @@ def add_dm_parameters(parser):
     parser.add_argument(
         '--dm', choices=['sim', 'bmc', 'ciusb'], default='sim')
     parser.add_argument('--dm-name', type=str, default=None)
+
+
+def add_cam_parameters(parser):
+    parser.add_argument(
+        '--cam', choices=['sim', 'thorcam'], default='sim')
+    parser.add_argument('--cam-name', type=str, default=None)

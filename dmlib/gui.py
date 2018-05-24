@@ -27,7 +27,7 @@ from PyQt5.QtWidgets import (
     QMainWindow, QTabWidget, QLabel, QPushButton, QGroupBox, QGridLayout,
     QCheckBox, QVBoxLayout, QFrame, QApplication, QShortcut, QDoubleSpinBox,
     QToolBox, QFileDialog, QSplitter, QInputDialog, QStyleFactory,
-    QSizePolicy, QErrorMessage,
+    QSizePolicy,
     )
 
 import version
@@ -36,7 +36,7 @@ from zpanel import ZernikePanel
 from interf import FringeAnalysis
 from calibration import WeightedLSCalib
 from control import ZernikeControl
-from core import FakeDM, FakeCamera, VoltageTransform
+from core import add_dm_parameters, add_cam_parameters, open_dm, open_cam
 
 
 class Control(QMainWindow):
@@ -1207,32 +1207,6 @@ class LoopListener(QThread):
                 return
 
 
-def open_hardware(args):
-    if args.cam == 'sim':
-        cam = FakeCamera()
-    elif args.cam == 'thorcam':
-        from thorcam import ThorCam
-        cam = ThorCam()
-        cam.open(args.cam_name)
-    else:
-        raise NotImplementedError(args.cam)
-
-    if args.dm == 'sim':
-        dm = FakeDM()
-    elif args.dm == 'bmc':
-        from bmc import BMC
-        dm = BMC()
-        dm.open(args.dm_name)
-    elif args.dm == 'ciusb':
-        from ciusb import CIUsb
-        dm = CIUsb()
-        dm.open(args.dm_index)
-    else:
-        raise NotImplementedError(args.dm)
-
-    return cam, dm
-
-
 class Shared:
 
     def __init__(self, cam, dm):
@@ -1322,9 +1296,9 @@ class Worker:
     run_align_state = [0]
 
     def __init__(self, shared, args):
-        cam, dm = open_hardware(args)
+        dm = open_dm(None, args)
+        cam = open_cam(None, args)
         cam.set_exposure(cam.get_exposure_range()[0])
-        dm = VoltageTransform(dm)
 
         shared.make_static()
         shared.f0f1[0] = 0.
@@ -1839,42 +1813,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='DM calibration GUI',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument(
-        '--dm', choices=['sim', 'bmc', 'ciusb'], default='sim')
-    parser.add_argument(
-        '--cam', choices=['sim', 'thorcam'], default='sim')
-    parser.add_argument('--dm-name', type=str, default=None)
-    parser.add_argument('--cam-name', type=str, default=None)
+    add_dm_parameters(parser)
+    add_cam_parameters(parser)
     args = parser.parse_args(args[1:])
 
-    cam, dm = open_hardware(args)
-
-    def set_dm(t):
-        args.dm_name = t
-
-    def set_cam(t):
-        args.cam_name = t
-
-    loops = zip(
-        (cam, dm), ('camera', 'dm'),
-        (args.cam_name, args.dm_name),
-        (set_cam, set_dm))
-    for dev, name, def1, set1 in loops:
-        devs = dev.get_devices()
-        if len(devs) == 0:
-            e = QErrorMessage()
-            e.showMessage('no {} found'.format(name))
-            sys.exit(app.exec_())
-        elif def1 is None or def1 not in devs:
-            if len(devs) == 1:
-                set1(devs[0])
-            else:
-                item, ok = QInputDialog.getItem(
-                    None, '', 'select ' + name + ':', devs, 0, False)
-                if ok and item:
-                    set1(item)
-                else:
-                    sys.exit(0)
+    dm = open_dm(app, args)
+    cam = open_cam(app, args)
 
     shared = Shared(cam, dm)
     dm.close()
