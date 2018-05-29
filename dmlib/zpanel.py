@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
     QWidget, QFileDialog, QGroupBox, QGridLayout, QLabel, QPushButton,
     QLineEdit, QCheckBox, QScrollArea, QSlider, QDoubleSpinBox, QFrame,
     QErrorMessage, QApplication, QMainWindow, QSplitter, QShortcut,
-    QMessageBox,
+    QMessageBox, QSizePolicy,
     )
 
 from sensorless.czernike import RZern
@@ -39,11 +39,12 @@ class ZernikePanel(QWidget):
     im = None
     cb = None
     shape = (128, 128)
-    settings = {'zernike_labels': {}}
+    settings = {'zernike_labels': {}, 'shown_modes': 21}
 
     def save_settings(self, merge={}):
         d = {**merge, **self.settings}
         d['z'] = self.z.tolist()
+        d['shown_modes'] = len(self.zernike_rows)
         return d
 
     def update_gui(self):
@@ -76,7 +77,7 @@ class ZernikePanel(QWidget):
         xv, yv = np.meshgrid(dd, dd)
         self.rzern.make_cart_grid(xv, yv)
         self.rad_to_nm = wavelength/(2*np.pi)
-        self.nmodes = min((21, self.rzern.nk))
+        self.nmodes = min((self.settings['shown_modes'], self.rzern.nk))
         self.callback = callback
 
         self.z = np.zeros((self.rzern.nk,))
@@ -88,6 +89,7 @@ class ZernikePanel(QWidget):
                 pass
 
         zernike_rows = list()
+        self.zernike_rows = zernike_rows
         fto100mul = 100
 
         top1 = QGroupBox('phase')
@@ -278,7 +280,7 @@ class ZernikePanel(QWidget):
         def change_nmodes():
             try:
                 ival = int(lezm.text())
-                assert(ival > 1)
+                assert(ival > 0)
                 assert(ival <= self.rzern.nk)
             except Exception as exp:
                 lezm.setText(str(self.nmodes))
@@ -328,6 +330,7 @@ class ZernikeWindow(QMainWindow):
 
     def __init__(self, control, settings={}, parent=None):
         super().__init__()
+        self.control = control
 
         self.setWindowTitle('ZernikeWindow ' + version.__version__)
         QShortcut(QKeySequence("Ctrl+Q"), self, self.close)
@@ -337,12 +340,14 @@ class ZernikeWindow(QMainWindow):
 
         if 'ZernikePanel' not in settings:
             settings['ZernikePanel'] = {}
+        if 'flat_on' in settings:
+            control.flat_on = int(settings['flat_on'])
 
         self.dmplot = DMPlot()
         self.dmplot.update_txs(calib.dmplot_txs)
 
         def f1():
-            def f2(z):
+            def f(z):
                 control.write(z)
 
                 if control.saturation:
@@ -358,7 +363,7 @@ class ZernikeWindow(QMainWindow):
                 img.set_data(g)
                 img.set_clim(g.min(), g.max())
                 ax[0].figure.canvas.draw()
-            return f2
+            return f
 
         self.zpanel = ZernikePanel(
             control.calib.wavelength, control.calib.get_rzern().n,
@@ -368,6 +373,8 @@ class ZernikeWindow(QMainWindow):
         ax, ima, img, fig = self.make_figs()
         lab = QLabel()
         lab2 = QLabel(self.settings['calibration'])
+        lab.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        lab2.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         split = QSplitter(Qt.Horizontal)
         split.addWidget(self.zpanel)
@@ -407,11 +414,19 @@ class ZernikeWindow(QMainWindow):
                         QMessageBox.information(self, 'error', str(e))
             return f
 
+        def f5():
+            up = f1()
+
+            def f(b):
+                control.flat_on = b
+                up(self.zpanel.z)
+            return f
+
         bcalib = QPushButton('load calibration')
         bsave = QPushButton('save settings')
         bload = QPushButton('load settings')
         bflat = QCheckBox('flat')
-        bflat.setChecked(True)
+        bflat.setChecked(control.flat_on)
 
         bcalib.clicked.connect(f3(
             'Select a calibration file', 'H5 (*.h5);;All Files (*)',
@@ -420,6 +435,7 @@ class ZernikeWindow(QMainWindow):
         bload.clicked.connect(f3(
             'Select a settings file', 'JSON (*.json);;All Files (*)',
             '--settings'))
+        bflat.stateChanged.connect(f5())
 
         central = QFrame()
         layout = QGridLayout()
@@ -436,6 +452,7 @@ class ZernikeWindow(QMainWindow):
 
     def save_settings(self, merge={}):
         self.settings['ZernikePanel'] = self.zpanel.save_settings()
+        self.settings['flat_on'] = self.control.flat_on
         d = {**merge, **self.settings}
         return d
 
