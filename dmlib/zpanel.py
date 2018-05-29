@@ -487,6 +487,11 @@ if __name__ == '__main__':
         metavar='JSON')
     args = parser.parse_args(args[1:])
 
+    def warn(str1):
+        e = QErrorMessage()
+        e.showMessage(str1)
+        app.exec_()
+
     def quit(str1):
         e = QErrorMessage()
         e.showMessage(str1)
@@ -509,7 +514,7 @@ if __name__ == '__main__':
         args.calibration.close()
         settings['calibration'] = args.calibration.name
 
-    if 'calibration' not in settings:
+    def load_calibration():
         fileName, _ = QFileDialog.getOpenFileName(
             None, 'Select a calibration', '', 'H5 (*.h5);;All Files (*)')
         if not fileName:
@@ -517,16 +522,22 @@ if __name__ == '__main__':
         else:
             settings['calibration'] = fileName
 
-    try:
-        with File(settings['calibration'], 'r') as f:
-            if 'WeightedLSCalib' not in f:
-                quit(
-                    settings['calibration'] +
-                    ' does not seem like a calibration file')
-            else:
-                calib = WeightedLSCalib.load_h5py(f)
-    except Exception as e:
-        quit(str(e) + ' loading ' + settings['calibration'])
+    if 'calibration' not in settings:
+        load_calibration()
+
+    while True:
+        try:
+            with File(settings['calibration'], 'r') as f:
+                if 'WeightedLSCalib' not in f:
+                    quit(
+                        settings['calibration'] +
+                        ' does not seem like a calibration file')
+                else:
+                    calib = WeightedLSCalib.load_h5py(f)
+            break
+        except Exception as e:
+            warn(str(e) + ' loading ' + settings['calibration'])
+            load_calibration()
 
     if args.dm_name is None:
         args.dm_name = calib.dm_serial
