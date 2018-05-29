@@ -285,10 +285,10 @@ def open_dm(app, args, dm_transform=None):
 def add_dm_parameters(parser):
     parser.add_argument(
         '--dm', choices=['sim', 'bmc', 'ciusb'], default='sim')
-    parser.add_argument('--dm-name', type=str, default=None)
+    parser.add_argument('--dm-name', type=str, default=None, metavar='SERIAL')
 
 
 def add_cam_parameters(parser):
     parser.add_argument(
         '--cam', choices=['sim', 'thorcam'], default='sim')
-    parser.add_argument('--cam-name', type=str, default=None)
+    parser.add_argument('--cam-name', type=str, default=None, metavar='SERIAL')

@@ -9,6 +9,7 @@ from numpy.linalg import norm
 from matplotlib import ticker
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.figure import Figure
+from datetime import datetime
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIntValidator, QDoubleValidator, QKeySequence
@@ -16,6 +17,7 @@ from PyQt5.QtWidgets import (
     QWidget, QFileDialog, QGroupBox, QGridLayout, QLabel, QPushButton,
     QLineEdit, QCheckBox, QScrollArea, QSlider, QDoubleSpinBox, QFrame,
     QErrorMessage, QApplication, QMainWindow, QSplitter, QShortcut,
+    QMessageBox,
     )
 
 from sensorless.czernike import RZern
@@ -375,12 +377,11 @@ class ZernikeWindow(QMainWindow):
             e = QErrorMessage()
             e.showMessage(str1)
 
-        def f3():
+        def f3(name, glob, param):
             def f():
                 self.setDisabled(True)
                 fileName, _ = QFileDialog.getOpenFileName(
-                    None, 'Select a calibration', '',
-                    'H5 (*.h5);;All Files (*)')
+                    None, name, '', glob)
                 if not fileName:
                     self.setDisabled(False)
                     return
@@ -388,13 +389,37 @@ class ZernikeWindow(QMainWindow):
                     self.close()
                     control.dm.close()
                     myargs = list(sys.argv)
-                    myargs.append('--calibration')
+                    myargs.append(param)
                     myargs.append(fileName)
                     subprocess.Popen([sys.executable, *myargs])
             return f
 
-        bopen = QPushButton('open')
-        bopen.clicked.connect(f3())
+        def f4():
+            def f():
+                fdiag, _ = QFileDialog.getSaveFileName(directory=(
+                    calib.dm_serial +
+                    datetime.now().strftime('_%Y%m%d_%H%M%S.json')))
+                if fdiag:
+                    try:
+                        with open(fdiag, 'w') as f:
+                            json.dump(self.save_settings(), f)
+                    except Exception as e:
+                        QMessageBox.information(self, 'error', str(e))
+            return f
+
+        bcalib = QPushButton('load calibration')
+        bsave = QPushButton('save settings')
+        bload = QPushButton('load settings')
+        bflat = QCheckBox('flat')
+        bflat.setChecked(True)
+
+        bcalib.clicked.connect(f3(
+            'Select a calibration file', 'H5 (*.h5);;All Files (*)',
+            '--calibration'))
+        bsave.clicked.connect(f4())
+        bload.clicked.connect(f3(
+            'Select a settings file', 'JSON (*.json);;All Files (*)',
+            '--settings'))
 
         central = QFrame()
         layout = QGridLayout()
@@ -402,7 +427,10 @@ class ZernikeWindow(QMainWindow):
         layout.addWidget(split, 0, 0, 1, 4)
         layout.addWidget(lab, 1, 0, 1, 4)
         layout.addWidget(lab2, 2, 0, 1, 4)
-        layout.addWidget(bopen, 3, 0)
+        layout.addWidget(bcalib, 3, 0)
+        layout.addWidget(bsave, 3, 1)
+        layout.addWidget(bload, 3, 2)
+        layout.addWidget(bflat, 3, 3)
 
         self.setCentralWidget(central)
 
@@ -435,20 +463,30 @@ if __name__ == '__main__':
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     add_dm_parameters(parser)
     parser.add_argument(
-        '--calibration', type=argparse.FileType('rb'), default=None)
+        '--calibration', type=argparse.FileType('rb'), default=None,
+        metavar='HDF5')
+    parser.add_argument(
+        '--settings', type=argparse.FileType('rb'), default=None,
+        metavar='JSON')
     args = parser.parse_args(args[1:])
-
-    savepath = path.join(Path.home(), '.zpanel.json')
-    try:
-        with open(savepath, 'r') as f:
-            settings = json.load(f)
-    except Exception:
-        settings = {}
 
     def quit(str1):
         e = QErrorMessage()
         e.showMessage(str1)
         sys.exit(app.exec_())
+
+    if args.settings is None:
+        savepath = path.join(Path.home(), '.zpanel.json')
+        try:
+            with open(savepath, 'r') as f:
+                settings = json.load(f)
+        except Exception:
+            settings = {}
+    else:
+        try:
+            settings = json.load(args.settings)
+        except Exception:
+            quit('cannot load ' + args.settings.name)
 
     if args.calibration:
         args.calibration.close()

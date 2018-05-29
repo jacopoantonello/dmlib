@@ -4,3 +4,4 @@ __pycache__/
 *.egg-info/
 /dmlib/*.h5
 *.pyd
+*.json
