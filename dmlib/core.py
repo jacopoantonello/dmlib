@@ -118,6 +118,8 @@ class FakeDM():
         return 140
 
     def write(self, v):
+        if self.transform:
+            v = self.transform(v)
         print('FakeDM', v)
 
     def get_transform(self):
