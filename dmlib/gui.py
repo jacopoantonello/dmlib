@@ -1653,7 +1653,7 @@ class Worker:
             h5f['sleep'].attrs['units'] = 's'
 
             h5f['dm/serial'] = dm.get_serial_number()
-            h5f['dm/transform'] = dm.get_transform()
+            h5f['dm/transform'] = str(dm.get_transform())
 
             h5f['data/U'] = U
             h5f['data/U'].dims[0].label = 'actuators'

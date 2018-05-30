@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import types
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
@@ -12,36 +11,28 @@ from numpy.random import uniform
 from PyQt5.QtWidgets import QErrorMessage, QInputDialog
 
 
-def apply_voltage_transform(what):
+class SquareRoot:
 
-    def f():
+    name = 'v = 2*np.sqrt((u + 1.0)/2.0) - 1.0'
 
-        def write(self, u):
-            assert(np.all(np.isfinite(u)))
+    def __call__(self, u):
+        assert(np.all(np.isfinite(u)))
 
-            if norm(u, np.inf) > 1.:
-                print('Saturation')
-                u[u > 1.] = 1.
-                u[u < -1.] = -1.
-            assert(norm(u, np.inf) <= 1.)
+        if norm(u, np.inf) > 1.:
+            print('SquareRoot saturation')
+            u[u > 1.] = 1.
+            u[u < -1.] = -1.
+        assert(norm(u, np.inf) <= 1.)
 
-            v = 2*np.sqrt((u + 1.0)/2.0) - 1.
-            assert(np.all(np.isfinite(v)))
-            assert(norm(v, np.inf) <= 1.)
-            del u
+        v = 2*np.sqrt((u + 1.0)/2.0) - 1.0
+        assert(np.all(np.isfinite(v)))
+        assert(norm(v, np.inf) <= 1.)
+        del u
 
-            self.write_raw(v)
+        return v
 
-        def get_transform(self):
-            return 'v = 2*np.sqrt((u + 1.0)/2.0) - 1.'
-
-        return write, get_transform
-
-    w, g = f()
-
-    what.write_raw = what.write
-    what.write = types.MethodType(w, what)
-    what.get_transform = types.MethodType(g, what)
+    def __str__(self):
+        return self.name
 
 
 class FakeCam():
@@ -111,6 +102,7 @@ class FakeCam():
 class FakeDM():
 
     name = None
+    transform = None
 
     def open(self, name):
         self.name = name
@@ -129,10 +121,13 @@ class FakeDM():
         print('FakeDM', v)
 
     def get_transform(self):
-        return 'v = u'
+        return self.transform
+
+    def set_transform(self, tx):
+        self.transform = tx
 
     def get_serial_number(self):
-        return 'dm0'
+        return 'simdm0'
 
     def preset(self, name, mag=0.7):
         u = np.zeros((140,))
@@ -271,13 +266,13 @@ def open_dm(app, args, dm_transform=None):
     dm.open(args.dm_name)
 
     if dm_transform is None:
-        apply_voltage_transform(dm)
-    elif dm_transform == 'v = 2*np.sqrt((u + 1.0)/2.0) - 1.':
-        apply_voltage_transform(dm)
+        dm.set_transform(SquareRoot())
+    elif dm_transform == SquareRoot.name:
+        dm.set_transform(SquareRoot())
     elif dm_transform == 'v = u':
         pass
     else:
-        raise NotImplementedError('unknown dm transform')
+        raise NotImplementedError('unknown transform')
 
     return dm
 
