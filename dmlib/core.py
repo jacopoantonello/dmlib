@@ -225,7 +225,7 @@ def open_cam(app, args):
     if args.cam == 'sim':
         cam = FakeCam()
     elif args.cam == 'thorcam':
-        from thorcam import ThorCam
+        from devwraps.thorcam import ThorCam
         cam = ThorCam()
         cam.open(args.cam_name)
     else:
@@ -249,10 +249,10 @@ def open_dm(app, args, dm_transform=None):
     if args.dm == 'sim':
         dm = FakeDM()
     elif args.dm == 'bmc':
-        from bmc import BMC
+        from devwraps.bmc import BMC
         dm = BMC()
     elif args.dm == 'ciusb':
-        from ciusb import CIUsb
+        from devwraps.ciusb import CIUsb
         dm = CIUsb()
         dm.open(args.dm_index)
     else:
