@@ -41,6 +41,8 @@ from core import add_dm_parameters, add_cam_parameters, open_dm, open_cam
 
 class Control(QMainWindow):
 
+    align_bauto = None
+
     zernikePanel = None
     can_close = True
 
@@ -197,6 +199,8 @@ class Control(QMainWindow):
 
         def f4(n):
             def f():
+                if self.align_bauto:
+                    self.align_bauto.setChecked(False)
                 self.shared.iq.put(('preset', n, 0.8))
                 self.shared.oq.get()
                 self.write_dm(None)
@@ -283,6 +287,7 @@ class Control(QMainWindow):
 
         bauto = QCheckBox('auto')
         bauto.setChecked(True)
+        self.align_bauto = bauto
         layout.addWidget(bauto, 3, 0)
         brepeat = QCheckBox('repeat')
         layout.addWidget(brepeat, 3, 1)
