@@ -227,7 +227,6 @@ def open_cam(app, args):
     elif args.cam == 'thorcam':
         from devwraps.thorcam import ThorCam
         cam = ThorCam()
-        cam.open(args.cam_name)
     else:
         raise NotImplementedError(args.cam)
 
@@ -254,7 +253,6 @@ def open_dm(app, args, dm_transform=None):
     elif args.dm == 'ciusb':
         from devwraps.ciusb import CIUsb
         dm = CIUsb()
-        dm.open(args.dm_index)
     else:
         raise NotImplementedError(args.dm)
 
