@@ -485,6 +485,8 @@ if __name__ == '__main__':
     parser.add_argument(
         '--settings', type=argparse.FileType('rb'), default=None,
         metavar='JSON')
+    parser.add_argument(
+        '--blank-settings', action='store_true')
     args = parser.parse_args(args[1:])
 
     def warn(str1):
@@ -497,7 +499,11 @@ if __name__ == '__main__':
         e.showMessage(str1)
         sys.exit(app.exec_())
 
-    if args.settings is None:
+    if args.blank_settings:
+        # blank settings
+        settings = {}
+    elif args.settings is None:
+        # last run settings
         savepath = path.join(Path.home(), '.zpanel.json')
         try:
             with open(savepath, 'r') as f:
@@ -505,6 +511,7 @@ if __name__ == '__main__':
         except Exception:
             settings = {}
     else:
+        # command-line settings
         try:
             settings = json.load(args.settings)
         except Exception:
