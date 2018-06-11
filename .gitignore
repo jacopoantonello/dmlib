@@ -2,5 +2,7 @@ __pycache__/
 .*.swp
 .directory
 *.egg-info/
+build/
+dist/
 /dmlib/*.h5
 *.json

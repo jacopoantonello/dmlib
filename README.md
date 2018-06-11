@@ -1,17 +1,11 @@
 DMlib
 =====
 
-Python tools for deformable mirror calibration
+Python tools for deformable mirror calibration.
 
 
-Develop
+Install
 -------
 
-    $ python setup.py develop --user
-
-
-Tests
------
-
-    $ cd tests
-    $ nosetests -v -x --pdb *.py
+    $ python setup.py bdist_wheel
+    $ pip install dist\dmlib-*.whl
