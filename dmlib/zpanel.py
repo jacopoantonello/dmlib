@@ -464,13 +464,14 @@ class ZernikeWindow(QMainWindow):
 if __name__ == '__main__':
     import argparse
     import json
+
     from os import path
     from pathlib import Path
     from h5py import File
 
-    from core import add_dm_parameters, open_dm
-    from calibration import WeightedLSCalib
-    from control import ZernikeControl
+    from .core import add_dm_parameters, open_dm
+    from .calibration import WeightedLSCalib
+    from .control import ZernikeControl
 
     app = QApplication(sys.argv)
     args = app.arguments()
