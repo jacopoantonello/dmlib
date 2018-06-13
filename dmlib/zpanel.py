@@ -4,7 +4,11 @@
 import sys
 import numpy as np
 import subprocess
+import json
 
+from os import path
+from pathlib import Path
+from h5py import File
 from numpy.linalg import norm
 from matplotlib import ticker
 from matplotlib.backends.backend_qt5agg import FigureCanvas
@@ -24,6 +28,9 @@ from sensorless.czernike import RZern
 
 from . import version
 from .dmplot import DMPlot
+from .core import add_dm_parameters, open_dm
+from .calibration import WeightedLSCalib
+from .control import ZernikeControl
 
 
 class ZernikePanel(QWidget):
@@ -343,7 +350,7 @@ class ZernikeWindow(QMainWindow):
             control.flat_on = int(settings['flat_on'])
 
         self.dmplot = DMPlot()
-        self.dmplot.update_txs(calib.dmplot_txs)
+        self.dmplot.update_txs(control.calib.dmplot_txs)
 
         def f1():
             def f(z):
@@ -403,7 +410,7 @@ class ZernikeWindow(QMainWindow):
         def f4():
             def f():
                 fdiag, _ = QFileDialog.getSaveFileName(directory=(
-                    calib.dm_serial +
+                    control.calib.dm_serial +
                     datetime.now().strftime('_%Y%m%d_%H%M%S.json')))
                 if fdiag:
                     try:
@@ -542,15 +549,6 @@ def load_settings(app, args, last_settings='.zpanel.json'):
 
 if __name__ == '__main__':
     import argparse
-    import json
-
-    from os import path
-    from pathlib import Path
-    from h5py import File
-
-    from .core import add_dm_parameters, open_dm
-    from .calibration import WeightedLSCalib
-    from .control import ZernikeControl
 
     app = QApplication(sys.argv)
     args = app.arguments()
