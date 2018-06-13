@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import QErrorMessage, QInputDialog
 
 class SquareRoot:
 
-    name = 'v = 2*np.sqrt((u + 1.0)/2.0) - 1.0'
+    name = 'v = 2.0*np.sqrt((u + 1.0)/2.0) - 1.0'
 
     def __call__(self, u):
         assert(np.all(np.isfinite(u)))
@@ -272,7 +272,7 @@ def open_dm(app, args, dm_transform=None):
     elif dm_transform == 'v = u':
         pass
     else:
-        raise NotImplementedError('unknown transform')
+        raise NotImplementedError('unknown transform ' + dm_transform)
 
     return dm
 

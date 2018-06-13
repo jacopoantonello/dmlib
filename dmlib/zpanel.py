@@ -531,7 +531,7 @@ def load_settings(app, args, last_settings='.zpanel.json'):
                 if 'WeightedLSCalib' not in f:
                     quit(
                         settings['calibration'] +
-                        ' does not seem like a calibration file')
+                        ' is not a calibration file')
                 else:
                     calib = WeightedLSCalib.load_h5py(f)
             break
