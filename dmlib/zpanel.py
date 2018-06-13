@@ -315,9 +315,11 @@ class ZernikePanel(QWidget):
         reset.clicked.connect(reset_fun)
         lezm.editingFinished.connect(change_nmodes)
 
+        split = QSplitter(Qt.Vertical)
+        split.addWidget(top1)
+        split.addWidget(top)
         l1 = QGridLayout()
-        l1.addWidget(top1, 0, 0)
-        l1.addWidget(top, 1, 0)
+        l1.addWidget(split)
         self.setLayout(l1)
 
 
@@ -328,8 +330,8 @@ class ZernikeWindow(QMainWindow):
     def make_figs(self):
         fig = FigureCanvas(Figure(figsize=(2, 2)))
         ax = fig.figure.subplots(2, 1)
-        ima = self.dmplot.draw(ax[0], control.u)
-        img = ax[1].imshow(self.dmplot.compute_gauss(control.u))
+        ima = self.dmplot.draw(ax[0], self.control.u)
+        img = ax[1].imshow(self.dmplot.compute_gauss(self.control.u))
         ax[0].axis('off')
         ax[1].axis('off')
 
