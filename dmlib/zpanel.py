@@ -5,6 +5,7 @@ import sys
 import numpy as np
 import subprocess
 import json
+import argparse
 
 from os import path
 from pathlib import Path
@@ -548,8 +549,6 @@ def load_settings(app, args, last_settings='.zpanel.json'):
 
 
 if __name__ == '__main__':
-    import argparse
-
     app = QApplication(sys.argv)
     args = app.arguments()
     parser = argparse.ArgumentParser(
