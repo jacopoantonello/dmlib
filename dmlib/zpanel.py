@@ -22,9 +22,8 @@ from PyQt5.QtWidgets import (
 
 from sensorless.czernike import RZern
 
-from dmplot import DMPlot
-
-import version
+from . import version
+from .dmplot import DMPlot
 
 
 class ZernikePanel(QWidget):
@@ -282,7 +281,7 @@ class ZernikePanel(QWidget):
                 ival = int(lezm.text())
                 assert(ival > 0)
                 assert(ival <= self.rzern.nk)
-            except Exception as exp:
+            except Exception:
                 lezm.setText(str(self.nmodes))
                 return
 

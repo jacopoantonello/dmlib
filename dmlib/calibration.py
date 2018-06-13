@@ -9,8 +9,9 @@ from numpy.linalg import lstsq, pinv
 from scipy.linalg import cholesky, solve_triangular
 from skimage.restoration import unwrap_phase
 
-from interf import FringeAnalysis
 from sensorless.czernike import RZern
+
+from .interf import FringeAnalysis
 
 HDF5_options = {
     'chunks': True,
