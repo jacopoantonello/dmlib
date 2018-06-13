@@ -461,23 +461,7 @@ class ZernikeWindow(QMainWindow):
         event.accept()
 
 
-if __name__ == '__main__':
-    import argparse
-    import json
-
-    from os import path
-    from pathlib import Path
-    from h5py import File
-
-    from .core import add_dm_parameters, open_dm
-    from .calibration import WeightedLSCalib
-    from .control import ZernikeControl
-
-    app = QApplication(sys.argv)
-    args = app.arguments()
-    parser = argparse.ArgumentParser(
-        description='Zernike DM control',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+def add_zpanel_arguments(parser):
     add_dm_parameters(parser)
     parser.add_argument(
         '--calibration', type=argparse.FileType('rb'), default=None,
@@ -487,8 +471,9 @@ if __name__ == '__main__':
         metavar='JSON')
     parser.add_argument(
         '--blank-settings', action='store_true')
-    args = parser.parse_args(args[1:])
 
+
+def load_settings(app, args, last_settings='.zpanel.json'):
     def warn(str1):
         e = QErrorMessage()
         e.showMessage(str1)
@@ -504,7 +489,7 @@ if __name__ == '__main__':
         settings = {}
     elif args.settings is None:
         # last run settings
-        savepath = path.join(Path.home(), '.zpanel.json')
+        savepath = path.join(Path.home(), last_settings)
         try:
             with open(savepath, 'r') as f:
                 settings = json.load(f)
@@ -551,6 +536,31 @@ if __name__ == '__main__':
 
     dm = open_dm(app, args, calib.dm_transform)
     control = ZernikeControl(dm, calib)
+
+    return control, settings
+
+
+if __name__ == '__main__':
+    import argparse
+    import json
+
+    from os import path
+    from pathlib import Path
+    from h5py import File
+
+    from .core import add_dm_parameters, open_dm
+    from .calibration import WeightedLSCalib
+    from .control import ZernikeControl
+
+    app = QApplication(sys.argv)
+    args = app.arguments()
+    parser = argparse.ArgumentParser(
+        description='Zernike DM control',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    add_zpanel_arguments(parser)
+    args = parser.parse_args(args[1:])
+
+    control, settings = load_settings(app, args)
 
     zwindow = ZernikeWindow(control, settings)
     zwindow.show()
