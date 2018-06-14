@@ -1,6 +1,6 @@
 [submodule "devwraps"]
 	path = devwraps
-	url = /home/jacopo/reports/gits/devwraps.git
+	url = https://github.com/jacopoantonello/devwraps.git
 [submodule "sensorless"]
 	path = sensorless
-	url = /home/jacopo/reports/gits/sensorless.git
+	url = ssh://git@dop-git.eng.ox.ac.uk:2222/diffusion/7/sensorless.git
