@@ -200,10 +200,14 @@ def choose_device(app, args, dev, name, def1, set1):
     elif def1 is not None and def1 not in devs:
         if app:
             e = QErrorMessage()
-            e.showMessage('{} {} not detected'.format(name, def1))
+            e.showMessage(
+                '{d} {n} not detected, available {d} are {ll}'.format(
+                    d=name, n=def1, ll=str(devs)))
             sys.exit(app.exec_())
         else:
-            raise ValueError('{} {} not detected'.format(name, def1))
+            raise ValueError(
+                '{d} {n} not detected, available {d} are {ll}'.format(
+                    d=name, n=def1, ll=str(devs)))
     elif def1 is None:
         if len(devs) == 1:
             set1(devs[0])
