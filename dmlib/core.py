@@ -81,7 +81,7 @@ class FakeCam():
         return f
 
     def get_serial_number(self):
-        return 'cam0'
+        return self.name
 
     def get_camera_info(self):
         return 'camera info'
@@ -96,7 +96,7 @@ class FakeCam():
         return 0xff
 
     def get_devices(self):
-        return ['cam0']
+        return ['simcam0', 'simcam1']
 
 
 class FakeDM():
@@ -112,7 +112,7 @@ class FakeDM():
         print('FakeDM close ' + self.name)
 
     def get_devices(self):
-        return ['dm0', 'C17W005#050']
+        return ['simdm0', 'simdm1']
 
     def size(self):
         return 140
@@ -129,7 +129,7 @@ class FakeDM():
         self.transform = tx
 
     def get_serial_number(self):
-        return 'simdm0'
+        return self.name
 
     def preset(self, name, mag=0.7):
         u = np.zeros((140,))

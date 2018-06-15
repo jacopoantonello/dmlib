@@ -37,7 +37,7 @@ def update_version():
         commit = re.search(
             r'^commit\s+([^\s]{40})', last, re.MULTILINE).group(1)
 
-        with open(path.join('dmlib', 'version.py'), 'r') as f:
+        with open(path.join('dmlib', 'version.py'), 'r', newline='\n') as f:
             vfile = f.read()
 
         vfile = re.sub(
@@ -53,7 +53,7 @@ def update_version():
             vfile,
             flags=re.MULTILINE)
 
-        with open(path.join('dmlib', 'version.py'), 'w') as f:
+        with open(path.join('dmlib', 'version.py'), 'w', newline='\n') as f:
             f.write(vfile)
     except Exception as e:
         print('Cannot update version {}'.format(str(e)), file=sys.stderr)
