@@ -223,6 +223,19 @@ def choose_device(app, args, dev, name, def1, set1):
                 raise ValueError('must specify a device name')
 
 
+def attempt_open(app, what, devname, devtype):
+    try:
+        what.open(devname)
+    except Exception:
+        errstr = 'unable to open {} {}'.format(devtype, devname)
+        if app:
+            e = QErrorMessage()
+            e.showMessage(errstr)
+            sys.exit(app.exec_())
+        else:
+            raise ValueError(errstr)
+
+
 def open_cam(app, args):
 
     # choose driver
@@ -241,7 +254,7 @@ def open_cam(app, args):
     choose_device(app, args, cam, 'cam', args.cam_name, set_cam)
 
     # open device
-    cam.open(args.cam_name)
+    attempt_open(app, cam, args.cam_name, 'cam')
 
     return cam
 
@@ -267,7 +280,7 @@ def open_dm(app, args, dm_transform=None):
     choose_device(app, args, dm, 'dm', args.dm_name, set_dm)
 
     # open device
-    dm.open(args.dm_name)
+    attempt_open(app, dm, args.dm_name, 'dm')
 
     if dm_transform is None:
         dm.set_transform(SquareRoot())
