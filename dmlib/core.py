@@ -3,12 +3,12 @@
 
 import sys
 import numpy as np
-import matplotlib.pyplot as plt
 
 from numpy.linalg import norm
-from numpy.random import uniform
 
 from PyQt5.QtWidgets import QErrorMessage, QInputDialog
+
+import dmlib.test
 
 
 class SquareRoot:
@@ -49,10 +49,7 @@ class FakeCam():
         print('FakeCam close ' + self.name)
 
     def grab_image(self):
-        img = plt.imread('../test/data/int3.tif')
-        img = np.roll(img, int(np.round(uniform(-200, 200))), axis=0)
-        img = np.roll(img, int(np.round(uniform(-200, 200))), axis=1)
-        return img
+        return dmlib.test.load_int3()
 
     def shape(self):
         return (1024, 1280)
