@@ -239,13 +239,23 @@ def attempt_open(app, what, devname, devtype):
 def open_cam(app, args):
 
     # choose driver
-    if args.cam == 'sim':
+    if args.cam_driver == 'sim':
         cam = FakeCam()
-    elif args.cam == 'thorcam':
+    elif args.cam_driver == 'thorcam':
         from devwraps.thorcam import ThorCam
         cam = ThorCam()
     else:
-        raise NotImplementedError(args.cam)
+        raise NotImplementedError(args.cam_driver)
+
+    if args.cam_list:
+        devs = cam.get_devices()
+        print(cam.get_devices())
+        if app:
+            e = QErrorMessage()
+            e.showMessage('detected cameras are: ' + str(devs))
+            sys.exit(app.exec_())
+        else:
+            sys.exit()
 
     # choose device
     def set_cam(t):
@@ -262,16 +272,26 @@ def open_cam(app, args):
 def open_dm(app, args, dm_transform=None):
 
     # choose driver
-    if args.dm == 'sim':
+    if args.dm_driver == 'sim':
         dm = FakeDM()
-    elif args.dm == 'bmc':
+    elif args.dm_driver == 'bmc':
         from devwraps.bmc import BMC
         dm = BMC()
-    elif args.dm == 'ciusb':
+    elif args.dm_driver == 'ciusb':
         from devwraps.ciusb import CIUsb
         dm = CIUsb()
     else:
-        raise NotImplementedError(args.dm)
+        raise NotImplementedError(args.dm_driver)
+
+    if args.dm_list:
+        devs = dm.get_devices()
+        print(dm.get_devices())
+        if app:
+            e = QErrorMessage()
+            e.showMessage('detected dms are: ' + str(devs))
+            sys.exit(app.exec_())
+        else:
+            sys.exit()
 
     # choose device
     def set_dm(t):
@@ -296,11 +316,15 @@ def open_dm(app, args, dm_transform=None):
 
 def add_dm_parameters(parser):
     parser.add_argument(
-        '--dm', choices=['sim', 'bmc', 'ciusb'], default='sim')
+        '--dm-driver', choices=['sim', 'bmc', 'ciusb'], default='sim')
     parser.add_argument('--dm-name', type=str, default=None, metavar='SERIAL')
+    parser.add_argument(
+        '--dm-list', action='store_true', help='List detected devices')
 
 
 def add_cam_parameters(parser):
     parser.add_argument(
-        '--cam', choices=['sim', 'thorcam'], default='sim')
+        '--cam-driver', choices=['sim', 'thorcam'], default='sim')
     parser.add_argument('--cam-name', type=str, default=None, metavar='SERIAL')
+    parser.add_argument(
+        '--cam-list', action='store_true', help='List detected devices')
