@@ -18,18 +18,12 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 def update_version():
     try:
-        # rcount = str(len(check_output(
-        #     'git log --oneline', universal_newlines=True,
-        #     shell=True).split('\n')))
-        version = check_output(
-            'git describe --tags --long', universal_newlines=True,
-            shell=True).strip()
-        # version = pver + ':' + str(rcount)
-        dirty = check_output(
-            'git diff-index --name-only HEAD', universal_newlines=True,
-            shell=True)
-        if dirty:
-            version += '-dirty'
+        toks = check_output(
+            'git describe --tags --long --dirty', universal_newlines=True,
+            shell=True).strip().split('-')
+        version = toks[0].strip('v') + '+' + toks[1] + '.' + toks[2]
+        if toks[-1] == 'dirty':
+            version += '.dirty'
         last = check_output(
             'git log -n 1', universal_newlines=True, shell=True)
         date = re.search(
