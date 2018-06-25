@@ -46,12 +46,15 @@ class Control(QMainWindow):
     zernikePanel = None
     can_close = True
 
-    def __init__(self, worker, shared, settings={}, parent=None):
+    def __init__(
+            self, worker, shared, cam_name, dm_name, settings={}, parent=None):
         super().__init__()
 
         self.worker = worker
         self.shared = shared
         self.shared.make_static()
+        self.cam_name = cam_name
+        self.dm_name = dm_name
 
         self.setWindowTitle('DM calibration ' + version.__version__)
         QShortcut(QKeySequence("Ctrl+Q"), self, self.close)
@@ -159,7 +162,7 @@ class Control(QMainWindow):
             cam_get('get_exposure_range'),
             cam_get('get_exposure')))
 
-        self.toolbox.addItem(tool_cam, 'camera')
+        self.toolbox.addItem(tool_cam, 'cam: ' + self.cam_name)
 
     def update_dm_gui(self):
         self.dmplot.draw(self.dm_ax, self.shared.u)
@@ -254,7 +257,7 @@ class Control(QMainWindow):
         self.dm_ax.axis('off')
         self.write_dm(None)
 
-        self.toolbox.addItem(tool_dm, 'dm')
+        self.toolbox.addItem(tool_dm, 'dm: ' + self.dm_name)
 
     def make_panel_align(self):
         frame = QFrame()
@@ -1824,6 +1827,8 @@ if __name__ == '__main__':
 
     dm = open_dm(app, args)
     cam = open_cam(app, args)
+    cam_name = cam.get_serial_number()
+    dm_name = dm.get_serial_number()
 
     shared = Shared(cam, dm)
     dm.close()
@@ -1832,7 +1837,7 @@ if __name__ == '__main__':
     p = Process(name='worker', target=run_worker, args=(shared, args))
     p.start()
 
-    control = Control(p, shared)
+    control = Control(p, shared, cam_name, dm_name)
     control.show()
 
     exit = app.exec_()
