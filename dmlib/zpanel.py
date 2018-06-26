@@ -27,11 +27,11 @@ from PyQt5.QtWidgets import (
 
 from sensorless.czernike import RZern
 
-from . import version
-from .dmplot import DMPlot
-from .core import add_dm_parameters, open_dm
-from .calibration import WeightedLSCalib
-from .control import ZernikeControl
+from dmlib.version import __version__
+from dmlib.dmplot import DMPlot
+from dmlib.core import add_dm_parameters, open_dm
+from dmlib.calibration import WeightedLSCalib
+from dmlib.control import ZernikeControl
 
 
 class ZernikePanel(QWidget):
@@ -341,7 +341,7 @@ class ZernikeWindow(QMainWindow):
         super().__init__()
         self.control = control
 
-        self.setWindowTitle('ZernikeWindow ' + version.__version__)
+        self.setWindowTitle('ZernikeWindow ' + __version__)
         QShortcut(QKeySequence("Ctrl+Q"), self, self.close)
 
         if settings:
@@ -516,7 +516,7 @@ def load_settings(app, args, last_settings='.zpanel.json'):
         args.calibration.close()
         settings['calibration'] = args.calibration.name
 
-    def load_calibration():
+    def choose_calib_file():
         fileName, _ = QFileDialog.getOpenFileName(
             None, 'Select a calibration', '', 'H5 (*.h5);;All Files (*)')
         if not fileName:
@@ -525,7 +525,7 @@ def load_settings(app, args, last_settings='.zpanel.json'):
             settings['calibration'] = fileName
 
     if 'calibration' not in settings:
-        load_calibration()
+        choose_calib_file()
 
     while True:
         try:
@@ -534,20 +534,29 @@ def load_settings(app, args, last_settings='.zpanel.json'):
                     quit(
                         settings['calibration'] +
                         ' is not a calibration file')
-                else:
-                    calib = WeightedLSCalib.load_h5py(f)
             break
         except Exception as e:
             warn(str(e) + ' loading ' + settings['calibration'])
-            load_calibration()
+            choose_calib_file()
 
-    if args.dm_name is None:
+    return settings
+
+
+def load_calibration(settings):
+    with File(settings['calibration'], 'r') as f:
+        calib = WeightedLSCalib.load_h5py(f)
+    return calib
+
+
+def open_hardware(app, args, settings, calib=None):
+    if args.dm_name is None and calib is not None:
         args.dm_name = calib.dm_serial
 
-    dm = open_dm(app, args, calib.dm_transform)
-    control = ZernikeControl(dm, calib)
+    return open_dm(app, args, calib.dm_transform)
 
-    return control, settings
+
+def apply_control(settings, dm, calib):
+    return ZernikeControl(dm, calib)
 
 
 if __name__ == '__main__':
@@ -559,7 +568,14 @@ if __name__ == '__main__':
     add_zpanel_arguments(parser)
     args = parser.parse_args(args[1:])
 
-    control, settings = load_settings(app, args)
+    settings = load_settings(app, args)
+    try:
+        calib = load_calibration(settings)
+    except Exception as e:
+        quit('error loading calibration {}: {}'.format(
+            settings['calibration'], str(e)))
+    dm = open_hardware(app, args, settings, calib)
+    control = apply_control(settings, dm, calib)
 
     zwindow = ZernikeWindow(control, settings)
     zwindow.show()
