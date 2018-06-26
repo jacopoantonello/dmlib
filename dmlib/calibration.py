@@ -3,6 +3,7 @@
 
 import numpy as np
 
+from h5py import File
 from scipy.interpolate import interp1d
 from multiprocessing import Pool
 from numpy.linalg import lstsq, pinv
@@ -11,7 +12,7 @@ from skimage.restoration import unwrap_phase
 
 from sensorless.czernike import RZern
 
-from .interf import FringeAnalysis
+from dmlib.interf import FringeAnalysis
 
 HDF5_options = {
     'chunks': True,
@@ -194,6 +195,18 @@ class WeightedLSCalib:
 
     def get_rad_to_nm(self):
         return (self.wavelength/1e-9)/(2*np.pi)
+
+    @classmethod
+    def query_calibration(cls, f):
+        with File(f, 'r') as f:
+            if 'WeightedLSCalib' not in f:
+                raise ValueError(f.filename + ' is not a calibration file')
+            else:
+                return (
+                    f['WeightedLSCalib/dm_serial'][()],
+                    f['WeightedLSCalib/dm_transform'][()],
+                    f['WeightedLSCalib/dmplot_txs'][()],
+                    )
 
     @classmethod
     def load_h5py(cls, f, prepend=None):

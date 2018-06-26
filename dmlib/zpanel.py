@@ -527,32 +527,12 @@ def load_settings(app, args, last_settings='.zpanel.json'):
     if 'calibration' not in settings:
         choose_calib_file()
 
-    while True:
-        try:
-            with File(settings['calibration'], 'r') as f:
-                if 'WeightedLSCalib' not in f:
-                    quit(
-                        settings['calibration'] +
-                        ' is not a calibration file')
-            break
-        except Exception as e:
-            warn(str(e) + ' loading ' + settings['calibration'])
-            choose_calib_file()
+    try:
+        dminfo = WeightedLSCalib.query_calibration(settings['calibration'])
+    except ValueError as e:
+        quit(str(e))
 
-    return settings
-
-
-def load_calibration(settings):
-    with File(settings['calibration'], 'r') as f:
-        calib = WeightedLSCalib.load_h5py(f)
-    return calib
-
-
-def open_hardware(app, args, settings, calib=None):
-    if args.dm_name is None and calib is not None:
-        args.dm_name = calib.dm_serial
-
-    return open_dm(app, args, calib.dm_transform)
+    return dminfo, settings
 
 
 def apply_control(settings, dm, calib):
@@ -568,14 +548,20 @@ if __name__ == '__main__':
     add_zpanel_arguments(parser)
     args = parser.parse_args(args[1:])
 
-    settings = load_settings(app, args)
+    dminfo, settings = load_settings(app, args)
+    calib_dm_name, calib_dm_transform, _ = dminfo
     try:
-        calib = load_calibration(settings)
+        with File(settings['calibration'], 'r') as f:
+            calib = WeightedLSCalib.load_h5py(f)
     except Exception as e:
         quit('error loading calibration {}: {}'.format(
             settings['calibration'], str(e)))
-    dm = open_hardware(app, args, settings, calib)
-    control = apply_control(settings, dm, calib)
+
+    if args.dm_name is None:
+        args.dm_name = calib_dm_name
+    dm = open_dm(app, args, calib_dm_transform)
+
+    control = ZernikeControl(dm, calib)
 
     zwindow = ZernikeWindow(control, settings)
     zwindow.show()
