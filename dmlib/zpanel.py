@@ -549,17 +549,19 @@ if __name__ == '__main__':
     args = parser.parse_args(args[1:])
 
     dminfo, settings = load_settings(app, args)
-    calib_dm_name, calib_dm_transform, _ = dminfo
+    calib_dm_name = dminfo[0]
+    calib_dm_transform = dminfo[1]
+
+    if args.dm_name is None:
+        args.dm_name = calib_dm_name
+    dm = open_dm(app, args, calib_dm_transform)
+
     try:
         with File(settings['calibration'], 'r') as f:
             calib = WeightedLSCalib.load_h5py(f)
     except Exception as e:
         quit('error loading calibration {}: {}'.format(
             settings['calibration'], str(e)))
-
-    if args.dm_name is None:
-        args.dm_name = calib_dm_name
-    dm = open_dm(app, args, calib_dm_transform)
 
     control = ZernikeControl(dm, calib)
 

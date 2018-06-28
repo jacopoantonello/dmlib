@@ -188,23 +188,11 @@ class FakeDM():
 def choose_device(app, args, dev, name, def1, set1):
     devs = dev.get_devices()
     if len(devs) == 0:
-        if app:
-            e = QErrorMessage()
-            e.showMessage('no {} found'.format(name))
-            sys.exit(app.exec_())
-        else:
-            raise ValueError('no {} found'.format(name))
+        exit_error(app, 'no {} found'.format(name), ValueError)
     elif def1 is not None and def1 not in devs:
-        if app:
-            e = QErrorMessage()
-            e.showMessage(
-                '{d} {n} not detected, available {d} are {ll}'.format(
-                    d=name, n=def1, ll=str(devs)))
-            sys.exit(app.exec_())
-        else:
-            raise ValueError(
-                '{d} {n} not detected, available {d} are {ll}'.format(
-                    d=name, n=def1, ll=str(devs)))
+        exit_error(
+            app, '{d} {n} not detected, available {d} are {ll}'.format(
+                d=name, n=def1, ll=str(devs)), ValueError)
     elif def1 is None:
         if len(devs) == 1:
             set1(devs[0])
@@ -224,25 +212,42 @@ def attempt_open(app, what, devname, devtype):
     try:
         what.open(devname)
     except Exception:
-        errstr = 'unable to open {} {}'.format(devtype, devname)
-        if app:
-            e = QErrorMessage()
-            e.showMessage(errstr)
-            sys.exit(app.exec_())
-        else:
-            raise ValueError(errstr)
+        exit_error(
+            app, 'unable to open {} {}'.format(devtype, devname),
+            ValueError)
+
+
+def exit_exception(app, exc):
+    if app:
+        e = QErrorMessage()
+        e.showMessage(str(exc))
+        sys.exit(app.exec_())
+    else:
+        raise exc(str(exc))
+
+
+def exit_error(app, text, exc):
+    if app:
+        e = QErrorMessage()
+        e.showMessage(text)
+        sys.exit(app.exec_())
+    else:
+        raise exc(text)
 
 
 def open_cam(app, args):
 
-    # choose driver
-    if args.cam_driver == 'sim':
-        cam = FakeCam()
-    elif args.cam_driver == 'thorcam':
-        from devwraps.thorcam import ThorCam
-        cam = ThorCam()
-    else:
-        raise NotImplementedError(args.cam_driver)
+    try:
+        # choose driver
+        if args.cam_driver == 'sim':
+            cam = FakeCam()
+        elif args.cam_driver == 'thorcam':
+            from devwraps.thorcam import ThorCam
+            cam = ThorCam()
+        else:
+            raise NotImplementedError(args.cam_driver)
+    except Exception as e:
+        exit_exception(app, e)
 
     if args.cam_list:
         devs = cam.get_devices()
@@ -269,16 +274,19 @@ def open_cam(app, args):
 def open_dm(app, args, dm_transform=None):
 
     # choose driver
-    if args.dm_driver == 'sim':
-        dm = FakeDM()
-    elif args.dm_driver == 'bmc':
-        from devwraps.bmc import BMC
-        dm = BMC()
-    elif args.dm_driver == 'ciusb':
-        from devwraps.ciusb import CIUsb
-        dm = CIUsb()
-    else:
-        raise NotImplementedError(args.dm_driver)
+    try:
+        if args.dm_driver == 'sim':
+            dm = FakeDM()
+        elif args.dm_driver == 'bmc':
+            from devwraps.bmc import BMC
+            dm = BMC()
+        elif args.dm_driver == 'ciusb':
+            from devwraps.ciusb import CIUsb
+            dm = CIUsb()
+        else:
+            raise NotImplementedError(args.dm_driver)
+    except Exception as e:
+        exit_exception(app, e)
 
     if args.dm_list:
         devs = dm.get_devices()
