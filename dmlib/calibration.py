@@ -206,6 +206,7 @@ class WeightedLSCalib:
                     f['WeightedLSCalib/dm_serial'][()],
                     f['WeightedLSCalib/dm_transform'][()],
                     f['WeightedLSCalib/dmplot_txs'][()],
+                    f['WeightedLSCalib/H'].shape,
                     )
 
     @classmethod
