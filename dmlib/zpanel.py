@@ -529,7 +529,7 @@ def load_settings(app, args, last_settings='.zpanel.json'):
 
     try:
         dminfo = WeightedLSCalib.query_calibration(settings['calibration'])
-    except ValueError as e:
+    except Exception as e:
         quit(str(e))
 
     return dminfo, settings
