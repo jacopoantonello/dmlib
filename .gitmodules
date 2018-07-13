@@ -2,3 +2,7 @@
 	path = devwraps
 	url = https://github.com/jacopoantonello/devwraps.git
 	branch = master
+[submodule "zernike"]
+	path = zernike
+	url = https://github.com/jacopoantonello/zernike.git
+	branch = master
