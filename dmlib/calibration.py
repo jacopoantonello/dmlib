@@ -10,7 +10,7 @@ from numpy.linalg import lstsq, pinv
 from scipy.linalg import cholesky, solve_triangular
 from skimage.restoration import unwrap_phase
 
-from sensorless.czernike import RZern
+from zernike.czernike import RZern
 
 from dmlib.interf import FringeAnalysis
 

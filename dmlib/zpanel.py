@@ -25,7 +25,7 @@ from PyQt5.QtWidgets import (
     QMessageBox, QSizePolicy,
     )
 
-from sensorless.czernike import RZern
+from zernike.czernike import RZern
 
 from dmlib.version import __version__
 from dmlib.dmplot import DMPlot
