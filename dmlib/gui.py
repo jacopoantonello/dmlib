@@ -191,14 +191,18 @@ class Control(QMainWindow):
             bottom=.1, top=.9,
             wspace=0.45, hspace=0.45)
 
+        g1 = QGroupBox('Plot transforms')
+        gl1 = QGridLayout()
         flipx = QPushButton('flipx')
-        layout.addWidget(flipx, 1, 0)
+        gl1.addWidget(flipx, 0, 0)
         flipy = QPushButton('flipy')
-        layout.addWidget(flipy, 1, 1)
+        gl1.addWidget(flipy, 0, 1)
         rotate1 = QPushButton('rotate cw')
-        layout.addWidget(rotate1, 2, 0)
+        gl1.addWidget(rotate1, 1, 0)
         rotate2 = QPushButton('rotate acw')
-        layout.addWidget(rotate2, 2, 1)
+        gl1.addWidget(rotate2, 1, 1)
+        g1.setLayout(gl1)
+        layout.addWidget(g1, 1, 0)
 
         def f4(n):
             def f():
@@ -209,23 +213,27 @@ class Control(QMainWindow):
                 self.write_dm(None)
             return f
 
+        g2 = QGroupBox('Actuators')
+        gl2 = QGridLayout()
         reset = QPushButton('reset')
-        layout.addWidget(reset, 3, 0)
+        gl2.addWidget(reset, 0, 0)
         setall = QPushButton('set all')
-        layout.addWidget(setall, 4, 0)
+        gl2.addWidget(setall, 1, 0)
         loadflat = QPushButton('load flat')
-        layout.addWidget(loadflat, 4, 1)
-        i = 5
+        gl2.addWidget(loadflat, 1, 1)
+        i = 2
         j = 0
         for name in ('centre', 'cross', 'x', 'rim', 'checker', 'arrows'):
             b = QPushButton(name)
-            layout.addWidget(b, i, j)
+            gl2.addWidget(b, i, j)
             if j == 1:
                 i += 1
                 j = 0
             else:
                 j += 1
             b.clicked[bool].connect(f4(name))
+        g2.setLayout(gl2)
+        layout.addWidget(g2, 2, 0)
 
         def f2():
             def f():
