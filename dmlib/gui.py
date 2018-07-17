@@ -177,12 +177,12 @@ class Control(QMainWindow):
 
     def make_tool_dm(self):
         tool_dm = QFrame()
-        layout = QGridLayout()
-        tool_dm.setLayout(layout)
+        central = QSplitter(Qt.Vertical)
+        layout = QVBoxLayout()
 
         self.dm_fig = FigureCanvas(Figure(figsize=(3, 2)))
         self.dm_ax = self.dm_fig.figure.add_subplot(1, 1, 1)
-        layout.addWidget(self.dm_fig, 0, 0, 1, 0)
+        central.addWidget(self.dm_fig)
         self.dmplot = DMPlot()
         self.dmplot.install_select_callback(
             self.dm_ax, self.shared.u, self, self.write_dm)
@@ -202,7 +202,7 @@ class Control(QMainWindow):
         rotate2 = QPushButton('rotate acw')
         gl1.addWidget(rotate2, 1, 1)
         g1.setLayout(gl1)
-        layout.addWidget(g1, 1, 0)
+        central.addWidget(g1)
 
         def f4(n):
             def f():
@@ -233,7 +233,7 @@ class Control(QMainWindow):
                 j += 1
             b.clicked[bool].connect(f4(name))
         g2.setLayout(gl2)
-        layout.addWidget(g2, 2, 0)
+        central.addWidget(g2)
 
         def f2():
             def f():
@@ -293,6 +293,9 @@ class Control(QMainWindow):
         flipy.clicked.connect(f4(self.dmplot.flipy, flipy))
         rotate1.clicked.connect(f3(1))
         rotate2.clicked.connect(f3(-1))
+
+        tool_dm.setLayout(layout)
+        layout.addWidget(central)
 
         self.dm_ax.axis('off')
         self.write_dm(None)
