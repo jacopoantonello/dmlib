@@ -211,7 +211,11 @@ class Control(QMainWindow):
 
         reset = QPushButton('reset')
         layout.addWidget(reset, 3, 0)
-        i = 4
+        setall = QPushButton('set all')
+        layout.addWidget(setall, 4, 0)
+        loadflat = QPushButton('load flat')
+        layout.addWidget(loadflat, 4, 1)
+        i = 5
         j = 0
         for name in ('centre', 'cross', 'x', 'rim', 'checker', 'arrows'):
             b = QPushButton(name)
@@ -229,7 +233,35 @@ class Control(QMainWindow):
                 self.write_dm()
             return f
 
+        def f3():
+            def f():
+                val, ok = QInputDialog.getDouble(
+                    self, 'Set all actuators', 'range [-1, 1]',
+                    0., -1., 1., 4)
+                if ok:
+                    self.shared.u[:] = val
+                    self.write_dm()
+            return f
+
+        def f4():
+            def f():
+                fileName, _ = QFileDialog.getOpenFileName(
+                    self, 'Select factory flat file', '',
+                    'TXT (*.txt);;All Files (*)')
+                if fileName:
+                    try:
+                        uflat = np.loadtxt(fileName, delimiter='\n')
+                        uflat = 2*(uflat**2) - 1
+                        assert(self.shared.u.size == uflat.size)
+                        self.shared.u[:] = uflat
+                        self.write_dm()
+                    except Exception:
+                        pass
+            return f
+
         reset.clicked.connect(f2())
+        setall.clicked.connect(f3())
+        loadflat.clicked.connect(f4())
 
         def f3(sign):
             ind = [0]
