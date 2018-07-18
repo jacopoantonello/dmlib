@@ -244,6 +244,9 @@ def open_cam(app, args):
         elif args.cam_driver == 'thorcam':
             from devwraps.thorcam import ThorCam
             cam = ThorCam()
+        elif args.cam_driver == 'ximea':
+            from devwraps.ximea import Ximea
+            cam = Ximea()
         else:
             raise NotImplementedError(args.cam_driver)
     except Exception as e:
@@ -329,7 +332,7 @@ def add_dm_parameters(parser):
 
 def add_cam_parameters(parser):
     parser.add_argument(
-        '--cam-driver', choices=['sim', 'thorcam'], default='sim')
+        '--cam-driver', choices=['sim', 'thorcam', 'ximea'], default='sim')
     parser.add_argument('--cam-name', type=str, default=None, metavar='SERIAL')
     parser.add_argument(
         '--cam-list', action='store_true', help='List detected devices')
