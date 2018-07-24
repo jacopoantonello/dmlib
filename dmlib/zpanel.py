@@ -535,10 +535,6 @@ def load_settings(app, args, last_settings='.zpanel.json'):
     return dminfo, settings
 
 
-def apply_control(settings, dm, calib):
-    return ZernikeControl(dm, calib)
-
-
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     args = app.arguments()

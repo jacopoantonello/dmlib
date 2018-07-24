@@ -184,18 +184,7 @@ class ZernikeControl:
         return R
 
 
-control_classes = [ZernikeControl]
-control_names = [c.__name__ for c in control_classes]
-
-
-def apply_control(name, optsys, args):
-    if name not in control_names:
-        raise ValueError(
-            'Control name must be any of {}'.format(str(control_names)))
-    return control_classes[control_names.index(name)](optsys, args)
-
-
-def get_zernike_indeces_from_args(args):
+def get_noll_indices(args):
     if args.z_min > 0 and args.z_max > 0:
         mrange = np.arange(args.z_min, args.z_max + 1)
     else:
@@ -225,27 +214,14 @@ def get_zernike_indeces_from_args(args):
 
 def add_control_parameters(parser):
     parser.add_argument(
-        '--dm-ab', type=float, default=0.0, metavar='RMS',
-        help='Add random DM aberration of RMS [rad] (calibration lambda)')
-    parser.add_argument(
-        '--control', metavar='NAME',
-        choices=control_names, default=control_names[0],
-        help='Select a DM control')
-    parser.add_argument(
         '--noll-include', type=str, default=None, metavar='INDICES',
-        help='''
-Comma separated list of Noll indices to include, e.g.,
-1,2,3,4,5,6.
-NB: DO NOT USE SPACES in the list!''')
+        help='Comma separated list of Noll indices to include')
     parser.add_argument(
         '--noll-exclude', type=str, default=None, metavar='INDICES',
-        help='''
-Comma separated list of Noll indices to exclude, e.g.,
-1,5,6 to exclude piston and astigmatism.
-NB: DO NOT USE SPACES in the list!''')
+        help='Comma separated list of Noll indices to exclude')
     parser.add_argument(
-        '--z-min', type=int, default=5, metavar='MIN',
+        '--noll-min', type=int, default=5, metavar='MIN',
         help='Minimum Noll index to consider, use -1 to ignore')
     parser.add_argument(
-        '--z-max', type=int, default=10, metavar='MAX',
+        '--noll-max', type=int, default=6, metavar='MAX',
         help='Maximum Noll index to consider, use -1 to ignore')
