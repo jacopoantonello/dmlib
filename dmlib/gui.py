@@ -14,7 +14,7 @@ import traceback
 from matplotlib import ticker
 from os import path
 from multiprocessing import Process, Queue, Array, Value
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from numpy.linalg import norm
 
 from matplotlib.backends.backend_qt5agg import FigureCanvas
@@ -454,11 +454,11 @@ class Control(QMainWindow):
                     return
 
                 a2.plot(
-                    self.shared.f0f1[0]*1e3, self.shared.f0f1[1]*1e3,
+                    self.shared.fxcfyc[0]*1e3, self.shared.fxcfyc[1]*1e3,
                     'rx', markersize=6)
 
                 a2.plot(
-                    -self.shared.f0f1[0]*1e3, -self.shared.f0f1[1]*1e3,
+                    -self.shared.fxcfyc[0]*1e3, -self.shared.fxcfyc[1]*1e3,
                     'rx', markersize=6)
 
                 fstord, mag, wrapped, unwrapped = self.shared.get_phase()
@@ -808,7 +808,10 @@ class Control(QMainWindow):
                     ok = setup_aperture()
 
                 if ok and radius[0] > 0 and centre:
-                    status.setText('working for a couple of minutes...')
+                    status.setText(
+                        'computing calibration (~10min; {}) ...'.format((
+                            datetime.now() +
+                            timedelta(0, 60*10)).strftime('%H:%M')))
                     clistener.start()
                 else:
                     enable()
@@ -921,13 +924,14 @@ class Control(QMainWindow):
         bflat.setChecked(True)
         layout.addWidget(bflat, 3, 1)
         bloop = QCheckBox('closed-loop')
-        bloop.setChecked(True)
+        bloop.setChecked(False)
+        bloop.setEnabled(False)
         layout.addWidget(bloop, 3, 2)
         bclear = QPushButton('clear')
         layout.addWidget(bclear, 4, 3)
 
         disables = [
-            self.toolbox, brun, bflat, bzernike, bloop, bclear,
+            self.toolbox, brun, bflat, bzernike, bclear,
             bzernike, bsleep, bzsize]
         llistener = LoopListener(self.shared)
         calib = []
@@ -1275,7 +1279,7 @@ class Shared:
         self.ft_buf = Array('d', totpixs, lock=False)
         self.ft_ext = Array('d', 4, lock=False)
 
-        self.f0f1 = Array('d', 2, lock=False)
+        self.fxcfyc = Array('d', 2, lock=False)
 
         self.fstord_buf = Array('c', dbl_dtsize*totpixs, lock=False)
         self.fstord_ext = Array('d', 4, lock=False)
@@ -1352,8 +1356,8 @@ class Worker:
         cam.set_exposure(cam.get_exposure_range()[0])
 
         shared.make_static()
-        shared.f0f1[0] = 0.
-        shared.f0f1[1] = 0.
+        shared.fxcfyc[0] = 0.
+        shared.fxcfyc[1] = 0.
 
         fringe = FringeAnalysis(cam.shape(), cam.get_pixel_size())
         for i in range(4):
@@ -1455,7 +1459,7 @@ class Worker:
                         return
 
                 shared.ft[:] = fringe.logf2[:]
-                shared.f0f1[:] = fringe.f0f1[:]
+                shared.fxcfyc[:] = fringe.fxcfyc[:]
 
                 self.fill(shared.fstord_buf, fringe.logf3)
                 for i in range(4):
@@ -1609,7 +1613,7 @@ class Worker:
             img_zero = self.dset['data/images'][0, ...]
             self.fringe.estimate_centre(img_zero, img_centre)
             self.shared.oq.put((
-                'OK', self.fringe.centre[1], self.fringe.centre[0]))
+                'OK', self.fringe.centre[0], self.fringe.centre[1]))
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
             self.shared.oq.put((str(e),))
