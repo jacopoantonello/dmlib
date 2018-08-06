@@ -30,13 +30,13 @@ from PyQt5.QtWidgets import (
     QSizePolicy,
     )
 
-from . import version
-from .dmplot import DMPlot
-from .zpanel import ZernikePanel
-from .interf import FringeAnalysis
-from .calibration import WeightedLSCalib
-from .control import ZernikeControl
-from .core import add_dm_parameters, add_cam_parameters, open_dm, open_cam
+from dmlib import version
+from dmlib.dmplot import DMPlot
+from dmlib.zpanel import ZernikePanel
+from dmlib.interf import FringeAnalysis
+from dmlib.calibration import WeightedLSCalib
+from dmlib.control import ZernikeControl
+from dmlib.core import add_dm_parameters, add_cam_parameters, open_dm, open_cam
 
 
 class Control(QMainWindow):
