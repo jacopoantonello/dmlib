@@ -336,9 +336,10 @@ class ZernikeWindow(QMainWindow):
 
         return ax, ima, img, fig
 
-    def __init__(self, control, settings={}, parent=None):
+    def __init__(self, app, control, settings={}, parent=None):
         super().__init__()
         self.control = control
+        self.app = app
 
         self.setWindowTitle('ZernikeWindow ' + __version__)
         QShortcut(QKeySequence("Ctrl+Q"), self, self.close)
@@ -467,7 +468,7 @@ class ZernikeWindow(QMainWindow):
     def closeEvent(self, event):
         with open(path.join(Path.home(), '.zpanel.json'), 'w') as f:
             json.dump(self.save_settings(), f)
-        event.accept()
+        self.app.quit()
 
 
 def add_zpanel_arguments(parser):
@@ -483,11 +484,6 @@ def add_zpanel_arguments(parser):
 
 
 def load_settings(app, args, last_settings='.zpanel.json'):
-    def warn(str1):
-        e = QErrorMessage()
-        e.showMessage(str1)
-        app.exec_()
-
     def quit(str1):
         e = QErrorMessage()
         e.showMessage(str1)
@@ -560,7 +556,7 @@ if __name__ == '__main__':
 
     control = ZernikeControl(dm, calib)
 
-    zwindow = ZernikeWindow(control, settings)
+    zwindow = ZernikeWindow(app, control, settings)
     zwindow.show()
 
     sys.exit(app.exec_())
