@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-__version__ = '0.0.3+21.g17bad6a'
-__date__ = 'Fri Jul 13 15:58:31 2018 +0100'
-__commit__ = '17bad6acaeff634f96be049184a90401ae0b857d'
+__version__ = '0.0.3+33.gb570c95'
+__date__ = 'Mon Aug 6 16:12:23 2018 +0100'
+__commit__ = 'b570c9525e53171f5f9273dc2b950743249c398d'
 
 
 import h5py

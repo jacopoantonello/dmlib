@@ -310,6 +310,9 @@ class Control(QMainWindow):
         layout.addWidget(self.align_fig, 0, 0, 1, 0)
 
         self.tabs.addTab(frame, 'align')
+        self.tabs.setTabToolTip(
+            0,
+            'Align the DM, test actuators, and change the DM plot orientation')
 
         self.align_axes = self.align_fig.figure.subplots(2, 3)
         self.align_fig.figure.subplots_adjust(
@@ -332,20 +335,26 @@ class Control(QMainWindow):
         layout.addWidget(status, 2, 0, 1, 2)
 
         bauto = QCheckBox('auto')
+        bauto.setToolTip('Lock first order position automatically')
         bauto.setChecked(True)
         self.align_bauto = bauto
         layout.addWidget(bauto, 3, 0)
         brepeat = QCheckBox('repeat')
+        brepeat.setToolTip('Acquire data continuously or one time only')
         layout.addWidget(brepeat, 3, 1)
 
         listener = AlignListener(self.shared)
 
         bpoke = QCheckBox('poke')
+        bpoke.setToolTip('Poke actuators when running continuously')
         bsleep = QPushButton('sleep')
+        bsleep.setToolTip(
+            'Interval between setting the DM and acquiring an image')
         layout.addWidget(bpoke, 4, 0)
         layout.addWidget(bsleep, 4, 1)
         bunwrap = QCheckBox('unwrap')
         bunwrap.setChecked(True)
+        bunwrap.setToolTip('Perform phase extraction & unwrapping')
         layout.addWidget(bunwrap, 5, 0)
 
         disables = [
@@ -509,6 +518,9 @@ class Control(QMainWindow):
         layout.addWidget(self.dataacq_fig, 0, 0, 1, 0)
 
         self.tabs.addTab(frame, 'calibration')
+        self.tabs.setTabToolTip(
+            1, ('Acquire calibration data, define the DM pupil, ' +
+                'and compute calibrations'))
 
         self.dataacq_axes = self.dataacq_fig.figure.subplots(2, 2)
         self.dataacq_fig.figure.subplots_adjust(
@@ -521,8 +533,10 @@ class Control(QMainWindow):
         self.dataacq_axes[1, 1].set_title('unwrapped phi')
 
         brun = QPushButton('run')
+        brun.setToolTip('Collect new calibration data')
         bstop = QPushButton('stop')
         bwavelength = QPushButton('wavelength')
+        bwavelength.setToolTip('Calibration laser wavelength')
         layout.addWidget(brun, 1, 0)
         layout.addWidget(bstop, 1, 1)
         layout.addWidget(bwavelength, 1, 2)
@@ -531,15 +545,22 @@ class Control(QMainWindow):
         layout.addWidget(status, 2, 0, 1, 3)
 
         bplot = QPushButton('open')
+        bplot.setToolTip((
+            'Open an existing calibration file or plot the n-th measurement ' +
+            'of the current dataset'))
         bprev = QPushButton('prev')
+        bprev.setToolTip('Plot previous measurement')
         bnext = QPushButton('next')
+        bnext.setToolTip('Plot next measurement')
         layout.addWidget(bplot, 3, 0)
         layout.addWidget(bprev, 3, 1)
         layout.addWidget(bnext, 3, 2)
 
         baperture = QPushButton('aperture')
+        baperture.setToolTip('Define the pupil size over the DM surface')
         layout.addWidget(baperture, 4, 0)
         bcalibrate = QPushButton('calibrate')
+        bcalibrate.setToolTip('Compute a calibration file')
         layout.addWidget(bcalibrate, 4, 1)
         bclear = QPushButton('clear')
         layout.addWidget(bclear, 4, 2)
@@ -894,6 +915,8 @@ class Control(QMainWindow):
         layout.addWidget(self.test_fig, 0, 0, 1, 0)
 
         self.tabs.addTab(frame, 'test')
+        self.tabs.setTabToolTip(
+            2, ('Test a calibration file interferometrically'))
 
         self.test_axes = self.test_fig.figure.subplots(2, 2)
         self.test_fig.figure.subplots_adjust(
@@ -908,7 +931,12 @@ class Control(QMainWindow):
         brun = QPushButton('run')
         bstop = QPushButton('stop')
         bsleep = QPushButton('sleep')
+        bsleep.setToolTip(
+            'Interval between setting the DM and acquiring an image')
         bzsize = QPushButton('# Zernike')
+        bzsize.setToolTip((
+            'Maximum number of Zernike polynomials set by the DM (blue) ' +
+            'and measured by the interferometer (orange)'))
         layout.addWidget(brun, 1, 0)
         layout.addWidget(bstop, 1, 1)
         layout.addWidget(bsleep, 1, 2)
@@ -918,10 +946,13 @@ class Control(QMainWindow):
         layout.addWidget(status, 2, 0, 1, 3)
 
         bzernike = QPushButton('open')
+        bzernike.setToolTip('Open a calibration file')
         layout.addWidget(bzernike, 3, 0)
 
         bflat = QCheckBox('flat')
         bflat.setChecked(True)
+        bflat.setToolTip(
+            'Apply the flat value computed at calibration time')
         layout.addWidget(bflat, 3, 1)
         bloop = QCheckBox('closed-loop')
         bloop.setChecked(False)
