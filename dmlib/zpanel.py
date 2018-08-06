@@ -55,8 +55,7 @@ class ZernikePanel(QWidget):
         return d
 
     def update_gui(self):
-        phi = self.mul*self.rzern.eval_grid(self.z).reshape(
-            self.shape, order='F')
+        phi = self.mul*self.rzern.matrix(self.rzern.eval_grid(self.z))
         inner = phi[np.isfinite(phi)]
         min1 = inner.min()
         max1 = inner.max()
@@ -104,7 +103,7 @@ class ZernikePanel(QWidget):
         top1.setLayout(toplay1)
         self.fig = FigureCanvas(Figure(figsize=(2, 2)))
         self.ax = self.fig.figure.add_subplot(1, 1, 1)
-        phi = self.rzern.eval_grid(self.z).reshape(self.shape, order='F')
+        phi = self.rzern.matrix(self.rzern.eval_grid(self.z))
         self.im = self.ax.imshow(phi, origin='lower')
         self.cb = self.fig.figure.colorbar(self.im)
         self.cb.locator = ticker.MaxNLocator(nbins=5)
