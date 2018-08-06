@@ -25,59 +25,72 @@ HDF5_options = {
 def mgcentroid(xx, yy, img, mythr=0.0):
     assert(img.dtype == np.float)
 
-    mysum1 = np.sum((xx*img).ravel())
-    mysum2 = np.sum((yy*img).ravel())
-    mymass = np.sum(img.ravel())
-    return mysum1/mymass, mysum2/mymass
+    if mythr > 0.0:
+        img = img.copy()
+        img[img < mythr] = 0
+
+    xsum = (xx*img).sum()
+    ysum = (yy*img).sum()
+    mass = img.sum()
+
+    return xsum/mass, ysum/mass
 
 
 def make_cam_grid(sh, ps):
-    mm, nn = sh
-    wP, hP = ps
-    dd0 = np.arange(-mm//2, mm//2, 1)*wP
-    dd1 = np.arange(-nn//2, nn//2, 1)*hP
-    ext1 = (dd1.min(), dd1.max(), dd0.min(), dd0.max())
-    return dd0, dd1, ext1
+    ny, nx = sh  # grids are stored as (height, width) matrices
+    hP, wP = ps  # pixel dimensions are stored as (height, width)
+
+    yv = np.arange(-ny//2, ny//2, 1)*hP
+    xv = np.arange(-nx//2, nx//2, 1)*wP
+    # matplotlib's extent is (left, right, bottom, top) with origin='lower'
+    ext1 = (xv.min(), xv.max(), yv.min(), yv.max())
+
+    return xv, yv, ext1
 
 
 def make_ft_grid(sh, ps, pad=2):
-    mm, nn = sh
-    wP, hP = ps
-    ff0 = np.arange(-mm//2, mm//2, 1)/(pad*mm*wP)
-    ff1 = np.arange(-nn//2, nn//2, 1)/(pad*nn*hP)
-    ext2 = (ff1.min(), ff1.max(), ff0.min(), ff0.max())
-    return ff0, ff1, ext2
+    ny, nx = sh
+    hP, wP = ps
+
+    fy = np.arange(-ny//2, ny//2, 1)/(pad*ny*hP)
+    fx = np.arange(-nx//2, nx//2, 1)/(pad*nx*wP)
+    ext2 = (fx.min(), fx.max(), fy.min(), fy.max())
+
+    return fx, fy, ext2
 
 
-def ft(x, pad=2, alpha=.25):
-    mm, nn = x.shape
+def ft(f, pad=2, alpha=.25):
+    ny, nx = f.shape
 
     if alpha > 0:
-        w0 = tukey(x.shape[0], alpha, True)
-        w1 = tukey(x.shape[1], alpha, True)
-        x = x*(w0.reshape(-1, 1)*w1.reshape(1, -1))
+        wy = tukey(ny, alpha, True)
+        wx = tukey(nx, alpha, True)
+        f = f*(wy.reshape(-1, 1)*wx.reshape(1, -1))
 
-    x = np.hstack((np.zeros((mm, nn//pad)), x, np.zeros((mm, nn//pad))))
-    x = fftshift(fft(
-        fftshift(x, axes=1), axis=1), axes=1)[:, (nn//pad):(nn + nn//pad)]
-    x = np.vstack((np.zeros((mm//pad, nn)), x, np.zeros((mm//pad, nn))))
-    x = fftshift(fft(
-        fftshift(x, axes=0), axis=0), axes=0)[(mm//pad):(mm + mm//pad), :]
-    return x
+    f = np.hstack((np.zeros((ny, nx//pad)), f, np.zeros((ny, nx//pad))))
+    f = fftshift(fft(
+        fftshift(f, axes=1), axis=1), axes=1)[:, (nx//pad):(nx + nx//pad)]
+    f = np.vstack((np.zeros((ny//pad, nx)), f, np.zeros((ny//pad, nx))))
+    f = fftshift(fft(
+        fftshift(f, axes=0), axis=0), axes=0)[(ny//pad):(ny + ny//pad), :]
 
-
-def ift(y, pad=2):
-    l0, l1 = y.shape
-    y = np.hstack((np.zeros((l0, l1//pad)), y, np.zeros((l0, l1//pad))))
-    y = fftshift(
-        ifft(fftshift(y, axes=1), axis=1), axes=1)[:, (l1//pad):(l1 + l1//pad)]
-    y = np.vstack((np.zeros((l0//pad, l1)), y, np.zeros((l0//pad, l1))))
-    y = fftshift(
-        ifft(fftshift(y, axes=0), axis=0), axes=0)[(l0//pad):(l0 + l0//pad), :]
-    return y
+    return f
 
 
-def find_orders(ff0, ff1, img, mul=.9, maxcount=50):
+def ift(g, pad=2):
+    ny, nx = g.shape
+
+    g = np.hstack((np.zeros((ny, nx//pad)), g, np.zeros((ny, nx//pad))))
+    g = fftshift(
+        ifft(fftshift(g, axes=1), axis=1), axes=1)[:, (nx//pad):(nx + nx//pad)]
+    g = np.vstack((np.zeros((ny//pad, nx)), g, np.zeros((ny//pad, nx))))
+    g = fftshift(
+        ifft(fftshift(g, axes=0), axis=0), axes=0)[(ny//pad):(ny + ny//pad), :]
+
+    return g
+
+
+def find_orders(fx, fy, img, mul=.9, maxcount=50):
     selem = np.ones((6, 6))
     count = 0
     while count < maxcount:
@@ -95,12 +108,16 @@ def find_orders(ff0, ff1, img, mul=.9, maxcount=50):
         if unilabs.size >= 4:
             break
 
+        # extent = (fx.min(), fx.max(), fy.min(), fy.max())
+        # plt.figure(1)
         # plt.subplot(2, 2, 1)
-        # plt.imshow(img)
+        # plt.imshow(img, extent=ext, origin='lower')
         # plt.subplot(2, 2, 2)
-        # plt.imshow(thresh)
+        # plt.imshow(thresh, extent=ext, origin='lower')
         # plt.subplot(2, 2, 3)
-        # plt.imshow(labels, cmap='nipy_spectral')
+        # plt.imshow(
+        #     labels, cmap='nipy_spectral', extent=ext,
+        #     origin='lower')
         # plt.title(str(np.unique(labels).size))
         # plt.show()
 
@@ -108,42 +125,45 @@ def find_orders(ff0, ff1, img, mul=.9, maxcount=50):
         count += 1
 
     # plt.subplot(2, 2, 1)
-    # plt.imshow(img)
+    # plt.imshow(
+    #     img, extent=ext, origin='lower')
     # plt.subplot(2, 2, 2)
-    # plt.imshow(thresh)
+    # plt.imshow(
+    #     thresh, extent=ext, origin='lower')
     # plt.subplot(2, 2, 3)
-    # plt.imshow(labels, cmap='nipy_spectral')
+    # plt.imshow(
+    #     labels, cmap='nipy_spectral', extent=ext, origin='lower')
     # plt.title(str(np.unique(labels).size))
     # plt.show()
 
     if count >= maxcount:
         raise ValueError()
     else:
-        xx, yy = np.meshgrid(ff1, ff0)
+        ffx, ffy = np.meshgrid(fx, fy)
         fs = []
         norms = []
 
         for i in range(1, unilabs.size):
             img2 = img.copy()
             img2[labels != np.unique(labels)[i]] = 0
-            fi = np.array(mgcentroid(xx, yy, img2))
+            fi = np.array(mgcentroid(ffx, ffy, img2))
             fs.append(fi)
             norms.append(norm(fi))
 
         isort = np.array(norms).argsort()
-        f0 = (fs[isort[-1]][0] - fs[isort[-2]][0])/2
-        f1 = (fs[isort[-1]][1] - fs[isort[-2]][1])/2
+        fxc = (fs[isort[-1]][0] - fs[isort[-2]][0])/2
+        fyc = (fs[isort[-1]][1] - fs[isort[-2]][1])/2
 
         # plt.figure(5)
         # plt.subplot(1, 2, 1)
-        # plt.imshow(img2, extent=ext2, origin='lower')
+        # plt.imshow(img2, extent=ext, origin='lower')
         # plt.subplot(1, 2, 2)
-        # plt.imshow(img, extent=ext2, origin='lower')
-        # plt.plot(f0, f1, 'go', markersize=12)
-        # plt.plot(-f0, -f1, 'go', markersize=12)
+        # plt.imshow(img, extent=ext, origin='lower')
+        # plt.plot(fxc, fyc, 'go', markersize=12)
+        # plt.plot(-fxc, -fyc, 'go', markersize=12)
         # plt.show()
 
-        return f0, f1
+        return fxc, fyc
 
 
 def nextpow2(n):
@@ -152,64 +172,61 @@ def nextpow2(n):
     return 2**m_i
 
 
-def extract_order(fi, ff0, ff1, f0, f1, ps):
+def extract_order(fi, fx, fy, fxc, fyc, ps):
     # TODO check ext3 and the axes
-    wP, hP = ps
-    mm, nn = fi.shape
+    hP, wP = ps
+    ny, nx = fi.shape
 
-    i1 = int(np.round(f0*(2*nn*hP)))
-    i0 = int(np.round(f1*(2*mm*wP)))
-    fi = np.roll(fi, (i0, i1), axis=(0, 1))
+    iy = int(np.round(fyc*(2*ny*hP)))
+    ix = int(np.round(fxc*(2*nx*wP)))
+    fi = np.roll(fi, (iy, ix), axis=(0, 1))
 
-    l0 = int(i0)
-    l1 = int(i1)
-
-    if l0 > 0:
-        i0a = mm//2 - l0
-        i0b = mm//2 + l0
+    if ix > 0:
+        ixa = nx//2 - ix
+        ixb = nx//2 + ix
     else:
-        i0a = mm//2 + l0
-        i0b = mm//2 - l0
-    if l1 > 0:
-        i1a = nn//2 - l1
-        i1b = nn//2 + l1
+        ixa = nx//2 + ix
+        ixb = nx//2 - ix
+    if iy > 0:
+        iya = ny//2 - iy
+        iyb = ny//2 + iy
     else:
-        i1a = nn//2 + l1
-        i1b = nn//2 - l1
+        iya = ny//2 + iy
+        iyb = ny//2 - iy
 
-    fi = fi[i0a:i0b, i1a:i1b]
-    ext3 = (ff1[i1a], ff1[i1b], ff0[i0a], ff0[i0b])
+    fi = fi[iya:iyb, ixa:ixb]
+    ext3 = (fx[ixa], fx[ixb - 1], fy[iya], fy[iyb - 1])
 
     return fi, ext3
 
 
-def repad_order(f3, ff0, ff1, pad=2, alpha=.25):
-    dff0 = np.diff(ff0)[0]
-    dff1 = np.diff(ff1)[0]
-    w1 = tukey(f3.shape[0], alpha, True)
-    w2 = tukey(f3.shape[1], alpha, True)
-    w = w1.reshape(-1, 1)*w2.reshape(1, -1)
+def repad_order(f3, fx, fy, pad=2, alpha=.25):
+    dfx = np.diff(fx)[0]
+    dfy = np.diff(fy)[0]
+    wx = tukey(f3.shape[1], alpha, True)
+    wy = tukey(f3.shape[0], alpha, True)
+    w = wy.reshape(-1, 1)*wx.reshape(1, -1)
 
-    mm0 = nextpow2(f3.shape[0])
-    nn0 = nextpow2(f3.shape[1])
-    l0 = int(mm0)
-    l1 = int(nn0)
-    off1 = (l0 - f3.shape[0])//2
-    off2 = off1 + f3.shape[0]
-    off3 = (l1 - f3.shape[1])//2
-    off4 = off3 + f3.shape[1]
-    f4 = np.zeros(((l0, l1)), dtype=np.complex)
-    f4[off1:off2, off3:off4] = f3*w
+    x0 = int(nextpow2(f3.shape[1]))
+    y0 = int(nextpow2(f3.shape[0]))
 
-    dd0 = np.arange(-mm0//2, mm0//2, 1)/(pad*mm0*dff0)
-    dd1 = np.arange(-nn0//2, nn0//2, 1)/(pad*nn0*dff1)
-    ext4 = (dd1.min(), dd1.max(), dd0.min(), dd0.max())
+    offxa = (x0 - f3.shape[1])//2
+    offxb = offxa + f3.shape[1]
+    offya = (y0 - f3.shape[0])//2
+    offyb = offya + f3.shape[0]
+    f4 = np.zeros((y0, x0), dtype=np.complex)
+    f4[offya:offyb, offxa:offxb] = f3*w
 
-    return f4, dd0, dd1, ext4
+    yy = np.arange(-y0//2, y0//2, 1)/(pad*y0*dfy)
+    xx = np.arange(-x0//2, x0//2, 1)/(pad*x0*dfx)
+    ext4 = (xx.min(), xx.max(), yy.min(), yy.max())
+
+    return f4, xx, yy, ext4
 
 
 def estimate_aperture_centre(
-        dd0, dd1, zero_mag, zero_phi, centre_mag, centre_phi):
+        xv, yv, zero_mag, zero_phi, centre_mag, centre_phi):
+
     _, e0 = np.histogram(zero_mag, bins=10)
     mask0 = zero_mag > e0[1]
     _, ec = np.histogram(centre_mag, bins=10)
@@ -218,8 +235,8 @@ def estimate_aperture_centre(
 
     dd = np.linspace(-1, 1, 64)
     selem = np.ones((dd.size, dd.size))
-    [xx, yy] = np.meshgrid(dd, dd)
-    rr = np.sqrt(xx**2 + yy**2)
+    [xx1, yy1] = np.meshgrid(dd, dd)
+    rr = np.sqrt(xx1**2 + yy1**2)
     selem = rr < 1
     mask = morphology.binary_erosion(mask, selem)
     mask = morphology.binary_opening(mask, selem)
@@ -234,29 +251,33 @@ def estimate_aperture_centre(
     _, e2 = np.histogram(delta, bins=10)
     delta[delta < e2[3]] = 0
 
-    xx, yy = np.meshgrid(dd1, dd0)
+    xx, yy = np.meshgrid(xv, yv)
     centre = mgcentroid(xx, yy, delta)
-    return np.array((centre[1], centre[0]))
+
+    return np.array(centre)
 
 
-def call_unwrap(phase, mask=None):
+def call_unwrap(phase, mask=None, seed=None):
     if mask is not None:
+        assert(mask.shape == phase.shape)
         masked = np.ma.masked_array(phase, mask)
-        phi = np.array(unwrap_phase(masked))
+        phi = np.array(unwrap_phase(masked, seed=seed))
         # phi[mask] = phi[np.invert(mask)].mean()
         phi[mask] = 0
         return phi
     else:
-        return np.array(unwrap_phase(phase))
+        return np.array(unwrap_phase(phase, seed=seed))
 
 
 class FringeAnalysis:
 
-    f0f1 = None
+    order_shape = None
+
+    fxcfyc = None
     img = None
     ext3 = None
-    dd0 = None
-    dd1 = None
+    xv = None
+    yv = None
     ext4 = None
     gp = None
     unwrapped = None
@@ -275,30 +296,35 @@ class FringeAnalysis:
     def analyse(
             self, img, auto_find_orders=False, store_logf2=False,
             store_logf3=False, store_gp=False, store_mag=False,
-            store_wrapped=False, do_unwrap=True, use_mask=True):
+            store_wrapped=False, do_unwrap=True, use_mask=True,
+            seed=None):
 
         self.img = img
         fimg = ft(img)
 
-        if store_logf2 or auto_find_orders or self.f0f1 is None:
+        if store_logf2 or auto_find_orders or self.fxcfyc is None:
             self.logf2 = np.log(np.abs(fimg))
         else:
             self.logf2 = None
 
-        if self.f0f1 is None or auto_find_orders:
-            self.f0f1 = find_orders(
+        if self.fxcfyc is None or auto_find_orders:
+            self.fxcfyc = find_orders(
                 self.ft_grid[0], self.ft_grid[1], self.logf2)
 
         f3, self.ext3 = extract_order(
-            fimg, self.ft_grid[0], self.ft_grid[1], self.f0f1[0],
-            self.f0f1[1], self.P)
+            fimg, self.ft_grid[0], self.ft_grid[1],
+            self.fxcfyc[0], self.fxcfyc[1], self.P)
+        if auto_find_orders or self.order_shape is None:
+            self.order_shape = f3.shape
+        else:
+            assert(f3.shape == self.order_shape)
 
         if store_logf3:
             self.logf3 = np.log(np.abs(f3))
         else:
             self.logf3 = None
 
-        f4, self.dd0, self.dd1, self.ext4 = repad_order(
+        f4, self.xv, self.yv, self.ext4 = repad_order(
             f3, self.ft_grid[0], self.ft_grid[1])
 
         gp = ift(f4)
@@ -326,7 +352,7 @@ class FringeAnalysis:
                 mask = (mag < edges[1]).reshape(mag.shape)
             else:
                 mask = self.mask
-            self.unwrapped = call_unwrap(wrapped, mask)
+            self.unwrapped = call_unwrap(wrapped, mask, seed=seed)
 
     @classmethod
     def load_h5py(cls, f, prepend=None):
@@ -349,16 +375,16 @@ class FringeAnalysis:
             f[prefix + 'ft_grid1'][()],
             f[prefix + 'ft_grid2'][()])
 
-        if prefix + 'f0f1' in f:
-            z.f0f1 = f[prefix + 'f0f1'][()]
+        if prefix + 'fxcfyc' in f:
+            z.fxcfyc = f[prefix + 'fxcfyc'][()]
         if prefix + 'img' in f:
             z.img = f[prefix + 'img'][()]
         if prefix + 'ext3' in f:
             z.ext3 = f[prefix + 'ext3'][()]
-        if prefix + 'dd0' in f:
-            z.dd0 = f[prefix + 'dd0'][()]
-        if prefix + 'dd1' in f:
-            z.dd1 = f[prefix + 'dd1'][()]
+        if prefix + 'xv' in f:
+            z.xv = f[prefix + 'xv'][()]
+        if prefix + 'yv' in f:
+            z.yv = f[prefix + 'yv'][()]
         if prefix + 'ext4' in f:
             z.ext4 = f[prefix + 'ext4'][()]
         if prefix + 'gp' in f:
@@ -408,21 +434,21 @@ class FringeAnalysis:
         params['data'] = self.ft_grid[2]
         f.create_dataset(prefix + 'ft_grid2', **params)
 
-        if self.f0f1 is not None:
-            params['data'] = self.f0f1
-            f.create_dataset(prefix + 'f0f1', **params)
+        if self.fxcfyc is not None:
+            params['data'] = self.fxcfyc
+            f.create_dataset(prefix + 'fxcfyc', **params)
         if self.img is not None:
             params['data'] = self.img
             f.create_dataset(prefix + 'img', **params)
         if self.ext3 is not None:
             params['data'] = self.ext3
             f.create_dataset(prefix + 'ext3', **params)
-        if self.dd0 is not None:
-            params['data'] = self.dd0
-            f.create_dataset(prefix + 'dd0', **params)
-        if self.dd1 is not None:
-            params['data'] = self.dd1
-            f.create_dataset(prefix + 'dd1', **params)
+        if self.xv is not None:
+            params['data'] = self.xv
+            f.create_dataset(prefix + 'xv', **params)
+        if self.yv is not None:
+            params['data'] = self.yv
+            f.create_dataset(prefix + 'yv', **params)
         if self.ext4 is not None:
             params['data'] = self.ext4
             f.create_dataset(prefix + 'ext4', **params)
@@ -440,14 +466,19 @@ class FringeAnalysis:
 
     def get_unit_aperture(self):
         xx, yy = np.meshgrid(
-            (self.dd1 - self.centre[1])/self.radius,
-            (self.dd0 - self.centre[0])/self.radius)
-        return xx, yy, (self.dd1.size, self.dd0.size)
+            (self.xv - self.centre[0])/self.radius,
+            (self.yv - self.centre[1])/self.radius)
+        assert(xx.shape[1] == self.xv.size)
+        assert(xx.shape[0] == self.yv.size)
+        assert(yy.shape[1] == self.xv.size)
+        assert(yy.shape[0] == self.yv.size)
+        return xx, yy, (self.yv.size, self.xv.size)
 
     def update_radius(self, radius):
         if radius > 0. and self.centre is not None:
             [xx, yy] = np.meshgrid(
-                self.dd1 - self.centre[1], self.dd0 - self.centre[0])
+                self.xv - self.centre[0],
+                self.yv - self.centre[1])
             self.mask = np.sqrt(xx**2 + yy**2) >= radius
             self.radius = radius
         else:
@@ -467,6 +498,5 @@ class FringeAnalysis:
         phi_centre = self.unwrapped
 
         centre = estimate_aperture_centre(
-            self.dd0, self.dd1, mag_zero, phi_zero,
-            mag_centre, phi_centre)
+            self.xv, self.yv, mag_zero, phi_zero, mag_centre, phi_centre)
         self.centre = centre
