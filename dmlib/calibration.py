@@ -68,15 +68,17 @@ class WeightedLSCalib:
 
         nu, ns = U.shape
         xx, yy, shape = fringe.get_unit_aperture()
+        assert(xx.shape == shape)
+        assert(yy.shape == shape)
         cart = RZern(n_radial)
         cart.make_cart_grid(xx, yy)
 
-        zfm = np.isfinite(cart.ZZ[:, 0]).reshape(shape, order='F')
+        zfm = cart.matrix(np.isfinite(cart.ZZ[:, 0]))
         mask = np.invert(zfm)
         zfA1 = np.zeros((zfm.sum(), cart.nk))
         zfA2 = np.zeros_like(cart.ZZ)
         for i in range(zfA1.shape[1]):
-            tmp = cart.ZZ[:, i].reshape(shape, order='F')
+            tmp = cart.matrix(cart.ZZ[:, i])
             zfA1[:, i] = tmp[np.invert(mask)].ravel()
             zfA2[:, i] = tmp.ravel()
 
