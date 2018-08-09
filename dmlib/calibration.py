@@ -5,9 +5,10 @@ import numpy as np
 
 from h5py import File
 from scipy.interpolate import interp1d
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 from numpy.linalg import lstsq, pinv
 from scipy.linalg import cholesky, solve_triangular
+from time import time
 from skimage.restoration import unwrap_phase
 
 from zernike.czernike import RZern
@@ -64,8 +65,10 @@ class WeightedLSCalib:
     def calibrate(
             self, U, images, fringe, wavelength, dm_serial, dm_transform,
             cam_pixel_size, cam_serial, dmplot_txs, dname, hash1,
-            n_radial=25, alpha=.75, lambda1=5e-3):
+            n_radial=25, alpha=.75, lambda1=5e-3, status_cb=False):
 
+        if status_cb:
+            status_cb('Computing Zernike polynomials ...')
         nu, ns = U.shape
         xx, yy, shape = fringe.get_unit_aperture()
         assert(xx.shape == shape)
@@ -73,6 +76,8 @@ class WeightedLSCalib:
         cart = RZern(n_radial)
         cart.make_cart_grid(xx, yy)
 
+        if status_cb:
+            status_cb('Computing masks ...')
         zfm = cart.matrix(np.isfinite(cart.ZZ[:, 0]))
         mask = np.invert(zfm)
         zfA1 = np.zeros((zfm.sum(), cart.nk))
@@ -87,9 +92,37 @@ class WeightedLSCalib:
         assert(np.allclose(mask, mask1))
         assert(np.allclose(fringe.mask, mask1))
 
+        if status_cb:
+            status_cb('Computing phases 0.00% ...')
+
+        def make_progress():
+            prevts = [time()]
+
+            def f(pc):
+                t = time()
+                dt = t - prevts[0]
+                prevts[0] = t
+                if dt > 1.5 or pc > 99:
+                    status_cb(f'Computing phases {pc:.2f}% ...')
+            return f
+
         with Pool() as p:
-            phases = np.array(p.map(
-                PhaseExtract(fringe), [images[i, ...] for i in range(ns)]))
+            if status_cb:
+                chunksize = ns//(4*cpu_count())
+                if chunksize < 4:
+                    chunksize = 4
+                phases = []
+                progress_fun = make_progress()
+                for i, phi in enumerate(p.imap(
+                        PhaseExtract(fringe),
+                        [images[i, ...] for i in range(ns)],
+                        chunksize), 1):
+                    phases.append(phi)
+                    progress_fun(100*i/ns)
+            else:
+                phases = p.map(
+                    PhaseExtract(fringe), [images[i, ...] for i in range(ns)])
+            phases = np.array(phases)
 
         inds0 = fix_principal_val(U, phases)
         inds1 = np.setdiff1d(np.arange(ns), inds0)
@@ -98,12 +131,16 @@ class WeightedLSCalib:
         z0 = lstsq(np.dot(zfA1.T, zfA1), np.dot(zfA1.T, phi0), rcond=None)[0]
         phases -= phi0.reshape(1, -1)
 
+        if status_cb:
+            status_cb('Computing least-squares matrices ...')
         nphi = phases.shape[1]
         uiuiT = np.zeros((nu, nu))
         phiiuiT = np.zeros((nphi, nu))
         for i in inds1:
             uiuiT += np.dot(U[:, [i]], U[:, [i]].T)
             phiiuiT += np.dot(phases[[i], :].T, U[:, [i]].T)
+        if status_cb:
+            status_cb('Solving least-squares ...')
         A = np.dot(zfA1.T, zfA1)
         C = np.dot(zfA1.T, phiiuiT)
         B = uiuiT
@@ -120,6 +157,8 @@ class WeightedLSCalib:
 
         mvaf = vaf(phases.T, zfA1@H@U)
 
+        if status_cb:
+            status_cb('Applying regularisation ...')
         if alpha > 0.:
             # weighted least squares
             rr = np.sqrt(xx**2 + yy**2)

@@ -804,17 +804,16 @@ class Control(QMainWindow):
 
             return f
 
+        clistener = CalibListener(self.shared, dataset, centre, radius)
+
         def f6():
             def f(reply):
-                if reply[0] == 'OK':
-                    status.setText('{} {:.2f}%'.format(*reply[1:]))
-                else:
-                    status.setText(reply[0])
-                enable()
-                bstop.setEnabled(True)
+                status.setText(reply[1])
+                if reply[0] == 'OK' or reply[0] == 'ERR':
+                    enable()
+                    bstop.setEnabled(True)
             return f
 
-        clistener = CalibListener(self.shared, dataset, centre, radius)
         clistener.sig_update.connect(f6())
 
         def f5():
@@ -1221,7 +1220,11 @@ class CalibListener(QThread):
 
     def run(self):
         self.shared.iq.put(('calibrate', self.dset[0], self.radius[0]))
-        self.sig_update.emit(self.shared.oq.get())
+        while True:
+            result = self.shared.oq.get()
+            self.sig_update.emit(result)
+            if result[0] == 'OK' or result[0] == 'ERR':
+                break
 
 
 class DataAcqListener(QThread):
@@ -1585,13 +1588,20 @@ class Worker:
             dmplot_txs = self.dset['dmplot/txs'][()]
             hash1 = version.hash_file(dname)
 
+            def make_notify():
+                def f(m, cmd='UP'):
+                    self.shared.oq.put((cmd, m))
+                return f
+
+            notify_fun = make_notify()
+
             self.fringe.update_radius(radius)
             calib = WeightedLSCalib()
             calib.calibrate(
                 self.dset['data/U'][()], self.dset['data/images'],
                 self.fringe, wavelength, dm_serial, dm_transform,
                 cam_pixel_size, cam_serial, dmplot_txs, dname,
-                hash1)
+                hash1, status_cb=notify_fun)
 
             now = datetime.now(timezone.utc)
             libver = 'latest'
@@ -1599,14 +1609,17 @@ class Worker:
                 path.dirname(dname), path.basename(dname).rstrip('.h5') +
                 '-{:.3f}mm'.format(radius/1000) + '.h5')
 
+            notify_fun(f'Saving {h5fn} ...')
             with h5py.File(h5fn, 'w', libver=libver) as h5f:
                 version.write_h5_header(h5f, libver, now)
                 calib.save_h5py(h5f)
 
-            self.shared.oq.put(('OK', h5fn, calib.mvaf.mean()))
+            notify_fun(
+                f'Saved {h5fn}; Quality {calib.mvaf.mean():.2f}%',
+                cmd='OK')
         except Exception as e:
             traceback.print_exc(file=sys.stdout)
-            self.shared.oq.put((str(e),))
+            self.shared.oq.put(('ERR', 'Error: ' + str(e)))
 
     def open_calib(self, dname):
         if self.calib_name is None or self.calib_name != dname:

@@ -11,7 +11,7 @@ Make sure you have setup your `~/.ssh/config` as in the [wiki](https://uni.eng.o
 
     $ git clone --recurse-submodules dop-git.eng.ox.ac.uk:diffusion/8/dmlib.git
 
-Install the `devwraps` and `sensorless` dependencies, then install this package
+Install the `devwraps` and `zernike` dependencies, then install this package
 
     $ python setup.py bdist_wheel
     $ pip install dist\dmlib-*.whl
