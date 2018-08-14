@@ -1736,8 +1736,7 @@ class Worker:
             h5f['dmplot/txs'] = dmplot_txs
 
             h5f['cam/serial'] = cam.get_serial_number()
-            h5f['cam/camera_info'] = str(cam.get_camera_info())
-            h5f['cam/sensor_info'] = str(cam.get_sensor_info())
+            h5f['cam/settings'] = cam.get_settings()
             h5f['cam/pixel_size'] = cam.get_pixel_size()
             h5f['cam/pixel_size'].attrs['units'] = 'um'
             h5f['cam/exposure'] = cam.get_exposure()
