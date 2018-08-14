@@ -789,7 +789,8 @@ class Control(QMainWindow):
                     self.shared.iq.put(('aperture', dataset[0], radius[0]))
                     ndata = check_err()
                     if ndata == -1:
-                        clearup()
+                        radius[0] = 0.
+                        centre[0] = None
                         return False
                     centre[0] = ndata[0]
 
@@ -1589,11 +1590,6 @@ class Worker:
 
             notify_fun = make_notify()
 
-            # HERE
-            names = self.dset['align/names'][()]
-            img_centre = self.dset['align/images'][names.index('centre'), ...]
-            img_zero = self.dset['data/images'][0, ...]
-            self.fringe.estimate_aperture(img_zero, img_centre, radius)
             calib = WeightedLSCalib()
             calib.calibrate(
                 self.dset['data/U'][()], self.dset['data/images'],
