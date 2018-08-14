@@ -22,12 +22,12 @@ HDF5_options = {
     'compression_opts': 9}
 
 
-def mgcentroid(xx, yy, img, mythr=0.0):
+def mgcentroid(xx, yy, img, thr=0.0):
     assert(img.dtype == np.float)
 
-    if mythr > 0.0:
+    if thr > 0.0:
         img = img.copy()
-        img[img < mythr] = 0
+        img[img < thr] = 0
 
     xsum = (xx*img).sum()
     ysum = (yy*img).sum()
@@ -225,36 +225,52 @@ def repad_order(f3, fx, fy, pad=2, alpha=.25):
 
 
 def estimate_aperture_centre(
-        xv, yv, zero_mag, zero_phi, centre_mag, centre_phi):
+        xv, yv, zero_mag, zero_phi, centre_mag, centre_phi, radius):
 
-    _, e0 = np.histogram(zero_mag, bins=10)
-    mask0 = zero_mag > e0[1]
-    _, ec = np.histogram(centre_mag, bins=10)
-    maskc = centre_mag > ec[1]
-    mask = mask0*maskc
+    def make_diff(a):
+        d1 = np.vstack([np.zeros((1, a.shape[1])), np.diff(a, axis=0)])
+        d2 = np.hstack([np.zeros((a.shape[0], 1)), np.diff(a, axis=1)])
+        return d1**2 + d2**2
 
-    dd = np.linspace(-1, 1, 64)
-    selem = np.ones((dd.size, dd.size))
-    [xx1, yy1] = np.meshgrid(dd, dd)
+    def make_delta(a, b):
+        cm = a.mean() - b.mean()
+        k = round(cm/(2*np.pi))
+        c1 = a - b - 2*k*np.pi
+        c2 = c1 - c1.mean()
+        return c2
+
+    def make_rr(c, xx1, yy1, radius):
+        rr = np.sqrt(xx1**2 + yy1**2) < radius
+        rr1 = np.sqrt(xx1**2 + yy1**2) < .1*radius
+        rr2 = np.sqrt(xx1**2 + yy1**2) > .9*radius
+        s1 = c[np.logical_and(rr, rr1)].mean()
+        s2 = c[np.logical_and(rr, rr2)].mean()
+        if s1 < s2:
+            c = -c
+        return c, rr
+
+    delta = make_delta(centre_phi, zero_phi)
+    dc = make_diff(delta)
+
+    dd = np.linspace(-1, 1, 16)
+    xx1, yy1 = np.meshgrid(dd, dd)
     rr = np.sqrt(xx1**2 + yy1**2)
     selem = rr < 1
-    mask = morphology.binary_erosion(mask, selem)
-    mask = morphology.binary_opening(mask, selem)
-
-    phi0 = zero_phi*mask
-    phic = centre_phi*mask
-
-    delta = phi0 - phic
-    delta[mask] = delta[mask] - delta[mask].mean()
-    delta[np.invert(mask)] = 0
-    delta = np.abs(delta)
-    _, e2 = np.histogram(delta, bins=10)
-    delta[delta < e2[3]] = 0
+    mask0 = morphology.binary_opening(dc, selem)
+    mask = morphology.convex_hull_image(mask0)
 
     xx, yy = np.meshgrid(xv, yv)
-    centre = mgcentroid(xx, yy, delta)
+    cc1 = mgcentroid(xx, yy, zero_mag*mask)
 
-    return np.array(centre)
+    xx1, yy1 = np.meshgrid(xv - cc1[0], yv - cc1[1])
+    delta2, rr = make_rr(delta, xx1, yy1, radius)
+
+    delta2 = delta2[rr]
+    delta2 -= delta2.min()
+    _, e = np.histogram(delta2.ravel(), bins=10)
+    cc2 = mgcentroid(xx[rr], yy[rr], delta2, thr=e[7])
+
+    return np.array(cc2)
 
 
 def call_unwrap(phase, mask=None, seed=None):
@@ -392,19 +408,10 @@ class FringeAnalysis:
         if prefix + 'unwrapped' in f:
             z.unwrapped = f[prefix + 'unwrapped'][()]
 
-        make_mask = 1
-        if prefix + 'centre' in f:
+        if prefix + 'centre' in f and prefix + 'radius' in f:
             z.centre = f[prefix + 'centre'][()]
-            make_mask *= 1
-        else:
-            make_mask *= 0
-        if prefix + 'radius' in f:
             z.radius = f[prefix + 'radius'][()]
-            make_mask *= 1
-        else:
-            make_mask *= 0
-        if make_mask:
-            z.update_radius(z.radius)
+            z._make_mask()
 
         return z
 
@@ -474,29 +481,42 @@ class FringeAnalysis:
         assert(yy.shape[0] == self.yv.size)
         return xx, yy, (self.yv.size, self.xv.size)
 
-    def update_radius(self, radius):
-        if radius > 0. and self.centre is not None:
-            [xx, yy] = np.meshgrid(
+    def _make_mask(self):
+        if self.radius > 0.:
+            xx, yy = np.meshgrid(
                 self.xv - self.centre[0],
                 self.yv - self.centre[1])
-            self.mask = np.sqrt(xx**2 + yy**2) >= radius
-            self.radius = radius
+            self.xx = xx
+            self.yy = yy
+            self.mask = np.sqrt(xx**2 + yy**2) >= self.radius
         else:
             self.mask = None
             self.radius = 0.
 
-    def estimate_centre(self, img_zero, img_centre):
-        self.analyse(
-            img_zero, auto_find_orders=False, do_unwrap=True, use_mask=False,
-            store_mag=True)
-        mag_zero = self.mag
-        phi_zero = self.unwrapped
-        self.analyse(
-            img_centre, auto_find_orders=False, do_unwrap=True,
-            use_mask=False, store_mag=True)
-        mag_centre = self.mag
-        phi_centre = self.unwrapped
+    def clear_aperture(self):
+        self.centre = None
+        self.mask = None
+        self.radius = 0.
 
-        centre = estimate_aperture_centre(
-            self.xv, self.yv, mag_zero, phi_zero, mag_centre, phi_centre)
-        self.centre = centre
+    def estimate_aperture(self, img_zero, img_centre, radius):
+        if radius <= 0.:
+            self.clear_aperture()
+        else:
+            self.analyse(
+                img_zero, auto_find_orders=False, do_unwrap=True,
+                use_mask=False, store_mag=True)
+            mag_zero = self.mag
+            phi_zero = self.unwrapped
+            self.analyse(
+                img_centre, auto_find_orders=False, do_unwrap=True,
+                use_mask=False, store_mag=True)
+            mag_centre = self.mag
+            phi_centre = self.unwrapped
+
+            centre = estimate_aperture_centre(
+                self.xv, self.yv, mag_zero, phi_zero, mag_centre,
+                phi_centre, radius)
+
+            self.centre = centre
+            self.radius = radius
+            self._make_mask()
