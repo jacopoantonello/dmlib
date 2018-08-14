@@ -1551,9 +1551,9 @@ class Worker:
                 self.fringe.analyse(
                     img, auto_find_orders=True, do_unwrap=True,
                     use_mask=False)
-            except Exception as e:
+            except Exception:
                 traceback.print_exc(file=sys.stdout)
-                self.shared.oq.put((str(e),))
+                self.shared.oq.put(('Failed to detect first orders',))
                 return -1
             return 0
         else:
@@ -1798,7 +1798,7 @@ class Worker:
                     print('run_dataacq', 'iteration')
 
                     stopcmd = shared.iq.get()[1]
-                    shared.oq.put('')
+                    shared.oq.put(('',))
 
                     if stopcmd:
                         print('run_dataacq', 'stopcmd')

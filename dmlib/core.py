@@ -213,17 +213,18 @@ def attempt_open(app, what, devname, devtype):
         what.open(devname)
     except Exception:
         exit_error(
-            app, 'unable to open {} {}'.format(devtype, devname),
+            app, f'unable to open {devtype} {devname}',
             ValueError)
 
 
-def exit_exception(app, exc):
+def exit_exception(app, txt, exc):
+    msg = txt + ' ' + str(exc)
     if app:
         e = QErrorMessage()
-        e.showMessage(str(exc))
+        e.showMessage(msg)
         sys.exit(app.exec_())
     else:
-        raise exc(str(exc))
+        raise exc(msg)
 
 
 def exit_error(app, text, exc):
@@ -250,7 +251,8 @@ def open_cam(app, args):
         else:
             raise NotImplementedError(args.cam_driver)
     except Exception as e:
-        exit_exception(app, e)
+        exit_exception(
+            app, f'error loading camera {args.cam_driver} drivers', e)
 
     if args.cam_list:
         devs = cam.get_devices()
@@ -289,7 +291,8 @@ def open_dm(app, args, dm_transform=None):
         else:
             raise NotImplementedError(args.dm_driver)
     except Exception as e:
-        exit_exception(app, e)
+        exit_exception(
+            app, f'error loading dm {args.cam_driver} drivers', e)
 
     if args.dm_list:
         devs = dm.get_devices()
