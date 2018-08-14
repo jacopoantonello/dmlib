@@ -69,15 +69,19 @@ class WeightedLSCalib:
 
         if status_cb:
             status_cb('Computing Zernike polynomials ...')
+        t1 = time()
         nu, ns = U.shape
         xx, yy, shape = fringe.get_unit_aperture()
         assert(xx.shape == shape)
         assert(yy.shape == shape)
         cart = RZern(n_radial)
         cart.make_cart_grid(xx, yy)
+        print(
+            f'calibrate(): Computing Zernike polynomials {time() - t1:.1f}')
 
         if status_cb:
             status_cb('Computing masks ...')
+        t1 = time()
         zfm = cart.matrix(np.isfinite(cart.ZZ[:, 0]))
         mask = np.invert(zfm)
         zfA1 = np.zeros((zfm.sum(), cart.nk))
@@ -86,6 +90,8 @@ class WeightedLSCalib:
             tmp = cart.matrix(cart.ZZ[:, i])
             zfA1[:, i] = tmp[np.invert(mask)].ravel()
             zfA2[:, i] = tmp.ravel()
+        print(
+            f'calibrate(): Computing masks {time() - t1:.1f}')
 
         # TODO remove me
         mask1 = np.sqrt(xx**2 + yy**2) >= 1.
@@ -94,6 +100,7 @@ class WeightedLSCalib:
 
         if status_cb:
             status_cb('Computing phases 0.00% ...')
+        t1 = time()
 
         def make_progress():
             prevts = [time()]
@@ -130,17 +137,23 @@ class WeightedLSCalib:
         phi0 = phases[inds0, :].mean(axis=0)
         z0 = lstsq(np.dot(zfA1.T, zfA1), np.dot(zfA1.T, phi0), rcond=None)[0]
         phases -= phi0.reshape(1, -1)
+        print(
+            f'calibrate(): Computing phases {time() - t1:.1f}')
 
         if status_cb:
             status_cb('Computing least-squares matrices ...')
+        t1 = time()
         nphi = phases.shape[1]
         uiuiT = np.zeros((nu, nu))
         phiiuiT = np.zeros((nphi, nu))
         for i in inds1:
             uiuiT += np.dot(U[:, [i]], U[:, [i]].T)
             phiiuiT += np.dot(phases[[i], :].T, U[:, [i]].T)
+        print(
+            f'calibrate(): Computing least-squares matrices {time() - t1:.1f}')
         if status_cb:
             status_cb('Solving least-squares ...')
+        t1 = time()
         A = np.dot(zfA1.T, zfA1)
         C = np.dot(zfA1.T, phiiuiT)
         B = uiuiT
@@ -156,9 +169,12 @@ class WeightedLSCalib:
             return 100*(1 - np.var(y - ye, axis=1)/np.var(y, axis=1))
 
         mvaf = vaf(phases.T, zfA1@H@U)
+        print(
+            f'calibrate(): Solving least-squares {time() - t1:.1f}')
 
         if status_cb:
             status_cb('Applying regularisation ...')
+        t1 = time()
         if alpha > 0.:
             # weighted least squares
             rr = np.sqrt(xx**2 + yy**2)
@@ -207,6 +223,8 @@ class WeightedLSCalib:
 
         self.zfA1TzfA1 = np.dot(self.zfA1.T, self.zfA1)
         self.chzfA1TzfA1 = cholesky(self.zfA1TzfA1, lower=False)
+        print(
+            f'calibrate(): Applying regularisation {time() - t1:.1f}')
 
     def get_rzern(self):
         return self.cart
