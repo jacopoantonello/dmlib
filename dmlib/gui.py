@@ -14,7 +14,7 @@ import traceback
 from matplotlib import ticker
 from os import path
 from multiprocessing import Process, Queue, Array, Value
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from numpy.linalg import norm
 
 from matplotlib.backends.backend_qt5agg import FigureCanvas
@@ -572,7 +572,7 @@ class Control(QMainWindow):
         wavelength = []
         dataset = []
         lastind = []
-        centre = []
+        centre = [None]
         radius = [.0]
         listener = DataAcqListener(self.shared, wavelength, self.dmplot)
 
@@ -580,7 +580,7 @@ class Control(QMainWindow):
             wavelength.clear()
             dataset.clear()
             lastind.clear()
-            centre.clear()
+            centre[0] = None
             radius[0] = .0
 
             if clear_status:
@@ -744,12 +744,12 @@ class Control(QMainWindow):
                     origin='lower')
                 a4.set_xlabel('mm')
                 a4.set_title('unwrapped phi')
-                if centre:
-                    a4.plot(centre[0]/1000, centre[1]/1000, 'rx')
-                if radius[0] > 0. and centre:
+                if centre[0] is not None:
+                    a4.plot(centre[0][0]/1000, centre[0][1]/1000, 'rx')
+                if radius[0] > 0. and centre[0] is not None:
                     a4.plot(
-                        centre[0]/1000 + radius[0]/1000*np.cos(theta),
-                        centre[1]/1000 + radius[0]/1000*np.sin(theta), 'r')
+                        centre[0][0]/1000 + radius[0]/1000*np.cos(theta),
+                        centre[0][1]/1000 + radius[0]/1000*np.sin(theta), 'r')
 
                 a4.figure.canvas.draw()
 
@@ -786,16 +786,12 @@ class Control(QMainWindow):
                     else:
                         radius.append(val*1000)
 
-                    self.shared.iq.put(('centre', dataset[0]))
+                    self.shared.iq.put(('aperture', dataset[0], radius[0]))
                     ndata = check_err()
                     if ndata == -1:
                         clearup()
                         return False
-                    if centre:
-                        centre[:] = ndata[:]
-                    else:
-                        centre.append(ndata[0])
-                        centre.append(ndata[1])
+                    centre[0] = ndata[0]
 
                     drawf()
                     return True
@@ -824,14 +820,12 @@ class Control(QMainWindow):
                 bstop.setEnabled(False)
 
                 ok = True
-                if radius[0] <= 0 or not centre:
+                if radius[0] <= 0 or centre[0] is None:
                     ok = setup_aperture()
 
-                if ok and radius[0] > 0 and centre:
+                if ok and radius[0] > 0 and centre[0] is not None:
                     status.setText(
-                        'computing calibration (~10min; {}) ...'.format((
-                            datetime.now() +
-                            timedelta(0, 60*10)).strftime('%H:%M')))
+                        'Computing calibration (this can take long) ...')
                     clistener.start()
                 else:
                     enable()
@@ -872,7 +866,7 @@ class Control(QMainWindow):
                         dataset[0] = msg[1]
                     else:
                         dataset.append(msg[1])
-                    status.setText('finished ' + msg[1])
+                    status.setText('Saved calibration data file ' + msg[1])
                     enable()
                 else:
                     status.setText(msg[0])
@@ -1436,8 +1430,8 @@ class Worker:
                 self.run_query(*cmd[1:])
             elif cmd[0] == 'plot':
                 self.run_plot(*cmd[1:])
-            elif cmd[0] == 'centre':
-                self.run_centre(*cmd[1:])
+            elif cmd[0] == 'aperture':
+                self.run_aperture(*cmd[1:])
             elif cmd[0] == 'calibrate':
                 self.run_calibrate(*cmd[1:])
             elif cmd[0] == 'query_calib':
@@ -1595,7 +1589,11 @@ class Worker:
 
             notify_fun = make_notify()
 
-            self.fringe.update_radius(radius)
+            # HERE
+            names = self.dset['align/names'][()]
+            img_centre = self.dset['align/images'][names.index('centre'), ...]
+            img_zero = self.dset['data/images'][0, ...]
+            self.fringe.estimate_aperture(img_zero, img_centre, radius)
             calib = WeightedLSCalib()
             calib.calibrate(
                 self.dset['data/U'][()], self.dset['data/images'],
@@ -1643,24 +1641,30 @@ class Worker:
             'OK', self.calib.wavelength, self.calib.get_rzern().n,
             self.calib.get_radius(), self.calib.dmplot_txs))
 
-    def run_centre(self, dname):
+    def run_aperture(self, dname, radius):
         if self.open_dset(dname):
             return
 
-        names = self.dset['align/names'][()]
-        if 'centre' not in names.split(','):
-            self.shared.oq.put(('centre measurement is missing',))
-            return
+        if radius <= 0.:
+            self.fringe.clear_aperture()
+            self.shared.oq.put(('OK', None))
+        else:
+            names = self.dset['align/names'][()]
+            if 'centre' not in names.split(','):
+                self.shared.oq.put(('centre measurement is missing',))
+                return
 
-        try:
-            img_centre = self.dset['align/images'][names.index('centre'), ...]
-            img_zero = self.dset['data/images'][0, ...]
-            self.fringe.estimate_centre(img_zero, img_centre)
-            self.shared.oq.put((
-                'OK', self.fringe.centre[0], self.fringe.centre[1]))
-        except Exception as e:
-            traceback.print_exc(file=sys.stdout)
-            self.shared.oq.put((str(e),))
+            try:
+                img_centre = self.dset['align/images'][
+                    names.index('centre'), ...]
+                img_zero = self.dset['data/images'][0, ...]
+                self.fringe.estimate_aperture(img_zero, img_centre, radius)
+                self.shared.oq.put(('OK', self.fringe.centre))
+            except Exception:
+                traceback.print_exc(file=sys.stdout)
+                self.shared.oq.put((
+                    'Failed to estimate the aperture. Try improving the ' +
+                    'fringe contrast or the illumination profile',))
 
     def run_plot(self, dname, ind, radius):
         if self.open_dset(dname):
@@ -1679,7 +1683,6 @@ class Worker:
             ind -= t1
         try:
             img = self.dset[addr + '/images'][ind, ...]
-            fringe.update_radius(radius)
             fringe.analyse(
                 img, auto_find_orders=False, store_mag=True,
                 store_wrapped=True, do_unwrap=True, use_mask=radius > 0.)
