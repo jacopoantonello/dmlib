@@ -380,7 +380,7 @@ class Control(QMainWindow):
             def f():
                 val, ok = QInputDialog.getDouble(
                     self, 'Delay', 'write/read delay [s]',
-                    listener.sleep, decimals=4)
+                    listener.sleep, .5, decimals=4)
                 if ok:
                     listener.sleep = val
             return f
@@ -450,47 +450,48 @@ class Control(QMainWindow):
                     a1.set_title('cam {: 3d} {: 3d}'.format(
                         self.shared.cam.min(), self.shared.cam.max()))
 
-                a2.imshow(
-                    self.shared.ft, extent=self.shared.ft_ext,
-                    origin='lower')
-                a2.set_xlabel('1/mm')
-                a2.set_title('FT')
+                if listener.unwrap:
+                    a2.imshow(
+                        self.shared.ft, extent=self.shared.ft_ext,
+                        origin='lower')
+                    a2.set_xlabel('1/mm')
+                    a2.set_title('FT')
 
-                if msg != 'OK':
-                    status.setText(msg)
-                    enable()
-                    a2.figure.canvas.draw()
-                    return
+                    if msg != 'OK':
+                        status.setText(msg)
+                        enable()
+                        a2.figure.canvas.draw()
+                        return
 
-                a2.plot(
-                    self.shared.fxcfyc[0]*1e3, self.shared.fxcfyc[1]*1e3,
-                    'rx', markersize=6)
+                    a2.plot(
+                        self.shared.fxcfyc[0]*1e3, self.shared.fxcfyc[1]*1e3,
+                        'rx', markersize=6)
 
-                a2.plot(
-                    -self.shared.fxcfyc[0]*1e3, -self.shared.fxcfyc[1]*1e3,
-                    'rx', markersize=6)
+                    a2.plot(
+                        -self.shared.fxcfyc[0]*1e3, -self.shared.fxcfyc[1]*1e3,
+                        'rx', markersize=6)
 
-                fstord, mag, wrapped, unwrapped = self.shared.get_phase()
+                    fstord, mag, wrapped, unwrapped = self.shared.get_phase()
 
-                a3.imshow(
-                    fstord, extent=self.shared.fstord_ext, origin='lower')
-                a3.set_xlabel('1/mm')
-                a3.set_title('1st order')
+                    a3.imshow(
+                        fstord, extent=self.shared.fstord_ext, origin='lower')
+                    a3.set_xlabel('1/mm')
+                    a3.set_title('1st order')
 
-                a4.imshow(
-                    mag, extent=self.shared.mag_ext, origin='lower')
-                a4.set_xlabel('mm')
-                a4.set_title('magnitude')
+                    a4.imshow(
+                        mag, extent=self.shared.mag_ext, origin='lower')
+                    a4.set_xlabel('mm')
+                    a4.set_title('magnitude')
 
-                a5.imshow(
-                    wrapped, extent=self.shared.mag_ext, origin='lower')
-                a5.set_xlabel('mm')
-                a5.set_title('wrapped phi')
+                    a5.imshow(
+                        wrapped, extent=self.shared.mag_ext, origin='lower')
+                    a5.set_xlabel('mm')
+                    a5.set_title('wrapped phi')
 
-                a6.imshow(
-                    unwrapped, extent=self.shared.mag_ext, origin='lower')
-                a6.set_xlabel('mm')
-                a6.set_title('unwrapped phi')
+                    a6.imshow(
+                        unwrapped, extent=self.shared.mag_ext, origin='lower')
+                    a6.set_xlabel('mm')
+                    a6.set_title('unwrapped phi')
 
                 a6.figure.canvas.draw()
 
@@ -1180,7 +1181,7 @@ class AlignListener(QThread):
     auto = True
     repeat = False
     poke = False
-    sleep = .1
+    sleep = .5
     unwrap = True
 
     sig_update = pyqtSignal(str)
@@ -1474,36 +1475,35 @@ class Worker:
                     shared.cam_sat.value = 0
                 shared.cam[:] = img[:]
 
-                try:
-                    fringe.analyse(
-                        img, auto_find_orders=auto, store_logf2=True,
-                        store_logf3=True, store_mag=True,
-                        store_wrapped=True, do_unwrap=unwrap,
-                        use_mask=False)
-                except ValueError:
-                    shared.oq.put('Failed to find orders')
-                    if repeat:
-                        continue
-                    else:
-                        return
-
-                shared.ft[:] = fringe.logf2[:]
-                shared.fxcfyc[:] = fringe.fxcfyc[:]
-
-                self.fill(shared.fstord_buf, fringe.logf3)
-                for i in range(4):
-                    shared.fstord_ext[i] = fringe.ext3[i]*1000
-                shared.fstord_shape[:] = fringe.logf3.shape[:]
-                self.fill(shared.mag_buf, fringe.mag)
-                self.fill(shared.wrapped_buf, fringe.wrapped)
-                for i in range(4):
-                    shared.mag_ext[i] = fringe.ext4[i]/1000
-                shared.mag_shape[:] = fringe.mag.shape[:]
-
                 if unwrap:
+                    try:
+                        fringe.analyse(
+                            img, auto_find_orders=auto, store_logf2=True,
+                            store_logf3=True, store_mag=True,
+                            store_wrapped=True, do_unwrap=unwrap,
+                            use_mask=False)
+                    except ValueError:
+                        shared.oq.put('Failed to find orders')
+                        if repeat:
+                            continue
+                        else:
+                            return
+
+                    shared.ft[:] = fringe.logf2[:]
+                    shared.fxcfyc[:] = fringe.fxcfyc[:]
+
+                    self.fill(shared.fstord_buf, fringe.logf3)
+                    for i in range(4):
+                        shared.fstord_ext[i] = fringe.ext3[i]*1000
+                    shared.fstord_shape[:] = fringe.logf3.shape[:]
+                    self.fill(shared.mag_buf, fringe.mag)
+                    self.fill(shared.wrapped_buf, fringe.wrapped)
+                    for i in range(4):
+                        shared.mag_ext[i] = fringe.ext4[i]/1000
+                    shared.mag_shape[:] = fringe.mag.shape[:]
                     self.fill(shared.unwrapped_buf, fringe.unwrapped)
-                else:
-                    self.fill(shared.unwrapped_buf, np.zeros(shared.totpixs))
+                elif not poke:
+                    time.sleep(sleep)
             except Exception as ex:
                 shared.oq.put('Error: ' + str(ex))
                 traceback.print_exc(file=sys.stdout)
