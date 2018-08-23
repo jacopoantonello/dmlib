@@ -402,7 +402,7 @@ class Control(QMainWindow):
         def f1():
             def f():
                 disable()
-                status.setText('working...')
+                status.setText('Working...')
                 listener.repeat = brepeat.isChecked()
                 listener.start()
             return f
@@ -421,11 +421,11 @@ class Control(QMainWindow):
             def f():
                 listener.repeat = False
                 if not listener.isFinished():
-                    status.setText('stopping...')
+                    status.setText('Stopping...')
             return f
 
         def f20():
-            def f(msg):
+            def f(result):
                 a1 = self.align_axes[0, 0]
                 a2 = self.align_axes[0, 1]
                 a3 = self.align_axes[0, 2]
@@ -440,28 +440,23 @@ class Control(QMainWindow):
                 a5.clear()
                 a6.clear()
 
-                a1.imshow(
-                    self.shared.cam, extent=self.shared.cam_ext,
-                    origin='lower')
-                a1.set_xlabel('mm')
-                if self.shared.cam_sat.value:
-                    a1.set_title('cam SAT')
-                else:
-                    a1.set_title('cam {: 3d} {: 3d}'.format(
-                        self.shared.cam.min(), self.shared.cam.max()))
+                if result[0] != 'ERR1':
+                    a1.imshow(
+                        self.shared.cam, extent=self.shared.cam_ext,
+                        origin='lower')
+                    a1.set_xlabel('mm')
+                    if self.shared.cam_sat.value:
+                        a1.set_title('cam SAT')
+                    else:
+                        a1.set_title('cam {: 3d} {: 3d}'.format(
+                            self.shared.cam.min(), self.shared.cam.max()))
 
-                if listener.unwrap:
+                if listener.unwrap and result[0] not in ('ERR1', 'ERR2'):
                     a2.imshow(
                         self.shared.ft, extent=self.shared.ft_ext,
                         origin='lower')
                     a2.set_xlabel('1/mm')
                     a2.set_title('FT')
-
-                    if msg != 'OK':
-                        status.setText(msg)
-                        enable()
-                        a2.figure.canvas.draw()
-                        return
 
                     a2.plot(
                         self.shared.fxcfyc[0]*1e3, self.shared.fxcfyc[1]*1e3,
@@ -471,6 +466,8 @@ class Control(QMainWindow):
                         -self.shared.fxcfyc[0]*1e3, -self.shared.fxcfyc[1]*1e3,
                         'rx', markersize=6)
 
+                if listener.unwrap and result[0] not in (
+                        'ERR1', 'ERR2', 'ERR3'):
                     fstord, mag, wrapped, unwrapped = self.shared.get_phase()
 
                     a3.imshow(
@@ -494,11 +491,17 @@ class Control(QMainWindow):
                     a6.set_title('unwrapped phi')
 
                 a6.figure.canvas.draw()
-
                 self.update_dm_gui()
-
-                if not listener.repeat:
-                    status.setText('stopped')
+                if listener.repeat:
+                    if result[0] == 'OK':
+                        status.setText('Working...')
+                    else:
+                        status.setText(f'Working... {result[2]}')
+                else:
+                    if result[0] == 'OK':
+                        status.setText('Stopped')
+                    else:
+                        status.setText(result[2])
                     enable()
 
             return f
@@ -1184,7 +1187,7 @@ class AlignListener(QThread):
     sleep = .5
     unwrap = True
 
-    sig_update = pyqtSignal(str)
+    sig_update = pyqtSignal(tuple)
 
     def __init__(self, shared):
         super().__init__()
@@ -1197,11 +1200,13 @@ class AlignListener(QThread):
         while True:
             result = self.shared.oq.get()
             self.sig_update.emit(result)
-            if result == 'OK':
-                self.shared.iq.put(('stopcmd', not self.repeat))
-                self.shared.oq.get()
+            if result[0] != 'OK' and result[1] == 'STOP':
+                self.repeat = False
+            self.shared.iq.put(('stopcmd', not self.repeat))
+            self.shared.oq.get()
             if not self.repeat:
                 return
+        print('AlignListener stops')
 
 
 class CalibListener(QThread):
@@ -1459,6 +1464,8 @@ class Worker:
         fringe = self.fringe
 
         while True:
+            state = ('OK',)
+
             if poke:
                 shared.u[:] = 0.
                 shared.u[self.run_align_state[0]] = .7
@@ -1474,21 +1481,24 @@ class Worker:
                 else:
                     shared.cam_sat.value = 0
                 shared.cam[:] = img[:]
+            except Exception:
+                state = ('ERR1', 'STOP', 'Camera read error')
 
-                if unwrap:
-                    try:
-                        fringe.analyse(
-                            img, auto_find_orders=auto, store_logf2=True,
-                            store_logf3=True, store_mag=True,
-                            store_wrapped=True, do_unwrap=unwrap,
-                            use_mask=False)
-                    except ValueError:
-                        shared.oq.put('Failed to find orders')
-                        if repeat:
-                            continue
-                        else:
-                            return
+            if state[0] == 'OK' and not unwrap:
+                if not poke:
+                    time.sleep(sleep)
+            elif state[0] == 'OK' and unwrap:
+                try:
+                    fringe.analyse(
+                        img, auto_find_orders=auto, store_logf2=True,
+                        store_logf3=True, store_mag=True,
+                        store_wrapped=True, do_unwrap=unwrap,
+                        use_mask=False)
+                except Exception:
+                    state = ('ERR2', 'RETRY', 'Failed to detect first orders')
 
+            if state[0] == 'OK' and unwrap:
+                try:
                     shared.ft[:] = fringe.logf2[:]
                     shared.fxcfyc[:] = fringe.fxcfyc[:]
 
@@ -1502,24 +1512,15 @@ class Worker:
                         shared.mag_ext[i] = fringe.ext4[i]/1000
                     shared.mag_shape[:] = fringe.mag.shape[:]
                     self.fill(shared.unwrapped_buf, fringe.unwrapped)
-                elif not poke:
-                    time.sleep(sleep)
-            except Exception as ex:
-                shared.oq.put('Error: ' + str(ex))
-                traceback.print_exc(file=sys.stdout)
-                if repeat:
-                    continue
-                else:
-                    return
+                except Exception:
+                    state = ('ERR3', 'RETRY', 'Failed to unwrap phase')
 
-            shared.oq.put('OK')
-            print('run_align', 'iteration')
-
+            shared.oq.put(state)
             stopcmd = shared.iq.get()[1]
             shared.oq.put('')
 
             if not repeat or stopcmd:
-                print('run_align', 'break', repeat, stopcmd)
+                print('run_align', 'stop', repeat, stopcmd)
                 break
             else:
                 print('run_align', 'continue')
