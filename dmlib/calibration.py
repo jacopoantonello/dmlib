@@ -59,8 +59,27 @@ class PhaseExtract:
 
 class WeightedLSCalib:
 
+    zfA1 = None
+    zfA2 = None
+
     def __init__(self):
         pass
+
+    def _make_zfAs(self):
+        mask = np.invert(self.zfm)
+        zfA1 = np.zeros((self.zfm.sum(), self.cart.nk))
+        zfA2 = np.zeros_like(self.cart.ZZ)
+        for i in range(zfA1.shape[1]):
+            tmp = self.cart.matrix(self.cart.ZZ[:, i])
+            zfA1[:, i] = tmp[self.zfm].ravel()
+            zfA2[:, i] = tmp.ravel()
+
+        self.zfA1 = zfA1
+        self.zfA2 = zfA2
+        self.zfA1TzfA1 = np.dot(zfA1.T, zfA1)
+        self.chzfA1TzfA1 = cholesky(self.zfA1TzfA1, lower=False)
+
+        return zfA1, zfA2, mask
 
     def calibrate(
             self, U, images, fringe, wavelength, dm_serial, dm_transform,
@@ -83,13 +102,9 @@ class WeightedLSCalib:
             status_cb('Computing masks ...')
         t1 = time()
         zfm = cart.matrix(np.isfinite(cart.ZZ[:, 0]))
-        mask = np.invert(zfm)
-        zfA1 = np.zeros((zfm.sum(), cart.nk))
-        zfA2 = np.zeros_like(cart.ZZ)
-        for i in range(zfA1.shape[1]):
-            tmp = cart.matrix(cart.ZZ[:, i])
-            zfA1[:, i] = tmp[np.invert(mask)].ravel()
-            zfA2[:, i] = tmp.ravel()
+        self.cart = cart
+        self.zfm = zfm
+        zfA1, zfA2, mask = self._make_zfAs(cart, zfm)
         print(
             f'calibrate(): Computing masks {time() - t1:.1f}')
 
@@ -197,10 +212,6 @@ class WeightedLSCalib:
         uflat = -np.dot(C, z0)
 
         self.fringe = fringe
-        self.cart = cart
-        self.zfA1 = zfA1
-        self.zfA2 = zfA2
-        self.zfm = zfm
         self.shape = shape
 
         self.H = H
@@ -221,8 +232,6 @@ class WeightedLSCalib:
         self.dname = dname
         self.hash1 = hash1
 
-        self.zfA1TzfA1 = np.dot(self.zfA1.T, self.zfA1)
-        self.chzfA1TzfA1 = cholesky(self.zfA1TzfA1, lower=False)
         print(
             f'calibrate(): Applying regularisation {time() - t1:.1f}')
 
@@ -230,9 +239,15 @@ class WeightedLSCalib:
         return self.cart
 
     def zernike_eval(self, z):
+        if self.zfA2 is None:
+            self._make_zfAs()
+
         return np.dot(self.zfA2, z).reshape(self.shape)
 
     def zernike_fit(self, phi):
+        if self.zfA2 is None:
+            self._make_zfAs()
+
         Y = solve_triangular(
             self.chzfA1TzfA1, np.dot(self.zfA1.T, phi[self.zfm]),
             trans='T', lower=False)
@@ -280,8 +295,8 @@ class WeightedLSCalib:
 
         z.cart = RZern.load_h5py(f, prefix + 'cart/')
         z.fringe = FringeAnalysis.load_h5py(f, prefix + 'fringe/')
-        z.zfA1 = f[prefix + 'zfA1'][()]
-        z.zfA2 = f[prefix + 'zfA2'][()]
+        z.zfA1 = None
+        z.zfA2 = None
         z.zfm = f[prefix + 'zfm'][()]
         z.shape = f[prefix + 'shape'][()]
 
@@ -303,8 +318,8 @@ class WeightedLSCalib:
         z.dname = f[prefix + 'dname'][()]
         z.hash1 = f[prefix + 'hash1'][()]
 
-        z.zfA1TzfA1 = np.dot(z.zfA1.T, z.zfA1)
-        z.chzfA1TzfA1 = cholesky(z.zfA1TzfA1, lower=False)
+        z.zfA1TzfA1 = None
+        z.chzfA1TzfA1 = None
 
         return z
 
@@ -318,10 +333,6 @@ class WeightedLSCalib:
         self.cart.save_h5py(f, prefix + 'cart/', params=HDF5_options)
         self.fringe.save_h5py(f, prefix + 'fringe/', params=HDF5_options)
 
-        params['data'] = self.zfA1
-        f.create_dataset(prefix + 'zfA1', **params)
-        params['data'] = self.zfA2
-        f.create_dataset(prefix + 'zfA2', **params)
         params['data'] = self.zfm
         f.create_dataset(prefix + 'zfm', **params)
         params['data'] = self.shape
