@@ -231,7 +231,7 @@ def exit_error(app, text, exc):
     if app:
         e = QErrorMessage()
         e.showMessage(text)
-        sys.exit(app.exec_())
+        sys.exit(e.exec_())
     else:
         raise exc(text)
 
