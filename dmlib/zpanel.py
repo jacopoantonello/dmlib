@@ -510,6 +510,7 @@ def load_settings(app, args, last_settings='.zpanel.json'):
     if args.calibration:
         args.calibration.close()
         settings['calibration'] = args.calibration.name
+        args.calibration = settings['calibration']
 
     def choose_calib_file():
         fileName, _ = QFileDialog.getOpenFileName(

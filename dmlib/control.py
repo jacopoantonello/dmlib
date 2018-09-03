@@ -13,6 +13,8 @@ class ZernikeControl:
     saturation = 0
 
     def __init__(self, dm, calib, indices=None, h5f=None):
+        self.log = logging.getLogger('ZernikeControl')
+
         nz = calib.H.shape[0]
         nu = calib.H.shape[1]
 
@@ -65,6 +67,7 @@ class ZernikeControl:
             self.h5f['ZernikeControl/' + where] = what
 
     def write(self, x):
+        assert(x.shape == self.ab.shape)
         self.z[self.indices - 1] = x[:] + self.ab[:]
         if self.P is not None:
             np.dot(self.P, self.z, self.z1)
@@ -81,7 +84,7 @@ class ZernikeControl:
             self.h5_append('u', self.u)
 
         if norm(self.u, np.inf) > 1:
-            logging.warn(
+            self.log.warn(
                 'Saturation {}'.format(str(np.abs(self.u).max())))
             self.u[self.u > 1.] = 1.
             self.u[self.u < -1.] = -1.
@@ -185,8 +188,8 @@ class ZernikeControl:
 
 
 def get_noll_indices(args):
-    if args.z_min > 0 and args.z_max > 0:
-        mrange = np.arange(args.z_min, args.z_max + 1)
+    if args.noll_min > 0 and args.noll_max > 0:
+        mrange = np.arange(args.noll_min, args.noll_max + 1)
     else:
         mrange = np.array([], dtype=np.int)
 
@@ -206,8 +209,8 @@ def get_noll_indices(args):
         np.union1d(np.unique(mrange), np.unique(minclude)),
         np.unique(mexclude))
 
-    logging.info('Selected Noll indices for the Zernike modes are:')
-    logging.info(zernike_indices)
+    log = logging.getLogger('ZernikeControl')
+    log.info(f'selected Zernikes {zernike_indices}')
 
     return zernike_indices
 
