@@ -50,8 +50,8 @@ class ZernikeControl:
                 name, shape + (0,), maxshape=shape + (None,),
                 dtype=np.float)
         if h5f:
-            make_empty('x', (ndof,))
-            make_empty('u', (nu,))
+            make_empty('ZernikeControl/x', (ndof,))
+            make_empty('ZernikeControl/u', (nu,))
 
         self.h5_save('ab', self.ab)
         self.h5_save('P', np.eye(nz, nz))
@@ -80,8 +80,8 @@ class ZernikeControl:
             self.u += self.calib.uflat
 
         if self.h5f:
-            self.h5_append('x', x)
-            self.h5_append('u', self.u)
+            self.h5_append('ZernikeControl/x', x)
+            self.h5_append('ZernikeControl/u', self.u)
 
         if norm(self.u, np.inf) > 1:
             self.log.warn(
