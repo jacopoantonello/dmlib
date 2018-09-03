@@ -338,7 +338,8 @@ def add_dm_parameters(parser):
 
 def add_cam_parameters(parser):
     parser.add_argument(
-        '--cam-driver', choices=['sim', 'thorcam', 'ximea', 'ueye'], default='sim')
+        '--cam-driver', choices=['sim', 'thorcam', 'ximea', 'ueye'],
+        default='sim')
     parser.add_argument('--cam-name', type=str, default=None, metavar='SERIAL')
     parser.add_argument(
         '--cam-list', action='store_true', help='List detected devices')
