@@ -302,8 +302,7 @@ class ZernikePanel(QWidget):
 
         def reset_fun():
             self.z *= 0.
-            for t in zernike_rows:
-                t[2].setValue(0.0)
+            self.update_controls()
             self.update_gui()
 
         def change_nmodes():
