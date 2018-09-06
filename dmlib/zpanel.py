@@ -34,6 +34,14 @@ from dmlib.calibration import WeightedLSCalib
 from dmlib.control import ZernikeControl
 
 
+fto100mul = 100
+
+
+def fto100(f, amp):
+    maxrad = float(amp.text())
+    return int((f + maxrad)/(2*maxrad)*fto100mul)
+
+
 class ZernikePanel(QWidget):
 
     callback = None
@@ -54,7 +62,29 @@ class ZernikePanel(QWidget):
         d['shown_modes'] = len(self.zernike_rows)
         return d
 
-    def update_gui(self):
+    def update_controls(self):
+        for i, t in enumerate(self.zernike_rows):
+            slider, spinbox, amp = t[1], t[2], t[5]
+            oldamp = abs(float(amp.text()))
+            newamp = abs(self.z[i])
+            print(
+                f'update_controls {oldamp:} {newamp:} {self.z[i]:}')
+
+            slider.blockSignals(True)
+            spinbox.blockSignals(True)
+
+            if oldamp < newamp:
+                newamp = np.ceil(newamp)
+                amp.setText(str(newamp))
+                spinbox.setRange(-newamp, newamp)
+
+            spinbox.setValue(self.z[i])
+            slider.setValue(fto100(self.z[i], amp))
+
+            slider.blockSignals(False)
+            spinbox.blockSignals(False)
+
+    def update_gui(self, run_callback=True):
         phi = self.mul*self.rzern.matrix(self.rzern.eval_grid(self.z))
         inner = phi[np.isfinite(phi)]
         min1 = inner.min()
@@ -67,7 +97,7 @@ class ZernikePanel(QWidget):
         self.im.set_clim(inner.min(), inner.max())
         self.fig.figure.canvas.draw()
 
-        if self.callback:
+        if self.callback and run_callback:
             self.callback(self.z)
 
     def __init__(
@@ -96,7 +126,6 @@ class ZernikePanel(QWidget):
 
         zernike_rows = list()
         self.zernike_rows = zernike_rows
-        fto100mul = 100
 
         top1 = QGroupBox('phase')
         toplay1 = QGridLayout()
@@ -134,10 +163,6 @@ class ZernikePanel(QWidget):
         scroll.setWidget(QWidget())
         scrollLayout = QGridLayout(scroll.widget())
         scroll.setWidgetResizable(True)
-
-        def fto100(f, amp):
-            maxrad = float(amp.text())
-            return int((f + maxrad)/(2*maxrad)*fto100mul)
 
         def make_hand_spinbox(slider, ind, amp):
             def f(r):
@@ -206,7 +231,7 @@ class ZernikePanel(QWidget):
                             i + 1, ntab[i], mtab[i]))
                     slider = QSlider(Qt.Horizontal)
                     spinbox = QDoubleSpinBox()
-                    maxamp = max((8, self.z[i]))
+                    maxamp = max((8., self.z[i]))
                     if str(i) in self.settings['zernike_labels'].keys():
                         zname = self.settings['zernike_labels'][str(i)]
                     else:
