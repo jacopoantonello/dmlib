@@ -8,8 +8,8 @@ import argparse
 import numpy as np
 import time
 import h5py
+import logging
 import multiprocessing
-import traceback
 
 from matplotlib import ticker
 from os import path
@@ -1192,6 +1192,7 @@ class AlignListener(QThread):
     def __init__(self, shared):
         super().__init__()
         self.shared = shared
+        self.log = logging.getLogger('AlignListener')
 
     def run(self):
         self.shared.iq.put((
@@ -1206,7 +1207,7 @@ class AlignListener(QThread):
             self.shared.oq.get()
             if not self.repeat:
                 return
-        print('AlignListener stops')
+        self.log.info('dies')
 
 
 class CalibListener(QThread):
@@ -1239,24 +1240,24 @@ class DataAcqListener(QThread):
         self.shared = shared
         self.wavelength = wavelength
         self.dmplot = dmplot
+        self.log = logging.getLogger('DataAcqListener')
 
     def run(self):
         self.shared.iq.put(('dataacq', self.wavelength[0], self.dmplot.txs))
         while True:
             result = self.shared.oq.get()
-            print('listener result', result)
             if result[0] == 'OK':
                 self.shared.iq.put(('stopcmd', not self.run))
                 self.shared.oq.get()
                 if not self.run:
                     self.sig_update.emit(('stopped',))
-                    print('DataAcqListener stopped')
+                    self.log.info('dies')
                     return
                 elif not self.busy:
                     self.sig_update.emit(result)
             else:
                 self.sig_update.emit(result)
-                print('DataAcqListener terminates')
+                self.log.info('dies')
                 return
 
 
@@ -1273,27 +1274,27 @@ class LoopListener(QThread):
     def __init__(self, shared):
         super().__init__()
         self.shared = shared
+        self.log = logging.getLogger('LoopListener')
 
     def run(self):
         self.shared.iq.put((
             'loop', self.calib, self.flat, self.closed_loop, self.sleep))
         while True:
             result = self.shared.oq.get()
-            print('listener result', result)
             if result[0] == 'OK':
                 self.shared.iq.put(('stopcmd', not self.run))
                 self.shared.oq.get()
                 if not self.run:
                     self.sig_update.emit(('stopped',))
-                    print('LoopListener stopped')
+                    self.log.info('dies')
                     return
                 elif not self.busy:
                     self.sig_update.emit(result)
                 else:
-                    print('LoopListener throttling')
+                    self.log.debug('throttling')
             else:
                 self.sig_update.emit(result)
-                print('LoopListener terminates')
+                self.log.info('dies')
                 return
 
 
@@ -1386,6 +1387,7 @@ class Worker:
     run_align_state = [0]
 
     def __init__(self, shared, args):
+        self.log = logging.getLogger('Worker')
         dm = open_dm(None, args)
         cam = open_cam(None, args)
         cam.set_exposure(cam.get_exposure_range()[0])
@@ -1410,7 +1412,7 @@ class Worker:
         shared = self.shared
 
         for cmd in iter(shared.iq.get, 'STOP'):
-            print('worker', 'cmd', cmd)
+            self.log.info(f'cmd {cmd:}')
             if cmd[0] == 'get_exposure':
                 shared.oq.put(cam.get_exposure())
             elif cmd[0] == 'get_exposure_range':
@@ -1448,11 +1450,11 @@ class Worker:
             else:
                 raise NotImplementedError(cmd)
 
-        print('worker', 'STOP CMD')
+        self.log.info('STOP CMD')
         while not shared.iq.empty():
-            print('worker flushing', shared.iq.get())
+            self.log.info('flushing ' + str(shared.iq.get()))
 
-        print('worker', 'STOPPED')
+        self.log.info('dies')
 
     def fill(self, dst, src):
         dst[:src.nbytes] = src.tobytes()
@@ -1520,10 +1522,11 @@ class Worker:
             shared.oq.put('')
 
             if not repeat or stopcmd:
-                print('run_align', 'stop', repeat, stopcmd)
+                self.log.debug(
+                    f'run_align stop, repeat {repeat:}, stopcmd {stopcmd:}')
                 break
             else:
-                print('run_align', 'continue')
+                self.log.debug('run_align continue')
 
     def cam_pull(self):
         img = cam.grab_image()
@@ -1553,7 +1556,7 @@ class Worker:
                     img, auto_find_orders=True, do_unwrap=True,
                     use_mask=False)
             except Exception:
-                traceback.print_exc(file=sys.stdout)
+                self.log.info('open_dset failed fringe.analyse', exc_info=True)
                 self.shared.oq.put(('Failed to detect first orders',))
                 return -1
             return 0
@@ -1613,7 +1616,7 @@ class Worker:
                 f'Saved {h5fn}; Quality {calib.mvaf.mean():.2f}%',
                 cmd='OK')
         except Exception as e:
-            traceback.print_exc(file=sys.stdout)
+            self.log.error('run_calibrate', exc_info=True)
             self.shared.oq.put(('ERR', 'Error: ' + str(e)))
 
     def open_calib(self, dname):
@@ -1658,7 +1661,7 @@ class Worker:
                 self.fringe.estimate_aperture(img_zero, img_centre, radius)
                 self.shared.oq.put(('OK', self.fringe.centre))
             except Exception:
-                traceback.print_exc(file=sys.stdout)
+                self.log.debug('run_aperture', exc_info=True)
                 self.shared.oq.put((
                     'Failed to estimate the aperture. Try improving the ' +
                     'fringe contrast or the illumination profile',))
@@ -1697,7 +1700,7 @@ class Worker:
             self.fill(self.shared.unwrapped_buf, fringe.unwrapped)
             self.shared.oq.put(('OK',))
         except Exception as e:
-            traceback.print_exc(file=sys.stdout)
+            self.log.error('run_plot', exc_info=True)
             self.shared.oq.put((str(e),))
 
     def run_dataacq(self, wavelength, dmplot_txs, sleep=.1):
@@ -1785,7 +1788,7 @@ class Worker:
                         time.sleep(sleep)
                         img = cam.grab_image()
                     except Exception as e:
-                        traceback.print_exc(file=sys.stdout)
+                        self.log.error('run_dataacq', exc_info=True)
                         shared.oq.put((str(e),))
                         return
                     if img.max() == cam.get_image_max():
@@ -1796,13 +1799,13 @@ class Worker:
                     shared.u[:] = U1[:, i]
                     shared.cam[:] = img
                     shared.oq.put(('OK', count[0], tot))
-                    print('run_dataacq', 'iteration')
+                    self.log.debug('run_dataacq iteration')
 
                     stopcmd = shared.iq.get()[1]
                     shared.oq.put(('',))
 
                     if stopcmd:
-                        print('run_dataacq', 'stopcmd')
+                        self.log.debug('run_dataacq stop_cmd')
                         h5f.close()
                         try:
                             os.remove(h5fn)
@@ -1810,11 +1813,11 @@ class Worker:
                             pass
                         return
                     else:
-                        print('run_dataacq', 'continue')
+                        self.log.debug('run_dataacq continue')
 
                     count[0] += 1
 
-        print('run_dataacq', 'finished')
+        self.log.debug('run_dataacq finished')
         shared.oq.put(('finished', h5fn))
 
     def run_loop(self, dname, flat, closed_loop, sleep):
@@ -1869,29 +1872,29 @@ class Worker:
                 self.fill(shared.phi_err_buf, phi_er)
                 t10 = time.time()
 
-                print((
-                    'run_loop s:{:.3f} ' +
-                    'h:{:.3f} u:{:.3f} p1:{:.3f} p2:{:.3f} p3:{:.3f}').format(
-                        sleep,
-                        t2 - t1, t4 - t3, t6 - t5, t8 - t7, t10 - t9))
+                self.log.debug(
+                    f'run_loop s:{sleep:.3f} h:{t2 - t1:.3f} ' +
+                    f'u:{t4 - t3:.3f} p1:{t6 - t5:.3f} p2:{t8 - t7:.3f} ' +
+                    f'p3:{t10 - t9:.3f}')
+
             except Exception as e:
-                traceback.print_exc(file=sys.stdout)
+                self.log.info('run_loop', exc_info=True)
                 shared.oq.put((str(e),))
                 return
 
             shared.oq.put(('OK',))
-            print('run_loop', 'iteration')
+            self.log.debug('run_loop iteration')
 
             stopcmd = shared.iq.get()[1]
             shared.oq.put('')
 
             if stopcmd:
-                print('run_loop', 'stopcmd')
+                self.log.debug('run_loop stopcmd')
                 return
             else:
-                print('run_loop', 'continue')
+                self.log.debug('run_loop continue')
 
-        print('run_loop', 'finished')
+        self.log.debug('run_loop finished')
         shared.oq.put(('finished',))
 
 

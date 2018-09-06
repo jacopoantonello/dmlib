@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import sys
+import logging
 import numpy as np
 
 from numpy.linalg import norm
@@ -11,15 +12,21 @@ from PyQt5.QtWidgets import QErrorMessage, QInputDialog
 import dmlib.test
 
 
+LOG = logging.getLogger('core')
+
+
 class SquareRoot:
 
     name = 'v = 2.0*np.sqrt((u + 1.0)/2.0) - 1.0'
+
+    def __init__(self):
+        self.log = logging.getLogger('SquareRoot')
 
     def __call__(self, u):
         assert(np.all(np.isfinite(u)))
 
         if norm(u, np.inf) > 1.:
-            print('SquareRoot saturation')
+            self.log.info('saturation')
             u[u > 1.] = 1.
             u[u < -1.] = -1.
         assert(norm(u, np.inf) <= 1.)
@@ -41,12 +48,15 @@ class FakeCam():
 
     name = None
 
+    def __init__(self):
+        self.log = logging.getLogger(self.__class__.__name__)
+
     def open(self, name):
         self.name = name
-        print('FakeCam open ' + name)
+        self.log.info(f'open {name:}')
 
     def close(self):
-        print('FakeCam close ' + self.name)
+        self.log.info(f'close {self.name:}')
 
     def grab_image(self):
         return dmlib.test.load_int3()
@@ -101,12 +111,15 @@ class FakeDM():
     name = None
     transform = None
 
+    def __init__(self):
+        self.log = logging.getLogger(self.__class__.__name__)
+
     def open(self, name):
         self.name = name
-        print('FakeDM open ' + name)
+        self.log.info(f'open {name:}')
 
     def close(self):
-        print('FakeDM close ' + self.name)
+        self.log.info(f'close {self.name:}')
 
     def get_devices(self):
         return ['simdm0', 'simdm1']
@@ -117,7 +130,7 @@ class FakeDM():
     def write(self, v):
         if self.transform:
             v = self.transform(v)
-        print('FakeDM', v)
+        self.log.debug('write ' + str(v))
 
     def get_transform(self):
         return self.transform
@@ -259,7 +272,7 @@ def open_cam(app, args):
 
     if args.cam_list:
         devs = cam.get_devices()
-        print(cam.get_devices())
+        LOG.info('cam devices: ' + str(cam.get_devices()))
         if app:
             e = QErrorMessage()
             e.showMessage('detected cameras are: ' + str(devs))
@@ -299,7 +312,7 @@ def open_dm(app, args, dm_transform=None):
 
     if args.dm_list:
         devs = dm.get_devices()
-        print(dm.get_devices())
+        LOG.info('dm devices: ' + str(dm.get_devices()))
         if app:
             e = QErrorMessage()
             e.showMessage('detected dms are: ' + str(devs))
