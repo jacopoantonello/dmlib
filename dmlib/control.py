@@ -45,6 +45,9 @@ class ZernikeControl:
         self.flat_on = 1
         self.scale_z = 1
 
+        if h5f:
+            calib.save_h5py(h5f)
+
         def make_empty(name, shape):
             h5f.create_dataset(
                 name, shape + (0,), maxshape=shape + (None,),

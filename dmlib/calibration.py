@@ -318,6 +318,9 @@ class WeightedLSCalib:
         z.dname = f[prefix + 'dname'][()]
         z.hash1 = f[prefix + 'hash1'][()]
 
+        xx, yy, _ = z.fringe.get_unit_aperture()
+        z.cart.make_cart_grid(xx, yy)
+
         z.zfA1TzfA1 = None
         z.chzfA1TzfA1 = None
 
@@ -330,7 +333,14 @@ class WeightedLSCalib:
         if prepend is not None:
             prefix = prepend + prefix
 
+        try:
+            ZZ = self.cart.ZZ
+            del self.cart.ZZ
+        except AttributeError:
+            ZZ = None
         self.cart.save_h5py(f, prefix + 'cart/', params=HDF5_options)
+        if ZZ is not None:
+            self.cart.ZZ = ZZ
         self.fringe.save_h5py(f, prefix + 'fringe/', params=HDF5_options)
 
         params['data'] = self.zfm
