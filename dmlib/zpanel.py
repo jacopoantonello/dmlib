@@ -67,8 +67,6 @@ class ZernikePanel(QWidget):
             slider, spinbox, amp = t[1], t[2], t[5]
             oldamp = abs(float(amp.text()))
             newamp = abs(self.z[i])
-            print(
-                f'update_controls {oldamp:} {newamp:} {self.z[i]:}')
 
             slider.blockSignals(True)
             spinbox.blockSignals(True)
