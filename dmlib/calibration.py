@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import logging
 import numpy as np
 
 from h5py import File
@@ -15,6 +16,7 @@ from zernike.czernike import RZern
 
 from dmlib.interf import FringeAnalysis
 
+LOG = logging.getLogger('calibration')
 HDF5_options = {
     'chunks': True,
     'shuffle': True,
@@ -95,7 +97,7 @@ class WeightedLSCalib:
         assert(yy.shape == shape)
         cart = RZern(n_radial)
         cart.make_cart_grid(xx, yy)
-        print(
+        LOG.info(
             f'calibrate(): Computing Zernike polynomials {time() - t1:.1f}')
 
         if status_cb:
@@ -104,8 +106,8 @@ class WeightedLSCalib:
         zfm = cart.matrix(np.isfinite(cart.ZZ[:, 0]))
         self.cart = cart
         self.zfm = zfm
-        zfA1, zfA2, mask = self._make_zfAs(cart, zfm)
-        print(
+        zfA1, zfA2, mask = self._make_zfAs()
+        LOG.info(
             f'calibrate(): Computing masks {time() - t1:.1f}')
 
         # TODO remove me
@@ -152,7 +154,7 @@ class WeightedLSCalib:
         phi0 = phases[inds0, :].mean(axis=0)
         z0 = lstsq(np.dot(zfA1.T, zfA1), np.dot(zfA1.T, phi0), rcond=None)[0]
         phases -= phi0.reshape(1, -1)
-        print(
+        LOG.info(
             f'calibrate(): Computing phases {time() - t1:.1f}')
 
         if status_cb:
@@ -164,7 +166,7 @@ class WeightedLSCalib:
         for i in inds1:
             uiuiT += np.dot(U[:, [i]], U[:, [i]].T)
             phiiuiT += np.dot(phases[[i], :].T, U[:, [i]].T)
-        print(
+        LOG.info(
             f'calibrate(): Computing least-squares matrices {time() - t1:.1f}')
         if status_cb:
             status_cb('Solving least-squares ...')
@@ -184,7 +186,7 @@ class WeightedLSCalib:
             return 100*(1 - np.var(y - ye, axis=1)/np.var(y, axis=1))
 
         mvaf = vaf(phases.T, zfA1@H@U)
-        print(
+        LOG.info(
             f'calibrate(): Solving least-squares {time() - t1:.1f}')
 
         if status_cb:
@@ -232,7 +234,7 @@ class WeightedLSCalib:
         self.dname = dname
         self.hash1 = hash1
 
-        print(
+        LOG.info(
             f'calibrate(): Applying regularisation {time() - t1:.1f}')
 
     def get_rzern(self):
