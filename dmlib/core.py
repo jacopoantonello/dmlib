@@ -90,11 +90,8 @@ class FakeCam():
     def get_serial_number(self):
         return self.name
 
-    def get_camera_info(self):
-        return 'camera info'
-
-    def get_sensor_info(self):
-        return 'sensor info'
+    def get_settings(self):
+        return 'camera settings'
 
     def get_image_dtype(self):
         return 'uint8'

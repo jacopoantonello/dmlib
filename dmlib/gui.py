@@ -305,9 +305,11 @@ class Control(QMainWindow):
     def make_panel_align(self):
         frame = QFrame()
         self.align_fig = FigureCanvas(Figure(figsize=(7, 5)))
+        self.align_nav = NavigationToolbar2QT(self.align_fig, frame)
         layout = QGridLayout()
         frame.setLayout(layout)
-        layout.addWidget(self.align_fig, 0, 0, 1, 0)
+        layout.addWidget(self.align_nav, 0, 0, 1, 0)
+        layout.addWidget(self.align_fig, 1, 0, 1, 0)
 
         self.tabs.addTab(frame, 'align')
         self.tabs.setTabToolTip(
@@ -328,20 +330,20 @@ class Control(QMainWindow):
 
         brun = QPushButton('run')
         bstop = QPushButton('stop')
-        layout.addWidget(brun, 1, 0)
-        layout.addWidget(bstop, 1, 1)
+        layout.addWidget(brun, 2, 0)
+        layout.addWidget(bstop, 2, 1)
         status = QLabel('')
         status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        layout.addWidget(status, 2, 0, 1, 2)
+        layout.addWidget(status, 3, 0, 1, 2)
 
         bauto = QCheckBox('auto')
         bauto.setToolTip('Lock first order position automatically')
         bauto.setChecked(True)
         self.align_bauto = bauto
-        layout.addWidget(bauto, 3, 0)
+        layout.addWidget(bauto, 4, 0)
         brepeat = QCheckBox('repeat')
         brepeat.setToolTip('Acquire data continuously or one time only')
-        layout.addWidget(brepeat, 3, 1)
+        layout.addWidget(brepeat, 4, 1)
 
         listener = AlignListener(self.shared)
 
@@ -350,15 +352,16 @@ class Control(QMainWindow):
         bsleep = QPushButton('sleep')
         bsleep.setToolTip(
             'Interval between setting the DM and acquiring an image')
-        layout.addWidget(bpoke, 4, 0)
-        layout.addWidget(bsleep, 4, 1)
+        layout.addWidget(bpoke, 5, 0)
+        layout.addWidget(bsleep, 5, 1)
         bunwrap = QCheckBox('unwrap')
         bunwrap.setChecked(True)
         bunwrap.setToolTip('Perform phase extraction & unwrapping')
-        layout.addWidget(bunwrap, 5, 0)
+        layout.addWidget(bunwrap, 6, 0)
 
         disables = [
-            self.toolbox, brun, bauto, brepeat, bpoke, bsleep, bunwrap]
+            self.toolbox, brun, bauto, brepeat, bpoke, bsleep, bunwrap,
+            self.align_nav]
 
         def disable():
             self.can_close = False
@@ -511,15 +514,15 @@ class Control(QMainWindow):
         bstop.clicked.connect(f4())
         bauto.stateChanged.connect(f2())
         brepeat.stateChanged.connect(f3())
-        self.align_nav = NavigationToolbar2QT(self.align_fig, frame)
-        disables.append(self.align_nav)
 
     def make_panel_dataacq(self):
         frame = QFrame()
         self.dataacq_fig = FigureCanvas(Figure(figsize=(7, 5)))
+        self.dataacq_nav = NavigationToolbar2QT(self.dataacq_fig, frame)
         layout = QGridLayout()
         frame.setLayout(layout)
-        layout.addWidget(self.dataacq_fig, 0, 0, 1, 0)
+        layout.addWidget(self.dataacq_nav, 0, 0, 1, 0)
+        layout.addWidget(self.dataacq_fig, 1, 0, 1, 0)
 
         self.tabs.addTab(frame, 'calibration')
         self.tabs.setTabToolTip(
@@ -541,12 +544,12 @@ class Control(QMainWindow):
         bstop = QPushButton('stop')
         bwavelength = QPushButton('wavelength')
         bwavelength.setToolTip('Calibration laser wavelength')
-        layout.addWidget(brun, 1, 0)
-        layout.addWidget(bstop, 1, 1)
-        layout.addWidget(bwavelength, 1, 2)
+        layout.addWidget(brun, 2, 0)
+        layout.addWidget(bstop, 2, 1)
+        layout.addWidget(bwavelength, 2, 2)
         status = QLabel('')
         status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        layout.addWidget(status, 2, 0, 1, 3)
+        layout.addWidget(status, 3, 0, 1, 3)
 
         bplot = QPushButton('open')
         bplot.setToolTip((
@@ -556,21 +559,21 @@ class Control(QMainWindow):
         bprev.setToolTip('Plot previous measurement')
         bnext = QPushButton('next')
         bnext.setToolTip('Plot next measurement')
-        layout.addWidget(bplot, 3, 0)
-        layout.addWidget(bprev, 3, 1)
-        layout.addWidget(bnext, 3, 2)
+        layout.addWidget(bplot, 4, 0)
+        layout.addWidget(bprev, 4, 1)
+        layout.addWidget(bnext, 4, 2)
 
         baperture = QPushButton('aperture')
         baperture.setToolTip('Define the pupil size over the DM surface')
-        layout.addWidget(baperture, 4, 0)
+        layout.addWidget(baperture, 5, 0)
         bcalibrate = QPushButton('calibrate')
         bcalibrate.setToolTip('Compute a calibration file')
-        layout.addWidget(bcalibrate, 4, 1)
+        layout.addWidget(bcalibrate, 5, 1)
         bclear = QPushButton('clear')
-        layout.addWidget(bclear, 4, 2)
+        layout.addWidget(bclear, 5, 2)
 
         disables = [
-            self.toolbox, brun, bwavelength, bplot,
+            self.toolbox, brun, bwavelength, bplot, self.dataacq_nav,
             bprev, bnext, baperture, bcalibrate, bclear]
 
         wavelength = []
@@ -902,15 +905,15 @@ class Control(QMainWindow):
         bclear.clicked.connect(f7())
 
         listener.sig_update.connect(f20())
-        self.dataacq_nav = NavigationToolbar2QT(self.dataacq_fig, frame)
-        disables.append(self.dataacq_nav)
 
     def make_panel_test(self):
         frame = QFrame()
         self.test_fig = FigureCanvas(Figure(figsize=(7, 5)))
+        self.test_nav = NavigationToolbar2QT(self.test_fig, frame)
         layout = QGridLayout()
         frame.setLayout(layout)
-        layout.addWidget(self.test_fig, 0, 0, 1, 0)
+        layout.addWidget(self.test_nav, 0, 0, 1, 0)
+        layout.addWidget(self.test_fig, 1, 0, 1, 0)
 
         self.tabs.addTab(frame, 'test')
         self.tabs.setTabToolTip(
@@ -935,32 +938,32 @@ class Control(QMainWindow):
         bzsize.setToolTip((
             'Maximum number of Zernike polynomials set by the DM (blue) ' +
             'and measured by the interferometer (orange)'))
-        layout.addWidget(brun, 1, 0)
-        layout.addWidget(bstop, 1, 1)
-        layout.addWidget(bsleep, 1, 2)
-        layout.addWidget(bzsize, 1, 3)
+        layout.addWidget(brun, 2, 0)
+        layout.addWidget(bstop, 2, 1)
+        layout.addWidget(bsleep, 2, 2)
+        layout.addWidget(bzsize, 2, 3)
         status = QLabel('')
         status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        layout.addWidget(status, 2, 0, 1, 3)
+        layout.addWidget(status, 3, 0, 1, 3)
 
         bzernike = QPushButton('open')
         bzernike.setToolTip('Open a calibration file')
-        layout.addWidget(bzernike, 3, 0)
+        layout.addWidget(bzernike, 4, 0)
 
         bflat = QCheckBox('flat')
         bflat.setChecked(True)
         bflat.setToolTip(
             'Apply the flat value computed at calibration time')
-        layout.addWidget(bflat, 3, 1)
+        layout.addWidget(bflat, 4, 1)
         bloop = QCheckBox('closed-loop')
         bloop.setChecked(False)
         bloop.setEnabled(False)
-        layout.addWidget(bloop, 3, 2)
+        layout.addWidget(bloop, 4, 2)
         bclear = QPushButton('clear')
-        layout.addWidget(bclear, 4, 3)
+        layout.addWidget(bclear, 5, 3)
 
         disables = [
-            self.toolbox, brun, bflat, bzernike, bclear,
+            self.toolbox, brun, bflat, bzernike, bclear, self.test_nav,
             bzernike, bsleep, bzsize]
         llistener = LoopListener(self.shared)
         calib = []
@@ -1171,9 +1174,6 @@ class Control(QMainWindow):
         bclear.clicked.connect(f3())
         bsleep.clicked.connect(fs1())
         bzsize.clicked.connect(fs2())
-
-        self.test_nav = NavigationToolbar2QT(self.test_fig, frame)
-        disables.append(self.test_nav)
 
 
 # https://stackoverflow.com/questions/41794635/
