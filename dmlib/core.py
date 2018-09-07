@@ -338,6 +338,36 @@ def open_dm(app, args, dm_transform=None):
     return dm
 
 
+def add_log_parameters(parser):
+    parser.add_argument(
+        '--no-file-log', action='store_true',
+        help='Disable logging to a file')
+    parser.add_argument(
+        '--log-level',
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        default='DEBUG')
+
+
+def setup_logging(args, name):
+    if args.log_level == 'DEBUG':
+        level = logging.DEBUG
+    elif args.log_level == 'INFO':
+        level = logging.INFO
+    elif args.log_level == 'WARNING':
+        level = logging.WARNING
+    elif args.log_level == 'ERROR':
+        level = logging.ERROR
+    elif args.log_level == 'CRITICAL':
+        level = logging.CRITICAL
+    else:
+        raise NotImplementedError('Unknown logging level {args.log_level}')
+
+    if not args.no_file_log:
+        logging.basicConfig(filename=f'{name}.log', level=level)
+    else:
+        logging.basicConfig(level=level)
+
+
 def add_dm_parameters(parser):
     parser.add_argument(
         '--dm-driver', choices=['sim', 'bmc', 'ciusb'], default='sim')

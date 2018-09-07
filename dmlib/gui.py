@@ -36,7 +36,9 @@ from dmlib.zpanel import ZernikePanel
 from dmlib.interf import FringeAnalysis
 from dmlib.calibration import WeightedLSCalib
 from dmlib.control import ZernikeControl
-from dmlib.core import add_dm_parameters, add_cam_parameters, open_dm, open_cam
+from dmlib.core import (
+    add_log_parameters, setup_logging, add_dm_parameters,
+    add_cam_parameters, open_dm, open_cam)
 
 
 class Control(QMainWindow):
@@ -1914,9 +1916,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='DM calibration GUI',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    add_log_parameters(parser)
     add_dm_parameters(parser)
     add_cam_parameters(parser)
     args = parser.parse_args(args[1:])
+    setup_logging(args, 'dmlib.gui')
 
     dm = open_dm(app, args)
     cam = open_cam(app, args)

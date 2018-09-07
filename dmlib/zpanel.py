@@ -29,7 +29,8 @@ from zernike.czernike import RZern
 
 from dmlib.version import __version__
 from dmlib.dmplot import DMPlot
-from dmlib.core import add_dm_parameters, open_dm
+from dmlib.core import (
+    add_dm_parameters, open_dm, add_log_parameters, setup_logging)
 from dmlib.calibration import WeightedLSCalib
 from dmlib.control import ZernikeControl
 
@@ -559,8 +560,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Zernike DM control',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    add_log_parameters(parser)
     add_zpanel_arguments(parser)
     args = parser.parse_args(args[1:])
+    setup_logging(args, 'zpanel')
 
     dminfo, settings = load_settings(app, args)
     calib_dm_name = dminfo[0]
