@@ -563,7 +563,7 @@ if __name__ == '__main__':
     add_log_parameters(parser)
     add_zpanel_arguments(parser)
     args = parser.parse_args(args[1:])
-    setup_logging(args, 'zpanel')
+    setup_logging(args)
 
     dminfo, settings = load_settings(app, args)
     calib_dm_name = dminfo[0]

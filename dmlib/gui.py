@@ -1389,6 +1389,7 @@ class Worker:
     run_align_state = [0]
 
     def __init__(self, shared, args):
+        setup_logging(args)
         self.log = logging.getLogger('Worker')
         dm = open_dm(None, args)
         cam = open_cam(None, args)
@@ -1920,7 +1921,7 @@ if __name__ == '__main__':
     add_dm_parameters(parser)
     add_cam_parameters(parser)
     args = parser.parse_args(args[1:])
-    setup_logging(args, 'dmlib.gui')
+    setup_logging(args)
 
     dm = open_dm(app, args)
     cam = open_cam(app, args)

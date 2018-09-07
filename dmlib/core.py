@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import os
 import sys
 import logging
 import numpy as np
@@ -348,7 +349,7 @@ def add_log_parameters(parser):
         default='DEBUG')
 
 
-def setup_logging(args, name):
+def setup_logging(args):
     if args.log_level == 'DEBUG':
         level = logging.DEBUG
     elif args.log_level == 'INFO':
@@ -363,7 +364,7 @@ def setup_logging(args, name):
         raise NotImplementedError('Unknown logging level {args.log_level}')
 
     if not args.no_file_log:
-        logging.basicConfig(filename=f'{name}.log', level=level)
+        logging.basicConfig(filename=str(os.getpid()) + '.log', level=level)
     else:
         logging.basicConfig(level=level)
 
