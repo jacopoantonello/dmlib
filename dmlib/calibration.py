@@ -68,6 +68,10 @@ class WeightedLSCalib:
         pass
 
     def _make_zfAs(self):
+        if not hasattr(self.cart, 'ZZ'):
+            xx, yy, _ = z.fringe.get_unit_aperture()
+            z.cart.make_cart_grid(xx, yy)
+
         mask = np.invert(self.zfm)
         zfA1 = np.zeros((self.zfm.sum(), self.cart.nk))
         zfA2 = np.zeros_like(self.cart.ZZ)
@@ -286,7 +290,7 @@ class WeightedLSCalib:
                     )
 
     @classmethod
-    def load_h5py(cls, f, prepend=None):
+    def load_h5py(cls, f, prepend=None, lazy_cart_grid=False):
         """Load object contents from an opened HDF5 file object."""
         z = cls()
 
@@ -320,8 +324,9 @@ class WeightedLSCalib:
         z.dname = f[prefix + 'dname'][()]
         z.hash1 = f[prefix + 'hash1'][()]
 
-        xx, yy, _ = z.fringe.get_unit_aperture()
-        z.cart.make_cart_grid(xx, yy)
+        if not lazy_cart_grid:
+            xx, yy, _ = z.fringe.get_unit_aperture()
+            z.cart.make_cart_grid(xx, yy)
 
         z.zfA1TzfA1 = None
         z.chzfA1TzfA1 = None

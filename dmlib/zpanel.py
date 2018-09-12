@@ -575,7 +575,7 @@ if __name__ == '__main__':
 
     try:
         with File(settings['calibration'], 'r') as f:
-            calib = WeightedLSCalib.load_h5py(f)
+            calib = WeightedLSCalib.load_h5py(f, lazy_cart_grid=True)
     except Exception as e:
         quit('error loading calibration {}: {}'.format(
             settings['calibration'], str(e)))
