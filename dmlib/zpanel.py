@@ -510,7 +510,7 @@ def load_settings(app, args, last_settings='.zpanel.json'):
     def quit(str1):
         e = QErrorMessage()
         e.showMessage(str1)
-        sys.exit(app.exec_())
+        sys.exit(e.exec_())
 
     if args.blank_settings:
         # blank settings

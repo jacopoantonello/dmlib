@@ -233,7 +233,7 @@ def exit_exception(app, txt, exc):
     if app:
         e = QErrorMessage()
         e.showMessage(msg)
-        sys.exit(app.exec_())
+        sys.exit(e.exec_())
     else:
         raise exc(msg)
 
@@ -274,7 +274,7 @@ def open_cam(app, args):
         if app:
             e = QErrorMessage()
             e.showMessage('detected cameras are: ' + str(devs))
-            sys.exit(app.exec_())
+            sys.exit(e.exec_())
         else:
             sys.exit()
 
@@ -314,7 +314,7 @@ def open_dm(app, args, dm_transform=None):
         if app:
             e = QErrorMessage()
             e.showMessage('detected dms are: ' + str(devs))
-            sys.exit(app.exec_())
+            sys.exit(e.exec_())
         else:
             sys.exit()
 
