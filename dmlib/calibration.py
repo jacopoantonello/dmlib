@@ -69,8 +69,8 @@ class WeightedLSCalib:
 
     def _make_zfAs(self):
         if not hasattr(self.cart, 'ZZ'):
-            xx, yy, _ = z.fringe.get_unit_aperture()
-            z.cart.make_cart_grid(xx, yy)
+            xx, yy, _ = self.fringe.get_unit_aperture()
+            self.cart.make_cart_grid(xx, yy)
 
         mask = np.invert(self.zfm)
         zfA1 = np.zeros((self.zfm.sum(), self.cart.nk))
@@ -274,7 +274,7 @@ class WeightedLSCalib:
         return self.fringe.radius
 
     def get_rad_to_nm(self):
-        return (self.wavelength/1e-9)/(2*np.pi)
+        return (self.wavelength)/(2*np.pi)
 
     @classmethod
     def query_calibration(cls, f):

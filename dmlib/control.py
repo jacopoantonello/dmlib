@@ -35,6 +35,7 @@ class ZernikeControl:
         self.h5_save('uflat', calib.uflat)
         self.h5_save('indices', indices)
         self.h5_save('rad_to_nm', calib.get_rad_to_nm())
+        # NOTE P is supposed to be orthonormal
         self.P = None
 
         self.z = np.zeros((nz,))
@@ -43,16 +44,16 @@ class ZernikeControl:
         self.u = np.zeros((nu,))
 
         self.flat_on = 1
-        self.scale_z = 1
 
         if h5f:
             calib.save_h5py(h5f)
 
-        def make_empty(name, shape):
+        def make_empty(name, shape, dtype=np.float):
             h5f.create_dataset(
                 name, shape + (0,), maxshape=shape + (None,),
-                dtype=np.float)
+                dtype=dtype)
         if h5f:
+            make_empty('ZernikeControl/flat_on', (1,), np.bool)
             make_empty('ZernikeControl/x', (ndof,))
             make_empty('ZernikeControl/u', (nu,))
 
@@ -76,13 +77,13 @@ class ZernikeControl:
             np.dot(self.P, self.z, self.z1)
         else:
             self.z1[:] = self.z[:]
-        self.z1 *= self.scale_z
 
         np.dot(self.calib.C, self.z1, self.u)
         if self.flat_on:
             self.u += self.calib.uflat
 
         if self.h5f:
+            self.h5_append('ZernikeControl/flat_on', self.flat_on)
             self.h5_append('ZernikeControl/x', x)
             self.h5_append('ZernikeControl/u', self.u)
 
