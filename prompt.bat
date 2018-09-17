@@ -1,2 +1,2 @@
 @echo off
-Powershell.exe -executionpolicy bypass -NoExit -Command ". scripts\base.ps1; Activate-Anaconda"
+Powershell.exe -executionpolicy bypass -NoExit -Command ". devwraps\scripts\base.ps1; Activate-Anaconda"
