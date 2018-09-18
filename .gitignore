@@ -6,3 +6,4 @@ build/
 dist/
 /dmlib/*.h5
 *.json
+/dmlib/version.py

@@ -31,24 +31,13 @@ def update_version():
         commit = re.search(
             r'^commit\s+([^\s]{40})', last, re.MULTILINE).group(1)
 
-        with open(path.join('dmlib', 'version.py'), 'r', newline='\n') as f:
-            vfile = f.read()
-
-        vfile = re.sub(
-            r'(__version__\s+=\s)([^\s].*)$', r"\1'{}'".format(version),
-            vfile,
-            flags=re.MULTILINE)
-        vfile = re.sub(
-            r'(__date__\s+=\s)([^\s].*)$', r"\1'{}'".format(date),
-            vfile,
-            flags=re.MULTILINE)
-        vfile = re.sub(
-            r'(__commit__\s+=\s)([^\s].*)$', r"\1'{}'".format(commit),
-            vfile,
-            flags=re.MULTILINE)
-
-        with open(path.join('dmlib', 'version.py'), 'w', newline='\n') as f:
-            f.write(vfile)
+        with open(
+                path.join('dmlib', 'version.py'), 'w', newline='\n') as f:
+            f.write('#!/usr/bin/env python3\n')
+            f.write('# -*- coding: utf-8 -*-\n\n')
+            f.write(f"__version__ = '{version}'\n")
+            f.write(f"__date__ = '{date}'\n")
+            f.write(f"__commit__ = '{commit}'")
     except Exception as e:
         print('Cannot update version {}'.format(str(e)), file=sys.stderr)
 
@@ -69,9 +58,9 @@ setup(
     long_description=long_description,
     url='',
     author='The DMLib Project Contributors',
-    author_email=', '.join(
+    author_email=', '.join([
         'jacopo.antonello@cncb.ox.ac.uk',
-        'aurelien.barbotin@dtc.ox.ac.uk'),
+        'aurelien.barbotin@dtc.ox.ac.uk']),
     license='to be defined',
     classifiers=[
         'Development Status :: 4 - Beta',
