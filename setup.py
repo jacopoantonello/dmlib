@@ -68,9 +68,11 @@ setup(
     description='Python tools for deformable mirror calibration',
     long_description=long_description,
     url='',
-    author='',
-    author_email='',
-    license='',
+    author='The DMLib Project Contributors',
+    author_email=', '.join(
+        'jacopo.antonello@cncb.ox.ac.uk',
+        'aurelien.barbotin@dtc.ox.ac.uk'),
+    license='to be defined',
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',

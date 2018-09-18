@@ -4,7 +4,7 @@
 from . import version
 
 __author__ = 'J Antonello, A. Barbotin'
-__copyright__ = 'to be defined'
+__copyright__ = 'Copyright 2018, J. Antonello, A. Barbotin'
 __license__ = 'to be defined'
 __email__ = 'jacopo.antonello@cncb.ox.ac.uk, aurelien.barbotin@dtc.ox.ac.uk'
 __status__ = 'Prototype'
