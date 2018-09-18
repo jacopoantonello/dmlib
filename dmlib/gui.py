@@ -30,15 +30,15 @@ from PyQt5.QtWidgets import (
     QSizePolicy,
     )
 
-from dmlib import version
+from dmlib.version import __version__
 from dmlib.dmplot import DMPlot
 from dmlib.zpanel import ZernikePanel
 from dmlib.interf import FringeAnalysis
 from dmlib.calibration import WeightedLSCalib
 from dmlib.control import ZernikeControl
 from dmlib.core import (
-    add_log_parameters, setup_logging, add_dm_parameters,
-    add_cam_parameters, open_dm, open_cam)
+    hash_file, write_h5_header, add_log_parameters, setup_logging,
+    add_dm_parameters, add_cam_parameters, open_dm, open_cam)
 
 
 class Control(QMainWindow):
@@ -58,7 +58,7 @@ class Control(QMainWindow):
         self.cam_name = cam_name
         self.dm_name = dm_name
 
-        self.setWindowTitle('DM calibration ' + version.__version__)
+        self.setWindowTitle('DM calibration ' + __version__)
         QShortcut(QKeySequence("Ctrl+Q"), self, self.close)
 
         central = QSplitter(Qt.Horizontal)
@@ -1588,7 +1588,7 @@ class Worker:
             cam_pixel_size = self.dset['cam/pixel_size'][()]
             cam_serial = self.dset['cam/serial'][()]
             dmplot_txs = self.dset['dmplot/txs'][()]
-            hash1 = version.hash_file(dname)
+            hash1 = hash_file(dname)
 
             def make_notify():
                 def f(m, cmd='UP'):
@@ -1612,7 +1612,7 @@ class Worker:
 
             notify_fun(f'Saving {h5fn} ...')
             with h5py.File(h5fn, 'w', libver=libver) as h5f:
-                version.write_h5_header(h5f, libver, now)
+                write_h5_header(h5f, libver, now)
                 calib.save_h5py(h5f)
 
             notify_fun(
@@ -1738,7 +1738,7 @@ class Worker:
                 ))
 
         with h5py.File(h5fn, 'w', libver=libver) as h5f:
-            version.write_h5_header(h5f, libver, now)
+            write_h5_header(h5f, libver, now)
 
             h5f['dmplot/txs'] = dmplot_txs
 
