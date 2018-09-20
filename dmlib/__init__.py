@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from . import version
+from dmlib import version
 
 __author__ = 'J Antonello, A. Barbotin'
 __copyright__ = 'Copyright 2018, J. Antonello, A. Barbotin'
