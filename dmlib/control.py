@@ -104,7 +104,7 @@ class ZernikeControl:
         self.ab[:] = normal(size=self.ab.size)
         self.ab[:] /= norm(self.ab.size)
         if self.h5f:
-            self.h5f['ab'][:] = self.ab[:]
+            self.h5f['ZernikeControl/ab'][:] = self.ab[:]
 
     def transform_pupil(self, alpha=0., flipx=False, flipy=False):
         if alpha != 0.:
