@@ -69,9 +69,8 @@ setup(
     ],
     packages=['dmlib', 'dmlib.test'],
     package_data={'dmlib.test': ['*.tif']},
-    # setup_requires=['numpy', 'zernike', 'devwraps'],
-    setup_requires=['numpy', 'zernike'],
-    install_requires=['numpy', 'h5py', 'scikit-image'],
+    setup_requires=['numpy'],
+    install_requires=['numpy', 'h5py', 'scikit-image', 'zernike'],
     extras_require={
         'user interface': ['pyqt5'],
         'plot': ['matplotlib'],
