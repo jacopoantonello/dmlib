@@ -241,6 +241,11 @@ class WeightedLSCalib:
         LOG.info(
             f'calibrate(): Applying regularisation {time() - t1:.1f}')
 
+    def reflatten(self, exclude_zernike_noll=4):
+        tmp = self.z0.copy()
+        tmp[:exclude_zernike_noll] = 0
+        self.uflat = -np.dot(self.C, tmp)
+
     def get_rzern(self):
         return self.cart
 
