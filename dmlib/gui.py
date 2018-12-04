@@ -953,10 +953,13 @@ class Control(QMainWindow):
         layout.addWidget(bzernike, 4, 0)
 
         bflat = QCheckBox('flat')
+        bnoflat = QPushButton('exclude flat')
+        bnoflat.setToolTip('Exclude some Zernike modes from the flattening')
         bflat.setChecked(True)
         bflat.setToolTip(
             'Apply the flat value computed at calibration time')
         layout.addWidget(bflat, 4, 1)
+        layout.addWidget(bnoflat, 5, 1)
         bloop = QCheckBox('closed-loop')
         bloop.setChecked(False)
         bloop.setEnabled(False)
@@ -965,12 +968,13 @@ class Control(QMainWindow):
         layout.addWidget(bclear, 5, 3)
 
         disables = [
-            self.toolbox, brun, bflat, bzernike, bclear, self.test_nav,
-            bzernike, bsleep, bzsize]
+            self.toolbox, brun, bflat, bnoflat, bzernike, bclear,
+            self.test_nav, bzernike, bsleep, bzsize]
         llistener = LoopListener(self.shared)
         calib = []
         zsize = [1024]
         arts = []
+        noflat_index = [0]
 
         def clearup(clear_status=False):
             for c in arts:
@@ -1074,6 +1078,7 @@ class Control(QMainWindow):
                 llistener.run = True
                 llistener.calib = calib[0]
                 llistener.flat = bflat.isChecked()
+                llistener.noflat_index = noflat_index[0]
                 llistener.closed_loop = bloop.isChecked()
                 llistener.start()
             return f
@@ -1170,12 +1175,25 @@ class Control(QMainWindow):
                         zsize[0] = val
             return f
 
+        def f5():
+            def f():
+                val, ok = QInputDialog.getInt(
+                    self, 'Exclude Noll indices from flattening',
+                    'Noll index (inclusive)',
+                    noflat_index[0], 0, self.shared.z_sp.size)
+                if not ok:
+                    return
+                else:
+                    noflat_index[0] = val
+            return f
+
         brun.clicked.connect(f1())
         bstop.clicked.connect(f4())
         bzernike.clicked.connect(f2())
         bclear.clicked.connect(f3())
         bsleep.clicked.connect(fs1())
         bzsize.clicked.connect(fs2())
+        bnoflat.clicked.connect(f5())
 
 
 # https://stackoverflow.com/questions/41794635/
@@ -1270,6 +1288,7 @@ class LoopListener(QThread):
     run = True
     calib = False
     flat = True
+    noflat_index = 0
     closed_loop = True
     sig_update = pyqtSignal(tuple)
 
@@ -1280,7 +1299,8 @@ class LoopListener(QThread):
 
     def run(self):
         self.shared.iq.put((
-            'loop', self.calib, self.flat, self.closed_loop, self.sleep))
+            'loop', self.calib, self.flat, self.noflat_index,
+            self.closed_loop, self.sleep))
         while True:
             result = self.shared.oq.get()
             if result[0] == 'OK':
@@ -1823,7 +1843,7 @@ class Worker:
         self.log.debug('run_dataacq finished')
         shared.oq.put(('finished', h5fn))
 
-    def run_loop(self, dname, flat, closed_loop, sleep):
+    def run_loop(self, dname, flat, noflat_index, closed_loop, sleep):
         if self.open_calib(dname):
             return
 
@@ -1834,6 +1854,7 @@ class Worker:
         shared = self.shared
         shared.z_size.value = dm.ndof
 
+        calib.reflatten(noflat_index)
         dm.flat_on = flat
 
         for i in range(4):
