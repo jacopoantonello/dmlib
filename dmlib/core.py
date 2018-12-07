@@ -8,6 +8,7 @@ import numpy as np
 import h5py
 import hashlib
 
+from datetime import datetime
 from numpy.linalg import norm
 from PyQt5.QtWidgets import QErrorMessage, QInputDialog
 
@@ -397,7 +398,9 @@ def setup_logging(args):
         raise NotImplementedError('Unknown logging level {args.log_level}')
 
     if not args.no_file_log:
-        logging.basicConfig(filename=str(os.getpid()) + '.log', level=level)
+        fn = datetime.now().strftime(
+            '%Y%m%d-%H%M%S-' + str(os.getpid()) + '.log')
+        logging.basicConfig(filename=fn, level=level)
     else:
         logging.basicConfig(level=level)
 
