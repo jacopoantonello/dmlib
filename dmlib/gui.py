@@ -1178,8 +1178,8 @@ class Control(QMainWindow):
         def f5():
             def f():
                 val, ok = QInputDialog.getInt(
-                    self, 'Exclude Noll indices from flattening',
-                    'Noll index (inclusive)',
+                    self, 'Exclude Noll',
+                    'Exclude Noll indices from flattening up to (inclusive):',
                     noflat_index[0], 0, self.shared.z_sp.size)
                 if not ok:
                     return
