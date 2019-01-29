@@ -5,21 +5,24 @@ import logging
 import numpy as np
 
 from numpy.random import normal
-from numpy.linalg import norm, matrix_rank
+from numpy.linalg import norm, matrix_rank, svd
 
 
 class ZernikeControl:
 
     saturation = 0
 
-    def __init__(self, dm, calib, indices=None, h5f=None):
+    def __init__(self, dm, calib, args=None, h5f=None):
+        self.args = args
         self.log = logging.getLogger('ZernikeControl')
 
         nz = calib.H.shape[0]
         nu = calib.H.shape[1]
 
-        if indices is None:
+        if args is None:
             indices = np.arange(1, nz + 1)
+        else:
+            indices = get_noll_indices(args)
         assert(calib.get_rzern().nk == nz)
         ndof = indices.size
 
@@ -42,6 +45,7 @@ class ZernikeControl:
         self.z1 = np.zeros((nz,))
         self.ab = np.zeros((ndof,))
         self.u = np.zeros((nu,))
+        self.u0 = np.zeros((nu,))
 
         self.flat_on = 1
 
@@ -57,6 +61,7 @@ class ZernikeControl:
             make_empty('ZernikeControl/x', (ndof,))
             make_empty('ZernikeControl/u', (nu,))
 
+        self.h5_save('name', self.__class__.__name__)
         self.h5_save('ab', self.ab)
         self.h5_save('P', np.eye(nz))
 
@@ -79,6 +84,7 @@ class ZernikeControl:
             tmp = self.u - self.calib.uflat
         else:
             tmp = self.u
+        tmp += self.u0
         z1 = np.dot(self.calib.H, tmp)
         if self.P is None:
             return z1
@@ -96,6 +102,8 @@ class ZernikeControl:
         np.dot(self.calib.C, self.z1, self.u)
         if self.flat_on:
             self.u += self.calib.uflat
+
+        self.u += self.u0
 
         if self.h5f:
             self.h5_append('ZernikeControl/flat_on', self.flat_on)
@@ -219,10 +227,28 @@ class ZernikeControl:
         assert(norm((np.dot(R.T, R) - np.eye(cz.nk)).ravel()) < 1e-11)
         return R
 
+    def store_u0(self, u):
+        self.u0[:] = u
+        self.h5_save('u0', self.u0)
+
 
 class SVDControl(ZernikeControl):
-    def __init__(self, dm, calib, indices=None, h5f=None):
-        super().__init__(dm, calib, indices, h5f)
+    def __init__(self, dm, calib, args, h5=None):
+        super().__init__(dm, calib, dm, calib, args, h5)
+        self.log = logging.getLogger('SVDControl')
+
+        self.h5_save('svd_modes', args.svd_modes)
+
+        H = self.calib.H
+        nmax = (
+            np.fromstring(args.noll_exclude, dtype=np.int, sep=',') - 1).max()
+        Hl = H[:nmax, :]
+        _, _, Vt = svd(Hl)
+        Vl2 = Vt[nmax:, :].T
+        self.ndof = min(args.svd_modes, Vl2.shape[1])
+
+    def set_random_ab(self, rms=1.0):
+        raise NotImplementedError()
 
 
 def get_noll_indices(args):
@@ -264,7 +290,7 @@ def add_control_parameters(parser):
         '--noll-include', type=str, default='', metavar='INDICES',
         help='Comma separated list of Noll indices to include, eg 1,2')
     parser.add_argument(
-        '--noll-exclude', type=str, default='', metavar='INDICES',
+        '--noll-exclude', type=str, default='1,2,3,4', metavar='INDICES',
         help='Comma separated list of Noll indices to exclude, eg 1,2')
     parser.add_argument(
         '--noll-min', type=int, default=5, metavar='MIN',
@@ -275,3 +301,6 @@ def add_control_parameters(parser):
     parser.add_argument(
         '--control', choices=list(control_types.keys()),
         default=list(control_types.keys())[0], help='DM control type')
+    parser.add_argument(
+        '--svd-modes', type=int, default=2, metavar='N',
+        help='Correct N SVD modes if using SVD control')

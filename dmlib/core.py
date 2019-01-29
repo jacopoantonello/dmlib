@@ -162,7 +162,6 @@ class FakeDM():
     def write(self, v):
         if self.transform:
             v = self.transform(v)
-        self.log.debug('write ' + str(v))
 
     def get_transform(self):
         return self.transform
