@@ -38,6 +38,22 @@ from dmlib.control import ZernikeControl
 fto100mul = 100
 
 
+class MyQDoubleValidator(QDoubleValidator):
+    def setFixup(self, val):
+        self.fixupval = val
+
+    def fixup(self, txt):
+        return str(self.fixupval)
+
+
+class MyQIntValidator(QIntValidator):
+    def setFixup(self, val):
+        self.fixupval = val
+
+    def fixup(self, txt):
+        return str(self.fixupval)
+
+
 def fto100(f, amp):
     maxrad = float(amp.text())
     return int((f + maxrad)/(2*maxrad)*fto100mul)
@@ -147,7 +163,9 @@ class ZernikePanel(QWidget):
         labzm = QLabel('shown modes')
         lezm = QLineEdit(str(self.nmodes))
         lezm.setMaximumWidth(50)
-        lezm.setValidator(QIntValidator(1, self.rzern.nk))
+        lezmval = MyQIntValidator(1, self.rzern.nk)
+        lezmval.setFixup(self.nmodes)
+        lezm.setValidator(lezmval)
 
         brad = QCheckBox('rad')
         brad.setChecked(True)
@@ -173,9 +191,10 @@ class ZernikePanel(QWidget):
                 self.update_gui()
             return f
 
-        def make_hand_amp(spinbox, slider, le, i):
+        def make_hand_amp(spinbox, slider, le, val, i):
             def f():
                 amp = float(le.text())
+                val.setFixup(amp)
                 spinbox.setRange(-amp, amp)
                 spinbox.setValue(spinbox.value())
                 slider.setValue(fto100(self.z[i], le))
@@ -240,8 +259,9 @@ class ZernikePanel(QWidget):
                     lbn.setMaximumWidth(120)
                     amp = QLineEdit(str(maxamp))
                     amp.setMaximumWidth(50)
-                    val = QDoubleValidator()
-                    val.setBottom(0.0)
+                    val = MyQDoubleValidator()
+                    val.setBottom(0.5)
+                    val.setFixup(maxamp)
                     amp.setValidator(val)
 
                     slider.setMinimum(0)
@@ -257,7 +277,7 @@ class ZernikePanel(QWidget):
 
                     hand_slider = make_hand_slider(spinbox, amp)
                     hand_spinbox = make_hand_spinbox(slider, i, amp)
-                    hand_amp = make_hand_amp(spinbox, slider, amp, i)
+                    hand_amp = make_hand_amp(spinbox, slider, amp, val, i)
                     hand_lab = make_hand_lab(lbn, self.settings, i)
 
                     slider.valueChanged.connect(hand_slider)
