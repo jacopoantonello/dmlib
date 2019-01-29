@@ -126,10 +126,13 @@ class ZernikeControl:
         if tot.size == 1:
             return
         else:
-            if self.P is None:
-                self.P = tot
-            else:
-                np.dot(tot, self.P.copy(), self.P)
+            self.set_P(tot)
+
+    def set_P(self, P):
+        if self.P is None:
+            self.P = P.copy()
+        else:
+            np.dot(P, self.P.copy(), self.P)
 
         if self.h5f:
             self.h5f['P'][:] = self.P[:]
