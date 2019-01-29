@@ -58,7 +58,7 @@ class ZernikeControl:
             make_empty('ZernikeControl/u', (nu,))
 
         self.h5_save('ab', self.ab)
-        self.h5_save('P', np.eye(nz, nz))
+        self.h5_save('P', np.eye(nz))
 
     def h5_append(self, name, what):
         if self.h5f:
@@ -144,17 +144,25 @@ class ZernikeControl:
             self.set_P(tot)
 
     def set_P(self, P):
-        assert(P.ndim == 2)
-        assert(P.shape[0] == P.shape[1])
-        assert(np.allclose(np.dot(P, P.T), np.eye(P.shape[0])))
-        if self.P is None:
-            self.P = P.copy()
-        else:
-            np.dot(P, self.P.copy(), self.P)
+        if P is None:
+            self.P = None
 
-        if self.h5f:
-            del self.h5f['P']
-            self.h5f['P'][:] = self.P[:]
+            if self.h5f:
+                del self.h5f['P']
+                self.h5f['P'][:] = np.eye(self.nz)
+        else:
+            assert(P.ndim == 2)
+            assert(P.shape[0] == P.shape[1])
+            assert(np.allclose(np.dot(P, P.T), np.eye(P.shape[0])))
+            if self.P is None:
+                self.P = P.copy()
+            else:
+                np.dot(P, self.P.copy(), self.P)
+
+            if self.h5f:
+                del self.h5f['P']
+                self.h5f['P'][:] = self.P[:]
+        print(self.P)
 
     def make_rot_matrix(self, alpha):
         cz = self.calib.get_rzern()
