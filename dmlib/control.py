@@ -162,7 +162,6 @@ class ZernikeControl:
             if self.h5f:
                 del self.h5f['P']
                 self.h5f['P'][:] = self.P[:]
-        print(self.P)
 
     def make_rot_matrix(self, alpha):
         cz = self.calib.get_rzern()
