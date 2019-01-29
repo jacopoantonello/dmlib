@@ -191,19 +191,24 @@ class ZernikeControl:
         return R
 
 
+class SVDControl(ZernikeControl):
+    def __init__(self, dm, calib, indices=None, h5f=None):
+        super().__init__(dm, calib, indices, h5f)
+
+
 def get_noll_indices(args):
     if args.noll_min > 0 and args.noll_max > 0:
         mrange = np.arange(args.noll_min, args.noll_max + 1)
     else:
         mrange = np.array([], dtype=np.int)
 
-    if args.noll_include is not None:
+    if args.noll_include != '':
         minclude = np.fromstring(args.noll_include, dtype=np.int, sep=',')
         minclude = minclude[minclude > 0]
     else:
         minclude = np.array([], dtype=np.int)
 
-    if args.noll_exclude is not None:
+    if args.noll_exclude != '':
         mexclude = np.fromstring(args.noll_exclude, dtype=np.int, sep=',')
         mexclude = mexclude[mexclude > 0]
     else:
@@ -219,16 +224,25 @@ def get_noll_indices(args):
     return zernike_indices
 
 
+control_types = {
+    'Zernike': ZernikeControl,
+    'SVD': SVDControl,
+    }
+
+
 def add_control_parameters(parser):
     parser.add_argument(
-        '--noll-include', type=str, default=None, metavar='INDICES',
-        help='Comma separated list of Noll indices to include')
+        '--noll-include', type=str, default='', metavar='INDICES',
+        help='Comma separated list of Noll indices to include, eg 1,2')
     parser.add_argument(
-        '--noll-exclude', type=str, default=None, metavar='INDICES',
-        help='Comma separated list of Noll indices to exclude')
+        '--noll-exclude', type=str, default='', metavar='INDICES',
+        help='Comma separated list of Noll indices to exclude, eg 1,2')
     parser.add_argument(
         '--noll-min', type=int, default=5, metavar='MIN',
         help='Minimum Noll index to consider, use -1 to ignore')
     parser.add_argument(
         '--noll-max', type=int, default=6, metavar='MAX',
         help='Maximum Noll index to consider, use -1 to ignore')
+    parser.add_argument(
+        '--control', choices=list(control_types.keys()),
+        default=list(control_types.keys())[0], help='DM control type')
