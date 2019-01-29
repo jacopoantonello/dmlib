@@ -70,6 +70,21 @@ class ZernikeControl:
         if self.h5f:
             self.h5f['ZernikeControl/' + where] = what
 
+    def u2z(self):
+        # for GUI purposes & does not include flat
+        # z1 = P*z
+        # u = C*z1
+        # z1 = H*u
+        if self.flat_on:
+            tmp = self.u - self.calib.uflat
+        else:
+            tmp = self.u
+        z1 = np.dot(self.calib.H, tmp)
+        if self.P is None:
+            return z1
+        else:
+            return np.dot(self.P.T, z1)
+
     def write(self, x):
         assert(x.shape == self.ab.shape)
         self.z[self.indices - 1] = x[:] + self.ab[:]
@@ -129,12 +144,16 @@ class ZernikeControl:
             self.set_P(tot)
 
     def set_P(self, P):
+        assert(P.ndim == 2)
+        assert(P.shape[0] == P.shape[1])
+        assert(np.allclose(np.dot(P, P.T), np.eye(P.shape[0])))
         if self.P is None:
             self.P = P.copy()
         else:
             np.dot(P, self.P.copy(), self.P)
 
         if self.h5f:
+            del self.h5f['P']
             self.h5f['P'][:] = self.P[:]
 
     def make_rot_matrix(self, alpha):
