@@ -14,7 +14,7 @@ class ZernikeControl:
 
     def __init__(self, dm, calib, args=None, h5f=None):
         self.args = args
-        self.log = logging.getLogger('ZernikeControl')
+        self.log = logging.getLogger(self.__class__.__name__)
 
         nz = calib.H.shape[0]
         nu = calib.H.shape[1]
@@ -52,21 +52,27 @@ class ZernikeControl:
         if h5f:
             calib.save_h5py(h5f)
 
-        def make_empty(name, shape, dtype=np.float):
-            h5f.create_dataset(
-                name, shape + (0,), maxshape=shape + (None,),
-                dtype=dtype)
         if h5f:
-            make_empty('ZernikeControl/flat_on', (1,), np.bool)
-            make_empty('ZernikeControl/x', (ndof,))
-            make_empty('ZernikeControl/u', (nu,))
+            self.h5_make_empty('flat_on', (1,), np.bool)
+            self.h5_make_empty('x', (ndof,))
+            self.h5_make_empty('u', (nu,))
 
         self.h5_save('name', self.__class__.__name__)
         self.h5_save('ab', self.ab)
         self.h5_save('P', np.eye(nz))
 
+    def h5_make_empty(self, name, shape, dtype=np.float):
+        if self.h5f:
+            name = 'ZernikeControl/' + name
+            if name in self.h5f:
+                del self.h5f[name]
+            self.h5f.create_dataset(
+                name, shape + (0,), maxshape=shape + (None,),
+                dtype=dtype)
+
     def h5_append(self, name, what):
         if self.h5f:
+            name = 'ZernikeControl/' + name
             self.h5f[name].resize((
                 self.h5f[name].shape[0], self.h5f[name].shape[1] + 1))
             self.h5f[name][:, -1] = what
@@ -106,9 +112,9 @@ class ZernikeControl:
         self.u += self.u0
 
         if self.h5f:
-            self.h5_append('ZernikeControl/flat_on', self.flat_on)
-            self.h5_append('ZernikeControl/x', x)
-            self.h5_append('ZernikeControl/u', self.u)
+            self.h5_append('flat_on', self.flat_on)
+            self.h5_append('x', x)
+            self.h5_append('u', self.u)
 
         if norm(self.u, np.inf) > 1:
             self.log.warn(
@@ -233,21 +239,81 @@ class ZernikeControl:
 
 
 class SVDControl(ZernikeControl):
+
     def __init__(self, dm, calib, args, h5=None):
-        super().__init__(dm, calib, dm, calib, args, h5)
-        self.log = logging.getLogger('SVDControl')
+        super().__init__(dm, calib, args, h5)
 
         self.h5_save('svd_modes', args.svd_modes)
 
         H = self.calib.H
-        nmax = (
-            np.fromstring(args.noll_exclude, dtype=np.int, sep=',') - 1).max()
-        Hl = H[:nmax, :]
+        nignore = (np.fromstring(
+            args.noll_exclude, dtype=np.int, sep=',') - 1).max()
+        Hl = H[:nignore, :]
+        # Hh = H[nignore:, :]
         _, _, Vt = svd(Hl)
-        Vl2 = Vt[nmax:, :].T
-        self.ndof = min(args.svd_modes, Vl2.shape[1])
+        Vl2 = Vt[nignore:, :].T
+        test1 = np.dot(H, Vl2)
+        assert(test1.shape[0] == H.shape[0])
+        assert(test1.shape[1] == H.shape[1] - nignore)
+        assert(np.allclose(test1[:nignore, :], 0))
+
+        U, s, Vt = svd(np.dot(H, Vl2))
+        U1 = U[:, :s.size]
+        # U2 = U[:, s.size:]
+        np.allclose(U1[:nignore, :], 0)
+
+        nmodes = args.svd_modes
+        V1 = Vt[:nmodes, :].T
+        s1i = np.power(s[:nmodes], -1)
+        S1i = np.diag(s1i)
+
+        self.h5_make_empty('x', (nmodes,))
+        self.K = Vl2@V1@S1i
+        self.ndof = nmodes
+        self.ab = np.zeros(nmodes)
+
+        def f(n, w):
+            self.h5f['ZernikeControl/SVDControl/' + n] = w
+
+        if self.h5f:
+            f('nignore', nignore)
+            f('nmodes', nmodes)
+            f('Vl2', Vl2)
+            f('V1', V1)
+            f('S1i', S1i)
+            f('K', self.K)
+
+    def write(self, x):
+        assert(x.shape == self.ab.shape)
+        z = x + self.ab
+        np.dot(self.K, z, self.u)
+        if self.flat_on:
+            self.u += self.calib.uflat
+
+        self.u += self.u0
+
+        if self.h5f:
+            self.h5_append('flat_on', self.flat_on)
+            self.h5_append('x', x)
+            self.h5_append('u', self.u)
+
+        if norm(self.u, np.inf) > 1:
+            self.log.warn(
+                'Saturation {}'.format(str(np.abs(self.u).max())))
+            self.u[self.u > 1.] = 1.
+            self.u[self.u < -1.] = -1.
+            self.saturation = 1
+        else:
+            self.saturation = 0
+
+        assert(norm(self.u, np.inf) <= 1.)
+
+        self.dm.write(self.u)
 
     def set_random_ab(self, rms=1.0):
+        raise NotImplementedError()
+
+    def set_P(self, P):
         raise NotImplementedError()
 
 
