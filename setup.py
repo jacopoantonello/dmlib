@@ -58,9 +58,7 @@ setup(
     long_description=long_description,
     url='',
     author='The DMLib Project Contributors',
-    author_email=', '.join([
-        'jacopo.antonello@cncb.ox.ac.uk',
-        'aurelien.barbotin@dtc.ox.ac.uk']),
+    author_email='jacopo@antonello.org',
     license='to be defined',
     classifiers=[
         'Development Status :: 4 - Beta',

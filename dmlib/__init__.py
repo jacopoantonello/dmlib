@@ -3,10 +3,10 @@
 
 from dmlib import version
 
-__author__ = 'J Antonello, A. Barbotin'
-__copyright__ = 'Copyright 2018, J. Antonello, A. Barbotin'
+__author__ = 'J Antonello'
+__copyright__ = 'Copyright 2019, J. Antonello'
 __license__ = 'to be defined'
-__email__ = 'jacopo.antonello@cncb.ox.ac.uk, aurelien.barbotin@dtc.ox.ac.uk'
+__email__ = 'jacopo@antonello.org'
 __status__ = 'Prototype'
 __all__ = [
     'calibration', 'control', 'core', 'dmplot', 'gui', 'interf',
