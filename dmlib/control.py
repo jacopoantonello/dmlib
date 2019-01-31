@@ -79,7 +79,10 @@ class ZernikeControl:
 
     def h5_save(self, where, what):
         if self.h5f:
-            self.h5f['ZernikeControl/' + where] = what
+            name = 'ZernikeControl/' + where
+            if name in self.h5f:
+                del self.h5f[name]
+            self.h5f[name] = what
 
     def u2z(self):
         # for GUI purposes & does not include flat
@@ -271,6 +274,7 @@ class SVDControl(ZernikeControl):
         self.K = Vl2@V1@S1i
         self.ndof = nmodes
         self.ab = np.zeros(nmodes)
+        self.h5_save('ab', self.ab)
 
         def f(n, w):
             self.h5f['ZernikeControl/SVDControl/' + n] = w
