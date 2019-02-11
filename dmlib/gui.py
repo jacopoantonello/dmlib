@@ -1560,6 +1560,7 @@ class Worker:
         return self.fringe.unwrapped[np.invert(self.fringe.mask)]
 
     def open_dset(self, dname):
+        estr = None
         if self.dfname is None or self.dfname != dname:
             if self.dset is not None:
                 self.dset.close()
@@ -1575,12 +1576,19 @@ class Worker:
 
             try:
                 img = self.dset['data/images'][0, ...]
+                pxsize = self.dset['cam/pixel_size'][()]
+                if img.shape != self.fringe.shape:
+                    estr = f'Camera must be {img.shape} {pxsize} um'
                 self.fringe.analyse(
                     img, auto_find_orders=True, do_unwrap=True,
                     use_mask=False)
             except Exception:
                 self.log.info('open_dset failed fringe.analyse', exc_info=True)
-                self.shared.oq.put(('Failed to detect first orders',))
+                if estr is None:
+                    self.shared.oq.put(('Failed to detect first orders',))
+                else:
+                    self.shared.oq.put((estr,))
+                self.dfname = None
                 return -1
             return 0
         else:

@@ -83,8 +83,10 @@ class FakeCam():
 
     name = None
 
-    def __init__(self):
+    def __init__(self, shape, pxsize):
         self.log = logging.getLogger(self.__class__.__name__)
+        self._shape = shape
+        self._pxsize = pxsize
 
     def open(self, name):
         self.name = name
@@ -94,13 +96,13 @@ class FakeCam():
         self.log.info(f'close {self.name:}')
 
     def grab_image(self):
-        return dmlib.test.load_int3()
+        return dmlib.test.load_int3(self._shape)
 
     def shape(self):
-        return (1024, 1280)
+        return self._shape
 
     def get_pixel_size(self):
-        return (5.20, 5.20)
+        return self._pxsize
 
     def get_exposure(self):
         return self.exp
@@ -285,7 +287,7 @@ def open_cam(app, args):
     try:
         # choose driver
         if args.cam_driver == 'sim':
-            cam = FakeCam()
+            cam = FakeCam(args.sim_cam_shape, args.sim_cam_pix_size)
         elif args.cam_driver == 'thorcam':
             from devwraps.thorcam import ThorCam
             cam = ThorCam()
@@ -419,3 +421,9 @@ def add_cam_parameters(parser):
     parser.add_argument('--cam-name', type=str, default=None, metavar='SERIAL')
     parser.add_argument(
         '--cam-list', action='store_true', help='List detected devices')
+    parser.add_argument(
+        '--sim-cam-shape', metavar=('H', 'W'), type=int, nargs=2,
+        default=(1024, 1280))
+    parser.add_argument(
+        '--sim-cam-pix-size', metavar=('H', 'W'), type=float, nargs=2,
+        default=(5.20, 5.20))
