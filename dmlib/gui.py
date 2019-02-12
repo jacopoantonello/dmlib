@@ -1031,7 +1031,24 @@ class Control(QMainWindow):
 
         def check_err():
             reply = self.shared.oq.get()
-            if reply[0] != 'OK':
+            if reply[0].startswith('Camera must be'):
+                try:
+                    newinst = path.join(
+                        path.dirname(path.abspath(__file__)),
+                        'gui.py')
+                    subprocess.Popen([
+                        sys.executable, newinst,
+                        '--cam-driver', 'sim', '--cam-name', 'simcam0',
+                        '--dm-driver', 'sim', '--dm-name', 'simdm0',
+                        '--sim-cam-shape', str(reply[1][0]), str(reply[1][1]),
+                        '--sim-cam-pix-size', str(reply[2][0]),
+                        str(reply[2][1]),
+                        ])
+                except Exception as e:
+                    self.log.error(str(e))
+                status.setText(reply[0])
+                return -1
+            elif reply[0] != 'OK':
                 status.setText(reply[0])
                 return -1
             else:
@@ -1595,10 +1612,21 @@ class Worker:
 
             try:
                 img = self.dset['data/images'][0, ...]
-                pxsize = self.dset['cam/pixel_size'][()]
-                if img.shape != self.fringe.shape:
+                shape1 = self.cam.shape()
+                shape2 = img.shape
+                pxsize1 = self.cam.get_pixel_size()
+                pxsize2 = self.dset['cam/pixel_size'][()]
+                self.log.info(f'open_dset shape1 {shape1}')
+                self.log.info(f'open_dset shape2 {shape2}')
+                self.log.info(f'open_dset pxsize1 {pxsize1}')
+                self.log.info(f'open_dset pxsize2 {pxsize2}')
+                if (
+                        shape1[0] != shape2[0] or
+                        shape1[1] != shape2[1] or
+                        pxsize1[0] != pxsize2[0] or
+                        pxsize1[1] != pxsize2[1]):
                     estr = (
-                        f'Camera must be {img.shape} {pxsize} um; ' +
+                        f'Camera must be {shape2} {pxsize2} um; ' +
                         'Spawning new instance...')
                 self.fringe.analyse(
                     img, auto_find_orders=True, do_unwrap=True,
@@ -1608,7 +1636,7 @@ class Worker:
                 if estr is None:
                     self.shared.oq.put(('Failed to detect first orders',))
                 else:
-                    self.shared.oq.put((estr, img.shape, pxsize))
+                    self.shared.oq.put((estr, shape2, pxsize2))
                 self.dfname = None
                 return -1
             return 0
@@ -1679,6 +1707,25 @@ class Worker:
                         dname + ' does not look like a calibration',))
                     return -1
                 else:
+                    shape1 = self.cam.shape()
+                    shape2 = f[
+                        'WeightedLSCalib/fringe/FringeAnalysis/shape'][()]
+                    pxsize1 = self.cam.get_pixel_size()
+                    pxsize2 = f['WeightedLSCalib/cam_pixel_size'][()]
+                    self.log.info(f'open_dset shape1 {shape1}')
+                    self.log.info(f'open_dset shape2 {shape2}')
+                    self.log.info(f'open_dset pxsize1 {pxsize1}')
+                    self.log.info(f'open_dset pxsize2 {pxsize2}')
+
+                    if (
+                            shape1[0] != shape2[0] or
+                            shape1[1] != shape2[1] or
+                            pxsize1[0] != pxsize2[0] or
+                            pxsize1[1] != pxsize2[1]):
+                        self.shared.oq.put((
+                            f'Camera must be {shape2} {pxsize2} um; ' +
+                            'Spawning new instance...', shape2, pxsize2))
+                        return -1
                     self.calib = WeightedLSCalib.load_h5py(f)
                     self.calib_name = dname
                     return 0
