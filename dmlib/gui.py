@@ -10,6 +10,7 @@ import time
 import h5py
 import logging
 import multiprocessing
+import subprocess
 
 from matplotlib import ticker
 from os import path
@@ -51,6 +52,7 @@ class Control(QMainWindow):
     def __init__(
             self, worker, shared, cam_name, dm_name, settings={}, parent=None):
         super().__init__()
+        self.log = logging.getLogger(self.__class__.__name__)
 
         self.worker = worker
         self.shared = shared
@@ -653,7 +655,24 @@ class Control(QMainWindow):
 
         def check_err():
             reply = self.shared.oq.get()
-            if reply[0] != 'OK':
+            if reply[0].startswith('Camera must be'):
+                try:
+                    newinst = path.join(
+                        path.dirname(path.abspath(__file__)),
+                        'gui.py')
+                    subprocess.Popen([
+                        sys.executable, newinst,
+                        '--cam-driver', 'sim', '--cam-name', 'simcam0',
+                        '--dm-driver', 'sim', '--dm-name', 'simdm0',
+                        '--sim-cam-shape', str(reply[1][0]), str(reply[1][1]),
+                        '--sim-cam-pix-size', str(reply[2][0]),
+                        str(reply[2][1]),
+                        ])
+                except Exception as e:
+                    self.log.error(str(e))
+                status.setText(reply[0])
+                return -1
+            elif reply[0] != 'OK':
                 status.setText(reply[0])
                 return -1
             else:
@@ -1578,7 +1597,9 @@ class Worker:
                 img = self.dset['data/images'][0, ...]
                 pxsize = self.dset['cam/pixel_size'][()]
                 if img.shape != self.fringe.shape:
-                    estr = f'Camera must be {img.shape} {pxsize} um'
+                    estr = (
+                        f'Camera must be {img.shape} {pxsize} um; ' +
+                        'Spawning new instance...')
                 self.fringe.analyse(
                     img, auto_find_orders=True, do_unwrap=True,
                     use_mask=False)
@@ -1587,7 +1608,7 @@ class Worker:
                 if estr is None:
                     self.shared.oq.put(('Failed to detect first orders',))
                 else:
-                    self.shared.oq.put((estr,))
+                    self.shared.oq.put((estr, img.shape, pxsize))
                 self.dfname = None
                 return -1
             return 0
