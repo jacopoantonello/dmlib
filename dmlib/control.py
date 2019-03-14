@@ -8,21 +8,43 @@ from numpy.random import normal
 from numpy.linalg import norm, matrix_rank, svd
 
 
+def merge_pars(dp, up):
+    p = {}
+    for k, v in dp.items():
+        if type(v) == dict:
+            options = list(v.keys())
+            if k not in up:
+                p[k] = {options[0]: dp[k][options[0]]}
+            else:
+                choice = list(up[k].keys())
+                assert(len(choice) == 1)
+                choice = choice[0]
+                assert(choice in dp[k].keys())
+                p[k] = {choice: merge_pars(dp[k][choice], up[k][choice])}
+        else:
+            if k in up:
+                p[k] = up[k]
+            else:
+                p[k] = dp[k]
+    return p
+
+
 class ZernikeControl:
 
     saturation = 0
 
-    def __init__(self, dm, calib, args=None, h5f=None):
-        self.args = args
+    def __init__(self, dm, calib, pars={}, h5f=None):
+        pars = merge_pars(get_default_parameters(), pars)
+        self.pars = pars
         self.log = logging.getLogger(self.__class__.__name__)
 
         nz = calib.H.shape[0]
         nu = calib.H.shape[1]
 
-        if args is None:
+        if pars['control']['Zernike']['all']:
             indices = np.arange(1, nz + 1)
         else:
-            indices = get_noll_indices(args)
+            indices = get_noll_indices(pars)
         assert(calib.get_rzern().nk == nz)
         ndof = indices.size
 
@@ -243,14 +265,15 @@ class ZernikeControl:
 
 class SVDControl(ZernikeControl):
 
-    def __init__(self, dm, calib, args, h5=None):
-        super().__init__(dm, calib, args, h5)
+    def __init__(self, dm, calib, pars, h5=None):
+        super().__init__(dm, calib, pars, h5)
 
-        self.h5_save('svd_modes', args.svd_modes)
+        svd_modes = self.pars['control']['SVD']['modes']
+        nignore = self.pars['control']['SVD']['zernike_exclude'] - 1
+
+        self.h5_save('svd_modes', svd_modes)
 
         H = self.calib.H
-        nignore = (np.fromstring(
-            args.noll_exclude, dtype=np.int, sep=',') - 1).max()
         Hl = H[:nignore, :]
         # Hh = H[nignore:, :]
         _, _, Vt = svd(Hl)
@@ -265,7 +288,7 @@ class SVDControl(ZernikeControl):
         # U2 = U[:, s.size:]
         np.allclose(U1[:nignore, :], 0)
 
-        nmodes = args.svd_modes
+        nmodes = pars.svd_modes
         V1 = Vt[:nmodes, :].T
         s1i = np.power(s[:nmodes], -1)
         S1i = np.diag(s1i)
@@ -321,24 +344,18 @@ class SVDControl(ZernikeControl):
         raise NotImplementedError()
 
 
-def get_noll_indices(args):
-    if args.noll_min > 0 and args.noll_max > 0:
-        mrange = np.arange(args.noll_min, args.noll_max + 1)
+def get_noll_indices(params):
+    p = params['control']
+    if 'Zernike' in p:
+        z = p['Zernike']
+        noll_min = z['min']
+        noll_max = z['max']
+        minclude = z['include']
+        mexclude = z['exclude']
     else:
-        mrange = np.array([], dtype=np.int)
+        RuntimeError()
 
-    if args.noll_include != '':
-        minclude = np.fromstring(args.noll_include, dtype=np.int, sep=',')
-        minclude = minclude[minclude > 0]
-    else:
-        minclude = np.array([], dtype=np.int)
-
-    if args.noll_exclude != '':
-        mexclude = np.fromstring(args.noll_exclude, dtype=np.int, sep=',')
-        mexclude = mexclude[mexclude > 0]
-    else:
-        mexclude = np.array([], dtype=np.int)
-
+    mrange = np.arange(noll_min, noll_max + 1)
     zernike_indices = np.setdiff1d(
         np.union1d(np.unique(mrange), np.unique(minclude)),
         np.unique(mexclude))
@@ -355,22 +372,40 @@ control_types = {
     }
 
 
-def add_control_parameters(parser):
-    parser.add_argument(
-        '--noll-include', type=str, default='', metavar='INDICES',
-        help='Comma separated list of Noll indices to include, eg 1,2')
-    parser.add_argument(
-        '--noll-exclude', type=str, default='1,2,3,4', metavar='INDICES',
-        help='Comma separated list of Noll indices to exclude, eg 1,2')
-    parser.add_argument(
-        '--noll-min', type=int, default=5, metavar='MIN',
-        help='Minimum Noll index to consider, use -1 to ignore')
-    parser.add_argument(
-        '--noll-max', type=int, default=6, metavar='MAX',
-        help='Maximum Noll index to consider, use -1 to ignore')
-    parser.add_argument(
-        '--control', choices=list(control_types.keys()),
-        default=list(control_types.keys())[0], help='DM control type')
-    parser.add_argument(
-        '--svd-modes', type=int, default=2, metavar='N',
-        help='Correct N SVD modes if using SVD control')
+def get_default_parameters():
+    return {
+        'control': {
+            'Zernike': {
+                'include': [],
+                'exclude': [1, 2, 3, 4],
+                'min': 5,
+                'max': 6,
+                'all': 1,
+                },
+            'SVD': {
+                'modes': 5,
+                'exclude': [1, 2, 3, 4],
+                },
+            }
+        }
+
+
+def get_parameters_info():
+    return {
+        'control': {
+            'Zernike': {
+                'include': (list, int, 'Zernike indices to include'),
+                'exclude': (list, int, 'Zernike indices to include'),
+                'min': (int, (1, None), 'Minimum Zernike index'),
+                'max': (int, (1, None), 'Maximum Zernike index'),
+                'all': (
+                    int, (0, 1), 'Use all Zernike available in calibration'),
+                },
+            'SVD': {
+                'modes': (int, (1, None), 'Number of SVD modes'),
+                'zernike_exclude': (
+                    int, (1, None),
+                    'Exclude Zernike indices up to (inclusive)'),
+                },
+            }
+        }
