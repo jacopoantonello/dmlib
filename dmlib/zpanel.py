@@ -208,7 +208,9 @@ class ZernikePanel(QWidget):
         def make_hand_slider(s, amp):
             def f(t):
                 maxrad = float(amp.text())
+                s.blockSignals(True)
                 s.setValue(t/fto100mul*(2*maxrad) - maxrad)
+                s.blockSignals(False)
             return f
 
         def default_zernike_name(i, n, m):
@@ -335,10 +337,11 @@ class ZernikePanel(QWidget):
                 lezm.setText(str(self.nmodes))
                 return
 
-            self.nmodes = ival
-            update_zernike_rows()
-            self.update_gui()
-            lezm.setText(str(self.nmodes))
+            if ival != self.nmodes:
+                self.nmodes = ival
+                update_zernike_rows()
+                self.update_gui()
+                lezm.setText(str(self.nmodes))
 
         def f2():
             def f(b):
