@@ -369,16 +369,6 @@ class ZernikeWindow(QMainWindow):
 
     settings = {}
 
-    def make_figs(self):
-        fig = FigureCanvas(Figure(figsize=(2, 2)))
-        ax = fig.figure.subplots(2, 1)
-        ima = self.dmplot.draw(ax[0], self.control.u)
-        img = ax[1].imshow(self.dmplot.compute_gauss(self.control.u))
-        ax[0].axis('off')
-        ax[1].axis('off')
-
-        return ax, ima, img, fig
-
     def __init__(self, app, control, settings={}, parent=None):
         super().__init__()
         self.control = control
@@ -397,10 +387,21 @@ class ZernikeWindow(QMainWindow):
 
         self.dmplot = DMPlot()
         self.dmplot.update_txs(control.calib.dmplot_txs)
+        dmstatus = QLabel()
 
-        ax, ima, img, fig = self.make_figs()
+        def make_figs():
+            fig = FigureCanvas(Figure(figsize=(2, 2)))
+            ax = fig.figure.subplots(2, 1)
+            ima = self.dmplot.draw(ax[0], self.control.u)
+            img = ax[1].imshow(self.dmplot.compute_gauss(self.control.u))
+            ax[0].axis('off')
+            ax[1].axis('off')
 
-        def f1():
+            return ax, ima, img, fig
+
+        ax, ima, img, fig = make_figs()
+
+        def make_write_fun():
             def f(z):
                 control.write(z)
 
@@ -408,7 +409,7 @@ class ZernikeWindow(QMainWindow):
                     tmp = 'SAT'
                 else:
                     tmp = 'OK'
-                lab.setText('DM {} u [{:+0.3f} {:+0.3f}] {}'.format(
+                dmstatus.setText('DM {} u [{:+0.3f} {:+0.3f}] {}'.format(
                     control.dm.get_serial_number(),
                     control.u.min(), control.u.max(), tmp))
 
@@ -419,13 +420,13 @@ class ZernikeWindow(QMainWindow):
                 ax[0].figure.canvas.draw()
             return f
 
+        write_fun = make_write_fun()
+
         self.zpanel = ZernikePanel(
             control.calib.wavelength, control.calib.get_rzern().n,
-            callback=f1(), settings=settings['ZernikePanel'])
+            callback=write_fun, settings=settings['ZernikePanel'])
 
         def make_select_cb():
-            cb = f1()
-
             def f(e):
                 if e.inaxes is not None:
                     ind = self.dmplot.index_actuator(e.xdata, e.ydata)
@@ -438,27 +439,32 @@ class ZernikeWindow(QMainWindow):
                         if ok:
                             control.u[ind] = val
                             self.zpanel.z[:] = control.u2z()
-                            cb(self.zpanel.z)
+                            write_fun(self.zpanel.z)
                         # TODO UNLOCK
             return f
 
         ax[0].figure.canvas.callbacks.connect(
             'button_press_event', make_select_cb())
 
-        control.write(self.zpanel.z)
-        lab = QLabel()
-        lab2 = QLabel(self.settings['calibration'])
-        lab.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        lab2.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        write_fun(self.zpanel.z)
+
+        dmstatus.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         split = QSplitter(Qt.Horizontal)
         split.addWidget(self.zpanel)
         split.addWidget(fig)
 
-        def abort(str1):
-            e = QErrorMessage()
-            e.showMessage(str1)
+        central = QFrame()
+        layout = QGridLayout()
+        central.setLayout(layout)
+        layout.addWidget(split, 0, 0, 1, 4)
+        layout.addWidget(dmstatus, 1, 0, 1, 4)
 
+        self.add_lower(layout, write_fun)
+
+        self.setCentralWidget(central)
+
+    def add_lower(self, layout, write_fun):
         def f3(name, glob, param):
             def f():
                 self.setDisabled(True)
@@ -490,12 +496,14 @@ class ZernikeWindow(QMainWindow):
             return f
 
         def f5():
-            up = f1()
-
             def f(b):
                 control.flat_on = b
-                up(self.zpanel.z)
+                write_fun(self.zpanel.z)
             return f
+
+        calibname = QLabel(self.settings['calibration'])
+        calibname.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        layout.addWidget(calibname, 2, 0, 1, 4)
 
         bcalib = QPushButton('load calibration')
         bsave = QPushButton('save settings')
@@ -512,18 +520,10 @@ class ZernikeWindow(QMainWindow):
             '--settings'))
         bflat.stateChanged.connect(f5())
 
-        central = QFrame()
-        layout = QGridLayout()
-        central.setLayout(layout)
-        layout.addWidget(split, 0, 0, 1, 4)
-        layout.addWidget(lab, 1, 0, 1, 4)
-        layout.addWidget(lab2, 2, 0, 1, 4)
         layout.addWidget(bcalib, 3, 0)
         layout.addWidget(bsave, 3, 1)
         layout.addWidget(bload, 3, 2)
         layout.addWidget(bflat, 3, 3)
-
-        self.setCentralWidget(central)
 
     def save_settings(self, merge={}):
         self.settings['ZernikePanel'] = self.zpanel.save_settings()
@@ -545,8 +545,7 @@ def add_zpanel_arguments(parser):
     parser.add_argument(
         '--settings', type=argparse.FileType('rb'), default=None,
         metavar='JSON')
-    parser.add_argument(
-        '--blank-settings', action='store_true')
+    parser.add_argument('--no-settings', action='store_true')
 
 
 def load_settings(app, args, last_settings='.zpanel.json'):
@@ -555,7 +554,7 @@ def load_settings(app, args, last_settings='.zpanel.json'):
         e.showMessage(str1)
         sys.exit(e.exec_())
 
-    if args.blank_settings:
+    if args.no_settings:
         # blank settings
         settings = {}
     elif args.settings is None:
