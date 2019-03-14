@@ -208,9 +208,7 @@ class ZernikePanel(QWidget):
         def make_hand_slider(s, amp):
             def f(t):
                 maxrad = float(amp.text())
-                s.blockSignals(True)
                 s.setValue(t/fto100mul*(2*maxrad) - maxrad)
-                s.blockSignals(False)
             return f
 
         def default_zernike_name(i, n, m):
