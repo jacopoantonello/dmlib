@@ -475,17 +475,17 @@ class ZernikeWindow(QMainWindow):
                 self.control.u[:] = t[0].u
                 self.zpanel.z[:] = self.control.u2z()
                 self.zpanel.update_controls()
-                self.zpanel.update_gui(False)
-                self.can_close = True
+                self.zpanel.update_gui()
                 self.setEnabled(True)
+                self.can_close = True
                 self.mutex.unlock()
             return f
 
         def make_acquire_hand():
             def f(t):
                 self.mutex.lock()
-                self.setEnabled(False)
                 self.can_close = False
+                self.setEnabled(False)
             return f
 
         self.sig_release.connect(make_release_hand())
@@ -569,7 +569,10 @@ class ZernikeWindow(QMainWindow):
         if self.can_close:
             with open(path.join(Path.home(), '.zpanel.json'), 'w') as f:
                 json.dump(self.save_settings(), f)
-            self.app.quit()
+            if self.app:
+                self.app.quit()
+            else:
+                event.accept()
         else:
             event.ignore()
 
@@ -667,7 +670,7 @@ def new_zernike_window(app, args):
             settings['calibration'], str(e)))
 
     control = ZernikeControl(dm, calib)
-    zwindow = ZernikeWindow(app, control, settings)
+    zwindow = ZernikeWindow(None, control, settings)
     zwindow.show()
 
     return zwindow
