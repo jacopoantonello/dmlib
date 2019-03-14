@@ -22,7 +22,7 @@ from PyQt5.QtWidgets import (
     QWidget, QFileDialog, QGroupBox, QGridLayout, QLabel, QPushButton,
     QLineEdit, QCheckBox, QScrollArea, QSlider, QDoubleSpinBox, QFrame,
     QErrorMessage, QApplication, QMainWindow, QSplitter, QShortcut,
-    QMessageBox, QSizePolicy,
+    QMessageBox, QSizePolicy, QInputDialog,
     )
 
 from zernike.czernike import RZern
@@ -398,6 +398,8 @@ class ZernikeWindow(QMainWindow):
         self.dmplot = DMPlot()
         self.dmplot.update_txs(control.calib.dmplot_txs)
 
+        ax, ima, img, fig = self.make_figs()
+
         def f1():
             def f(z):
                 control.write(z)
@@ -421,8 +423,29 @@ class ZernikeWindow(QMainWindow):
             control.calib.wavelength, control.calib.get_rzern().n,
             callback=f1(), settings=settings['ZernikePanel'])
 
+        def make_select_cb():
+            cb = f1()
+
+            def f(e):
+                if e.inaxes is not None:
+                    ind = self.dmplot.index_actuator(e.xdata, e.ydata)
+                    if ind != -1:
+                        # TODO LOCK
+                        val, ok = QInputDialog.getDouble(
+                            self, f'Actuator {ind} ' + str(ind),
+                            'range [-1, 1]', control.u[ind],
+                            -1., 1., 4)
+                        if ok:
+                            control.u[ind] = val
+                            self.zpanel.z[:] = control.u2z()
+                            cb(self.zpanel.z)
+                        # TODO UNLOCK
+            return f
+
+        ax[0].figure.canvas.callbacks.connect(
+            'button_press_event', make_select_cb())
+
         control.write(self.zpanel.z)
-        ax, ima, img, fig = self.make_figs()
         lab = QLabel()
         lab2 = QLabel(self.settings['calibration'])
         lab.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
