@@ -16,7 +16,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.figure import Figure
 from datetime import datetime
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QMutex
 from PyQt5.QtGui import QIntValidator, QDoubleValidator, QKeySequence
 from PyQt5.QtWidgets import (
     QWidget, QFileDialog, QGroupBox, QGridLayout, QLabel, QPushButton,
@@ -368,12 +368,14 @@ class ZernikePanel(QWidget):
 
 class ZernikeWindow(QMainWindow):
 
+    can_close = True
     settings = {}
 
     def __init__(self, app, control, settings={}, parent=None):
         super().__init__()
         self.control = control
         self.app = app
+        self.mutex = QMutex()
 
         self.setWindowTitle('ZernikeWindow ' + __version__)
         QShortcut(QKeySequence("Ctrl+Q"), self, self.close)
@@ -429,10 +431,10 @@ class ZernikeWindow(QMainWindow):
 
         def make_select_cb():
             def f(e):
+                self.mutex.lock()
                 if e.inaxes is not None:
                     ind = self.dmplot.index_actuator(e.xdata, e.ydata)
                     if ind != -1:
-                        # TODO LOCK
                         val, ok = QInputDialog.getDouble(
                             self, f'Actuator {ind} ' + str(ind),
                             'range [-1, 1]', control.u[ind],
@@ -441,7 +443,7 @@ class ZernikeWindow(QMainWindow):
                             control.u[ind] = val
                             self.zpanel.z[:] = control.u2z()
                             write_fun(self.zpanel.z)
-                        # TODO UNLOCK
+                self.mutex.unlock()
             return f
 
         ax[0].figure.canvas.callbacks.connect(
@@ -532,10 +534,26 @@ class ZernikeWindow(QMainWindow):
         d = {**merge, **self.settings}
         return d
 
+    def acquire_control(self, h5f):
+        self.mutex.lock()
+        # TODO disable
+        self.can_close = False
+
+        control = ZernikeControl(dm, calib, h5f=h5f)
+        return control
+
+    def release_control(self, h5f):
+        self.can_close = True
+        self.mutex.unlock()
+        # TODO enable
+
     def closeEvent(self, event):
-        with open(path.join(Path.home(), '.zpanel.json'), 'w') as f:
-            json.dump(self.save_settings(), f)
-        self.app.quit()
+        if self.can_close:
+            with open(path.join(Path.home(), '.zpanel.json'), 'w') as f:
+                json.dump(self.save_settings(), f)
+            self.app.quit()
+        else:
+            event.ignore()
 
 
 def add_zpanel_arguments(parser):
