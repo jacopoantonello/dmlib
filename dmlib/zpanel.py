@@ -16,7 +16,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.figure import Figure
 from datetime import datetime
 
-from PyQt5.QtCore import Qt, QMutex
+from PyQt5.QtCore import Qt, QMutex, pyqtSignal
 from PyQt5.QtGui import QIntValidator, QDoubleValidator, QKeySequence
 from PyQt5.QtWidgets import (
     QWidget, QFileDialog, QGroupBox, QGridLayout, QLabel, QPushButton,
@@ -368,6 +368,9 @@ class ZernikePanel(QWidget):
 
 class ZernikeWindow(QMainWindow):
 
+    sig_acquire = pyqtSignal(tuple)
+    sig_release = pyqtSignal(tuple)
+
     can_close = True
     settings = {}
 
@@ -464,8 +467,29 @@ class ZernikeWindow(QMainWindow):
         layout.addWidget(dmstatus, 1, 0, 1, 4)
 
         self.add_lower(layout, write_fun)
-
         self.setCentralWidget(central)
+        self.write_fun = write_fun
+
+        def make_release_hand():
+            def f(t):
+                self.control.u[:] = t[0].u
+                self.zpanel.z[:] = self.control.u2z()
+                self.zpanel.update_controls()
+                self.zpanel.update_gui(False)
+                self.can_close = True
+                self.setEnabled(True)
+                self.mutex.unlock()
+            return f
+
+        def make_acquire_hand():
+            def f(t):
+                self.mutex.lock()
+                self.setEnabled(False)
+                self.can_close = False
+            return f
+
+        self.sig_release.connect(make_release_hand())
+        self.sig_acquire.connect(make_acquire_hand())
 
     def add_lower(self, layout, write_fun):
         def f3(name, glob, param):
@@ -512,7 +536,7 @@ class ZernikeWindow(QMainWindow):
         bsave = QPushButton('save settings')
         bload = QPushButton('load settings')
         bflat = QCheckBox('flat')
-        bflat.setChecked(control.flat_on)
+        bflat.setChecked(self.control.flat_on)
 
         bcalib.clicked.connect(f3(
             'Select a calibration file', 'H5 (*.h5);;All Files (*)',
@@ -535,17 +559,11 @@ class ZernikeWindow(QMainWindow):
         return d
 
     def acquire_control(self, h5f):
-        self.mutex.lock()
-        # TODO disable
-        self.can_close = False
+        self.sig_acquire.emit((h5f,))
+        return self.control
 
-        control = ZernikeControl(dm, calib, h5f=h5f)
-        return control
-
-    def release_control(self, h5f):
-        self.can_close = True
-        self.mutex.unlock()
-        # TODO enable
+    def release_control(self, control, h5f):
+        self.sig_release.emit((control, h5f))
 
     def closeEvent(self, event):
         if self.can_close:
@@ -556,15 +574,11 @@ class ZernikeWindow(QMainWindow):
             event.ignore()
 
 
-def add_zpanel_arguments(parser):
+def add_arguments(parser):
     add_dm_parameters(parser)
     parser.add_argument(
-        '--calibration', type=argparse.FileType('rb'), default=None,
+        '--dm-calibration', type=argparse.FileType('rb'), default=None,
         metavar='HDF5')
-    parser.add_argument(
-        '--settings', type=argparse.FileType('rb'), default=None,
-        metavar='JSON')
-    parser.add_argument('--no-settings', action='store_true')
 
 
 def load_settings(app, args, last_settings='.zpanel.json'):
@@ -591,10 +605,10 @@ def load_settings(app, args, last_settings='.zpanel.json'):
         except Exception:
             quit('cannot load ' + args.settings.name)
 
-    if args.calibration:
-        args.calibration.close()
-        settings['calibration'] = args.calibration.name
-        args.calibration = settings['calibration']
+    if args.dm_calibration:
+        args.dm_calibration.close()
+        settings['calibration'] = args.dm_calibration.name
+        args.dm_calibration = settings['calibration']
 
     def choose_calib_file():
         fileName, _ = QFileDialog.getOpenFileName(
@@ -615,6 +629,50 @@ def load_settings(app, args, last_settings='.zpanel.json'):
     return dminfo, settings
 
 
+def new_zernike_window(app, args):
+    def quit(str1):
+        e = QErrorMessage()
+        e.showMessage(str1)
+        sys.exit(e.exec_())
+
+    if args.dm_calibration is None:
+        fileName, _ = QFileDialog.getOpenFileName(
+            None, 'Select a calibration', '', 'H5 (*.h5);;All Files (*)')
+        if not fileName:
+            sys.exit()
+        else:
+            fileName = args.dm_calibration
+    else:
+        args.dm_calibration = args.dm_calibration.name
+        fileName = args.dm_calibration
+    settings = {'calibration': fileName}
+
+    try:
+        dminfo = WeightedLSCalib.query_calibration(fileName)
+    except Exception as e:
+        quit(str(e))
+
+    calib_dm_name = dminfo[0]
+    calib_dm_transform = dminfo[1]
+
+    if args.dm_name is None:
+        args.dm_name = calib_dm_name
+    dm = open_dm(app, args, calib_dm_transform)
+
+    try:
+        with File(fileName, 'r') as f:
+            calib = WeightedLSCalib.load_h5py(f, lazy_cart_grid=True)
+    except Exception as e:
+        quit('error loading calibration {}: {}'.format(
+            settings['calibration'], str(e)))
+
+    control = ZernikeControl(dm, calib)
+    zwindow = ZernikeWindow(app, control, settings)
+    zwindow.show()
+
+    return zwindow
+
+
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     args = app.arguments()
@@ -622,7 +680,11 @@ if __name__ == '__main__':
         description='Zernike DM control',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     add_log_parameters(parser)
-    add_zpanel_arguments(parser)
+    add_arguments(parser)
+    parser.add_argument(
+        '--params', type=argparse.FileType('rb'), default=None,
+        metavar='JSON')
+    parser.add_argument('--no-params', action='store_true')
     args = parser.parse_args(args[1:])
     setup_logging(args)
 
