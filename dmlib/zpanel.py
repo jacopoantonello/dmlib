@@ -445,7 +445,8 @@ class ZernikeWindow(QMainWindow):
                         if ok:
                             control.u[ind] = val
                             self.zpanel.z[:] = control.u2z()
-                            write_fun(self.zpanel.z)
+                            self.zpanel.update_controls()
+                            self.zpanel.update_gui()
                 self.mutex.unlock()
             return f
 
@@ -524,7 +525,7 @@ class ZernikeWindow(QMainWindow):
 
         def f5():
             def f(b):
-                control.flat_on = b
+                self.control.flat_on = b
                 write_fun(self.zpanel.z)
             return f
 
