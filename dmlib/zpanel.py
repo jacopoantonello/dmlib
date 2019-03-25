@@ -633,15 +633,19 @@ def load_settings(app, args, last_settings='.zpanel.json'):
     return dminfo, settings
 
 
-def new_zernike_window(app, args):
+def new_zernike_window(app, args, settings):
+
     def quit(str1):
         e = QErrorMessage()
         e.showMessage(str1)
         sys.exit(e.exec_())
 
+    if 'calibration' in settings:
+        args.dm_calibration = settings['calibration']
+
     if args.dm_calibration is None:
         fileName, _ = QFileDialog.getOpenFileName(
-            None, 'Select a calibration', '', 'H5 (*.h5);;All Files (*)')
+            None, 'Select a DM calibration', '', 'H5 (*.h5);;All Files (*)')
         if not fileName:
             sys.exit()
         else:
@@ -649,7 +653,7 @@ def new_zernike_window(app, args):
     else:
         args.dm_calibration = args.dm_calibration.name
         fileName = args.dm_calibration
-    settings = {'calibration': fileName}
+    settings['calibration'] = fileName
 
     try:
         dminfo = WeightedLSCalib.query_calibration(fileName)
