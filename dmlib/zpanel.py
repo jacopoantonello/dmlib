@@ -633,30 +633,34 @@ def load_settings(app, args, last_settings='.zpanel.json'):
     return dminfo, settings
 
 
-def new_zernike_window(app, args, settings):
+def new_zernike_window(app, args, settings={}):
+    # args can override settings
 
     def quit(str1):
         e = QErrorMessage()
         e.showMessage(str1)
         sys.exit(e.exec_())
 
-    if 'calibration' in settings:
-        args.dm_calibration = settings['calibration']
+    calib_file = None
 
-    if args.dm_calibration is None:
+    if 'calibration' in settings:
+        calib_file = settings['calibration']
+    if args.dm_calibration is not None:
+        calib_file = args.dm_calibration.name
+        args.dm_calibration = calib_file
+
+    if calib_file is None:
         fileName, _ = QFileDialog.getOpenFileName(
             None, 'Select a DM calibration', '', 'H5 (*.h5);;All Files (*)')
         if not fileName:
             sys.exit()
         else:
-            fileName = args.dm_calibration
-    else:
-        args.dm_calibration = args.dm_calibration.name
-        fileName = args.dm_calibration
-    settings['calibration'] = fileName
+            calib_file = fileName
+
+    settings['calibration'] = calib_file
 
     try:
-        dminfo = WeightedLSCalib.query_calibration(fileName)
+        dminfo = WeightedLSCalib.query_calibration(calib_file)
     except Exception as e:
         quit(str(e))
 
@@ -668,7 +672,7 @@ def new_zernike_window(app, args, settings):
     dm = open_dm(app, args, calib_dm_transform)
 
     try:
-        with File(fileName, 'r') as f:
+        with File(calib_file, 'r') as f:
             calib = WeightedLSCalib.load_h5py(f, lazy_cart_grid=True)
     except Exception as e:
         quit('error loading calibration {}: {}'.format(
