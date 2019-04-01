@@ -561,7 +561,39 @@ class ZernikeWindow(QMainWindow):
 
     def acquire_control(self, h5f):
         self.sig_acquire.emit((h5f,))
-        return self.control
+
+        def make_gui_update():
+            def f(u):
+                self.control.u[:] = u
+                self.zpanel.z[:] = self.control.u2z()
+                self.zpanel.update_gui()
+            return f
+
+        class DummyControl(self.control.__class__):
+
+            def set_gui_update(self, gui_update):
+                self.gui_update = gui_update
+
+            def write(self, x):
+                super().write(x)
+                self.gui_update(self.u)
+
+        pars = {
+            'control': {
+                'Zernike': {
+                    'include': [],
+                    'exclude': [1, 2, 3, 4],
+                    'min': 5,
+                    'max': 6,
+                    'all': 0,
+                    }
+                }
+            }
+
+        control = DummyControl(
+            self.control.dm, self.control.calib, pars=pars, h5f=h5f)
+        control.set_gui_update(make_gui_update())
+        return control
 
     def release_control(self, control, h5f):
         self.sig_release.emit((control, h5f))

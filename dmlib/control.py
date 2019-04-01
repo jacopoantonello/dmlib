@@ -31,10 +31,9 @@ def merge_pars(dp, up):
 
 class ZernikeControl:
 
-    saturation = 0
-
     def __init__(self, dm, calib, pars={}, h5f=None):
         pars = merge_pars(get_default_parameters(), pars)
+        self.saturation = 0
         self.pars = pars
         self.log = logging.getLogger(self.__class__.__name__)
 
@@ -348,14 +347,14 @@ def get_noll_indices(params):
     p = params['control']
     if 'Zernike' in p:
         z = p['Zernike']
-        noll_min = z['min']
-        noll_max = z['max']
-        minclude = z['include']
-        mexclude = z['exclude']
+        noll_min = np.array(z['min'], dtype=np.int)
+        noll_max = np.array(z['max'], dtype=np.int)
+        minclude = np.array(z['include'], dtype=np.int)
+        mexclude = np.array(z['exclude'], dtype=np.int)
     else:
         RuntimeError()
 
-    mrange = np.arange(noll_min, noll_max + 1)
+    mrange = np.arange(noll_min, noll_max + 1, dtype=np.int)
     zernike_indices = np.setdiff1d(
         np.union1d(np.unique(mrange), np.unique(minclude)),
         np.unique(mexclude))
@@ -363,6 +362,7 @@ def get_noll_indices(params):
     log = logging.getLogger('ZernikeControl')
     log.info(f'selected Zernikes {zernike_indices}')
 
+    assert(zernike_indices.dtype == np.int)
     return zernike_indices
 
 
