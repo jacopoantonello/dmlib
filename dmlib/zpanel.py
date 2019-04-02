@@ -54,9 +54,137 @@ class MyQIntValidator(QIntValidator):
         return str(self.fixupval)
 
 
-def fto100(f, amp):
-    maxrad = float(amp.text())
-    return int((f + maxrad)/(2*maxrad)*fto100mul)
+class RelSlider:
+
+    def __init__(self, val, cb):
+        self.old_val = None
+        self.fto100mul = 100
+        self.cb = cb
+
+        self.sba = QDoubleSpinBox()
+        self.sba.setValue(val)
+        self.sba.setSingleStep(1.25e-3)
+        self.sba.setToolTip('Effective value')
+        self.sba.setMinimum(-1000)
+        self.sba.setMaximum(1000)
+        self.sba.setDecimals(3)
+
+        self.qsr = QSlider(Qt.Horizontal)
+        self.qsr.setMinimum(-100)
+        self.qsr.setMaximum(100)
+        self.qsr.setValue(0)
+        self.qsr.setToolTip('Drag to apply relative delta')
+
+        self.sbm = QDoubleSpinBox()
+        self.sbm.setValue(4.0)
+        self.sbm.setSingleStep(1.25e-3)
+        self.sbm.setToolTip('Maximum relative delta')
+        self.sbm.setDecimals(3)
+        self.sbm.setMinimum(0.001)
+
+        def sba_cb():
+            def f():
+                self.block()
+                self.cb(self.sba.value())
+                self.unblock()
+            return f
+
+        def qs1_cb():
+            def f(t):
+                self.block()
+
+                if self.old_val is None:
+                    self.qsr.setValue(0)
+                    self.unblock()
+                    return
+
+                val = self.old_val + self.qsr.value()/100*self.sbm.value()
+                self.sba.setValue(val)
+                self.cb(val)
+
+                self.unblock()
+            return f
+
+        def qs1_end():
+            def f():
+                self.block()
+                self.qsr.setValue(0)
+                self.old_val = None
+                self.unblock()
+            return f
+
+        def qs1_start():
+            def f():
+                self.block()
+                self.old_val = self.get_value()
+                self.unblock()
+            return f
+
+        self.sba_cb = sba_cb()
+        self.qs1_cb = qs1_cb()
+        self.qs1_start = qs1_start()
+        self.qs1_end = qs1_end()
+
+        self.sba.editingFinished.connect(self.sba_cb)
+        self.qsr.valueChanged.connect(self.qs1_cb)
+        self.qsr.sliderPressed.connect(self.qs1_start)
+        self.qsr.sliderReleased.connect(self.qs1_end)
+
+    def block(self):
+        self.sba.blockSignals(True)
+        self.qsr.blockSignals(True)
+        self.sbm.blockSignals(True)
+
+    def unblock(self):
+        self.sba.blockSignals(False)
+        self.qsr.blockSignals(False)
+        self.sbm.blockSignals(False)
+
+    def enable(self):
+        self.sba.setEnabled(True)
+        self.qsr.setEnabled(True)
+        self.sbm.setEnabled(True)
+
+    def disable(self):
+        self.sba.setEnabled(False)
+        self.qsr.setEnabled(False)
+        self.sbm.setEnabled(False)
+
+    def fto100(self, f):
+        return int((f + self.m2)/(2*self.m2)*self.fto100mul)
+
+    def get_value(self):
+        return self.sba.value()
+
+    def set_value(self, v):
+        return self.sba.setValue(v)
+
+    def add_to_layout(self, l1, ind1, ind2):
+        l1.addWidget(self.sba, ind1, ind2)
+        l1.addWidget(self.qsr, ind1, ind2 + 1)
+        l1.addWidget(self.sbm, ind1, ind2 + 2)
+
+    def remove_from_layout(self, l1):
+        l1.removeWidget(self.sba)
+        l1.removeWidget(self.qsr)
+        l1.removeWidget(self.sbm)
+
+        self.sba.setParent(None)
+        self.qsr.setParent(None)
+        self.sbm.setParent(None)
+
+        self.sba.editingFinished.disconnect(self.sba_cb)
+        self.qsr.valueChanged.disconnect(self.qs1_cb)
+        self.qsr.sliderPressed.disconnect(self.qs1_start)
+        self.qsr.sliderReleased.disconnect(self.qs1_end)
+
+        self.sba_cb = None
+        self.qs1_cb = None
+        self.qs1_start = None
+        self.qs1_end = None
+
+        self.sb = None
+        self.qsr = None
 
 
 class ZernikePanel(QWidget):
@@ -71,33 +199,21 @@ class ZernikePanel(QWidget):
     im = None
     cb = None
     shape = (128, 128)
-    settings = {'zernike_labels': {}, 'shown_modes': 21}
+    pars = {'zernike_labels': {}, 'shown_modes': 21}
 
-    def save_settings(self, merge={}):
-        d = {**merge, **self.settings}
+    def save_parameters(self, merge={}):
+        d = {**merge, **self.pars}
         d['z'] = self.z.tolist()
         d['shown_modes'] = len(self.zernike_rows)
         return d
 
     def update_controls(self):
         for i, t in enumerate(self.zernike_rows):
-            slider, spinbox, amp = t[1], t[2], t[5]
-            oldamp = abs(float(amp.text()))
-            newamp = abs(self.z[i])
+            slider = t[1]
 
-            slider.blockSignals(True)
-            spinbox.blockSignals(True)
-
-            if oldamp < newamp:
-                newamp = np.ceil(newamp)
-                amp.setText(str(newamp))
-                spinbox.setRange(-newamp, newamp)
-
-            spinbox.setValue(self.z[i])
-            slider.setValue(fto100(self.z[i], amp))
-
-            slider.blockSignals(False)
-            spinbox.blockSignals(False)
+            slider.disable()
+            slider.set_value(self.z[i])
+            slider.enable()
 
     def update_gui(self, run_callback=True):
         phi = self.mul*self.rzern.matrix(self.rzern.eval_grid(self.z))
@@ -116,26 +232,26 @@ class ZernikePanel(QWidget):
             self.callback(self.z)
 
     def __init__(
-            self, wavelength, n_radial, callback=None, settings=None,
+            self, wavelength, n_radial, callback=None, pars=None,
             parent=None):
         super().__init__(parent=parent)
 
-        if settings:
-            self.settings = {**self.settings, **settings}
+        if pars:
+            self.pars = {**self.pars, **pars}
 
         self.rzern = RZern(n_radial)
         dd = np.linspace(-1, 1, self.shape[0])
         xv, yv = np.meshgrid(dd, dd)
         self.rzern.make_cart_grid(xv, yv)
         self.rad_to_nm = wavelength/(2*np.pi)
-        self.nmodes = min((self.settings['shown_modes'], self.rzern.nk))
+        self.nmodes = min((self.pars['shown_modes'], self.rzern.nk))
         self.callback = callback
 
         self.z = np.zeros((self.rzern.nk,))
-        if 'z' in self.settings:
+        if 'z' in self.pars:
             try:
-                min1 = min(self.z.size, len(self.settings['z']))
-                self.z[:min1] = np.array(self.settings['z'])[:min1]
+                min1 = min(self.z.size, len(self.pars['z']))
+                self.z[:min1] = np.array(self.pars['z'])[:min1]
             except Exception:
                 pass
 
@@ -181,34 +297,15 @@ class ZernikePanel(QWidget):
         scrollLayout = QGridLayout(scroll.widget())
         scroll.setWidgetResizable(True)
 
-        def make_hand_spinbox(slider, ind, amp):
+        def make_hand_slider(ind):
             def f(r):
-                slider.blockSignals(True)
-                slider.setValue(fto100(r, amp))
-                slider.blockSignals(False)
-
                 self.z[ind] = r
                 self.update_gui()
             return f
 
-        def make_hand_amp(spinbox, slider, le, val, i):
+        def make_hand_lab(le, pars, i):
             def f():
-                amp = float(le.text())
-                val.setFixup(amp)
-                spinbox.setRange(-amp, amp)
-                spinbox.setValue(spinbox.value())
-                slider.setValue(fto100(self.z[i], le))
-            return f
-
-        def make_hand_lab(le, settings, i):
-            def f():
-                settings['zernike_labels'][str(i)] = le.text()
-            return f
-
-        def make_hand_slider(s, amp):
-            def f(t):
-                maxrad = float(amp.text())
-                s.setValue(t/fto100mul*(2*maxrad) - maxrad)
+                pars['zernike_labels'][str(i)] = le.text()
             return f
 
         def default_zernike_name(i, n, m):
@@ -236,87 +333,44 @@ class ZernikePanel(QWidget):
                 return ''
 
         def update_zernike_rows():
-            tick_interval = 20
-            single_step = 0.01
-
             mynk = self.nmodes
             ntab = self.rzern.ntab
             mtab = self.rzern.mtab
             if len(zernike_rows) < mynk:
                 for i in range(len(zernike_rows), mynk):
                     lab = QLabel(
-                        'Z<sub>{}</sub> Z<sub>{}</sub><sup>{}</sup>'.format(
-                            i + 1, ntab[i], mtab[i]))
-                    slider = QSlider(Qt.Horizontal)
-                    spinbox = QDoubleSpinBox()
-                    maxamp = max((8., self.z[i]))
-                    if str(i) in self.settings['zernike_labels'].keys():
-                        zname = self.settings['zernike_labels'][str(i)]
+                        f'Z<sub>{i + 1}</sub> ' +
+                        f'Z<sub>{ntab[i]}</sub><sup>{mtab[i]}</sup>')
+                    slider = RelSlider(self.z[i], make_hand_slider(i))
+
+                    if str(i) in self.pars['zernike_labels'].keys():
+                        zname = self.pars['zernike_labels'][str(i)]
                     else:
                         zname = default_zernike_name(i + 1, ntab[i], mtab[i])
-                        self.settings['zernike_labels'][str(i)] = zname
+                        self.pars['zernike_labels'][str(i)] = zname
                     lbn = QLineEdit(zname)
                     lbn.setMaximumWidth(120)
-                    amp = QLineEdit(str(maxamp))
-                    amp.setMaximumWidth(50)
-                    val = MyQDoubleValidator()
-                    val.setBottom(0.5)
-                    val.setFixup(maxamp)
-                    amp.setValidator(val)
-
-                    slider.setMinimum(0)
-                    slider.setMaximum(fto100mul)
-                    slider.setFocusPolicy(Qt.StrongFocus)
-                    slider.setTickPosition(QSlider.TicksBothSides)
-                    slider.setTickInterval(tick_interval)
-                    slider.setSingleStep(single_step)
-                    slider.setValue(fto100(self.z[i], amp))
-                    spinbox.setRange(-maxamp, maxamp)
-                    spinbox.setSingleStep(single_step)
-                    spinbox.setValue(self.z[i])
-
-                    hand_slider = make_hand_slider(spinbox, amp)
-                    hand_spinbox = make_hand_spinbox(slider, i, amp)
-                    hand_amp = make_hand_amp(spinbox, slider, amp, val, i)
-                    hand_lab = make_hand_lab(lbn, self.settings, i)
-
-                    slider.valueChanged.connect(hand_slider)
-                    spinbox.valueChanged.connect(hand_spinbox)
-                    amp.editingFinished.connect(hand_amp)
+                    hand_lab = make_hand_lab(lbn, self.pars, i)
                     lbn.editingFinished.connect(hand_lab)
 
                     scrollLayout.addWidget(lab, i, 0)
                     scrollLayout.addWidget(lbn, i, 1)
-                    scrollLayout.addWidget(spinbox, i, 2)
-                    scrollLayout.addWidget(slider, i, 3)
-                    scrollLayout.addWidget(amp, i, 4)
+                    slider.add_to_layout(scrollLayout, i, 2)
 
-                    zernike_rows.append((
-                        lab, slider, spinbox, hand_slider, hand_spinbox, amp,
-                        hand_amp, lbn, hand_lab))
+                    zernike_rows.append((lab, slider, lbn, hand_lab))
 
                 assert(len(zernike_rows) == mynk)
 
             elif len(zernike_rows) > mynk:
                 for i in range(len(zernike_rows) - 1, mynk - 1, -1):
-                    tup = zernike_rows.pop()
-                    lab, slider, spinbox, h1, h2, amp, h3, lbn, h4 = tup
+                    lab, slider, lbn, hand_lab = zernike_rows.pop()
 
                     scrollLayout.removeWidget(lab)
+                    slider.remove_from_layout(scrollLayout)
                     scrollLayout.removeWidget(lbn)
-                    scrollLayout.removeWidget(spinbox)
-                    scrollLayout.removeWidget(slider)
-                    scrollLayout.removeWidget(amp)
 
-                    slider.valueChanged.disconnect(h1)
-                    spinbox.valueChanged.disconnect(h2)
-                    amp.editingFinished.disconnect(h3)
-                    lbn.editingFinished.disconnect(h4)
-
+                    lbn.editingFinished.disconnect(hand_lab)
                     lab.setParent(None)
-                    slider.setParent(None)
-                    spinbox.setParent(None)
-                    amp.setParent(None)
                     lbn.setParent(None)
 
                 assert(len(zernike_rows) == mynk)
@@ -372,9 +426,9 @@ class ZernikeWindow(QMainWindow):
     sig_release = pyqtSignal(tuple)
 
     can_close = True
-    settings = {}
+    pars = {}
 
-    def __init__(self, app, control, settings={}, parent=None):
+    def __init__(self, app, control, pars={}, parent=None):
         super().__init__()
         self.control = control
         self.app = app
@@ -383,13 +437,13 @@ class ZernikeWindow(QMainWindow):
         self.setWindowTitle('ZernikeWindow ' + __version__)
         QShortcut(QKeySequence("Ctrl+Q"), self, self.close)
 
-        if settings:
-            self.settings = {**self.settings, **settings}
+        if pars:
+            self.pars = {**self.pars, **pars}
 
-        if 'ZernikePanel' not in settings:
-            settings['ZernikePanel'] = {}
-        if 'flat_on' in settings:
-            control.flat_on = int(settings['flat_on'])
+        if 'ZernikePanel' not in pars:
+            pars['ZernikePanel'] = {}
+        if 'flat_on' in pars:
+            control.flat_on = int(pars['flat_on'])
 
         self.dmplot = DMPlot()
         self.dmplot.update_txs(control.calib.dmplot_txs)
@@ -430,7 +484,7 @@ class ZernikeWindow(QMainWindow):
 
         self.zpanel = ZernikePanel(
             control.calib.wavelength, control.calib.get_rzern().n,
-            callback=write_fun, settings=settings['ZernikePanel'])
+            callback=write_fun, pars=pars['ZernikePanel'])
 
         def make_select_cb():
             def f(e):
@@ -503,7 +557,7 @@ class ZernikeWindow(QMainWindow):
                     return
                 else:
                     self.close()
-                    control.dm.close()
+                    self.control.dm.close()
                     myargs = list(sys.argv)
                     myargs.append(param)
                     myargs.append(fileName)
@@ -513,12 +567,12 @@ class ZernikeWindow(QMainWindow):
         def f4():
             def f():
                 fdiag, _ = QFileDialog.getSaveFileName(directory=(
-                    control.calib.dm_serial +
+                    self.control.calib.dm_serial +
                     datetime.now().strftime('_%Y%m%d_%H%M%S.json')))
                 if fdiag:
                     try:
                         with open(fdiag, 'w') as f:
-                            json.dump(self.save_settings(), f)
+                            json.dump(self.save_parameters(), f)
                     except Exception as e:
                         QMessageBox.information(self, 'error', str(e))
             return f
@@ -529,13 +583,13 @@ class ZernikeWindow(QMainWindow):
                 write_fun(self.zpanel.z)
             return f
 
-        calibname = QLabel(self.settings['calibration'])
+        calibname = QLabel(self.pars['calibration'])
         calibname.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(calibname, 2, 0, 1, 4)
 
         bcalib = QPushButton('load calibration')
-        bsave = QPushButton('save settings')
-        bload = QPushButton('load settings')
+        bsave = QPushButton('save parameters')
+        bload = QPushButton('load parameters')
         bflat = QCheckBox('flat')
         bflat.setChecked(self.control.flat_on)
 
@@ -544,8 +598,8 @@ class ZernikeWindow(QMainWindow):
             '--calibration'))
         bsave.clicked.connect(f4())
         bload.clicked.connect(f3(
-            'Select a settings file', 'JSON (*.json);;All Files (*)',
-            '--settings'))
+            'Select a parameters file', 'JSON (*.json);;All Files (*)',
+            '--parameters'))
         bflat.stateChanged.connect(f5())
 
         layout.addWidget(bcalib, 3, 0)
@@ -553,10 +607,10 @@ class ZernikeWindow(QMainWindow):
         layout.addWidget(bload, 3, 2)
         layout.addWidget(bflat, 3, 3)
 
-    def save_settings(self, merge={}):
-        self.settings['ZernikePanel'] = self.zpanel.save_settings()
-        self.settings['flat_on'] = self.control.flat_on
-        d = {**merge, **self.settings}
+    def save_parameters(self, merge={}):
+        self.pars['ZernikePanel'] = self.zpanel.save_parameters()
+        self.pars['flat_on'] = self.control.flat_on
+        d = {**merge, **self.pars}
         return d
 
     def acquire_control(self, h5f):
@@ -601,7 +655,7 @@ class ZernikeWindow(QMainWindow):
     def closeEvent(self, event):
         if self.can_close:
             with open(path.join(Path.home(), '.zpanel.json'), 'w') as f:
-                json.dump(self.save_settings(), f)
+                json.dump(self.save_parameters(), f)
             if self.app:
                 self.app.quit()
             else:
@@ -617,34 +671,34 @@ def add_arguments(parser):
         metavar='HDF5')
 
 
-def load_settings(app, args, last_settings='.zpanel.json'):
+def load_parameters(app, args, last_pars='.zpanel.json'):
     def quit(str1):
         e = QErrorMessage()
         e.showMessage(str1)
         sys.exit(e.exec_())
 
-    if args.no_settings:
-        # blank settings
-        settings = {}
-    elif args.settings is None:
-        # last run settings
-        savepath = path.join(Path.home(), last_settings)
+    if args.no_params:
+        # blank parameters
+        pars = {}
+    elif args.params is None:
+        # last run parameters
+        savepath = path.join(Path.home(), last_pars)
         try:
             with open(savepath, 'r') as f:
-                settings = json.load(f)
+                pars = json.load(f)
         except Exception:
-            settings = {}
+            pars = {}
     else:
-        # command-line settings
+        # command-line pars
         try:
-            settings = json.load(args.settings)
+            pars = json.load(args.params)
         except Exception:
-            quit('cannot load ' + args.settings.name)
+            quit('cannot load ' + args.params.name)
 
     if args.dm_calibration:
         args.dm_calibration.close()
-        settings['calibration'] = args.dm_calibration.name
-        args.dm_calibration = settings['calibration']
+        pars['calibration'] = args.dm_calibration.name
+        args.dm_calibration = pars['calibration']
 
     def choose_calib_file():
         fileName, _ = QFileDialog.getOpenFileName(
@@ -652,21 +706,21 @@ def load_settings(app, args, last_settings='.zpanel.json'):
         if not fileName:
             sys.exit()
         else:
-            settings['calibration'] = fileName
+            pars['calibration'] = fileName
 
-    if 'calibration' not in settings:
+    if 'calibration' not in pars:
         choose_calib_file()
 
     try:
-        dminfo = WeightedLSCalib.query_calibration(settings['calibration'])
+        dminfo = WeightedLSCalib.query_calibration(pars['calibration'])
     except Exception as e:
         quit(str(e))
 
-    return dminfo, settings
+    return dminfo, pars
 
 
-def new_zernike_window(app, args, settings={}):
-    # args can override settings
+def new_zernike_window(app, args, params={}):
+    # args can override params
 
     def quit(str1):
         e = QErrorMessage()
@@ -675,8 +729,8 @@ def new_zernike_window(app, args, settings={}):
 
     calib_file = None
 
-    if 'calibration' in settings:
-        calib_file = settings['calibration']
+    if 'calibration' in params:
+        calib_file = params['calibration']
     if args.dm_calibration is not None:
         calib_file = args.dm_calibration.name
         args.dm_calibration = calib_file
@@ -689,7 +743,7 @@ def new_zernike_window(app, args, settings={}):
         else:
             calib_file = fileName
 
-    settings['calibration'] = calib_file
+    params['calibration'] = calib_file
 
     try:
         dminfo = WeightedLSCalib.query_calibration(calib_file)
@@ -708,10 +762,10 @@ def new_zernike_window(app, args, settings={}):
             calib = WeightedLSCalib.load_h5py(f, lazy_cart_grid=True)
     except Exception as e:
         quit('error loading calibration {}: {}'.format(
-            settings['calibration'], str(e)))
+            params['calibration'], str(e)))
 
     control = ZernikeControl(dm, calib)
-    zwindow = ZernikeWindow(None, control, settings)
+    zwindow = ZernikeWindow(None, control, params)
     zwindow.show()
 
     return zwindow
@@ -732,7 +786,7 @@ if __name__ == '__main__':
     args = parser.parse_args(args[1:])
     setup_logging(args)
 
-    dminfo, settings = load_settings(app, args)
+    dminfo, params = load_parameters(app, args)
     calib_dm_name = dminfo[0]
     calib_dm_transform = dminfo[1]
 
@@ -741,15 +795,15 @@ if __name__ == '__main__':
     dm = open_dm(app, args, calib_dm_transform)
 
     try:
-        with File(settings['calibration'], 'r') as f:
+        with File(params['calibration'], 'r') as f:
             calib = WeightedLSCalib.load_h5py(f, lazy_cart_grid=True)
     except Exception as e:
         quit('error loading calibration {}: {}'.format(
-            settings['calibration'], str(e)))
+            params['calibration'], str(e)))
 
     control = ZernikeControl(dm, calib)
 
-    zwindow = ZernikeWindow(app, control, settings)
+    zwindow = ZernikeWindow(app, control, params)
     zwindow.show()
 
     sys.exit(app.exec_())
