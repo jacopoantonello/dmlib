@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import json
 import logging
 import numpy as np
 
 from numpy.random import normal
-from numpy.linalg import norm, matrix_rank, svd
+from numpy.linalg import norm, svd
 
 
 def merge_pars(dp, up):
@@ -29,18 +30,67 @@ def merge_pars(dp, up):
     return p
 
 
+def get_default_parameters():
+    return {
+        'control': {
+            'ZernikeControl': ZernikeControl.get_default_parameters(),
+            'SVDControl': SVDControl.get_default_parameters(),
+            }
+        }
+
+
+def get_parameters_info():
+    return {
+        'control': {
+            'ZernikeControl': ZernikeControl.get_parameters_info(),
+            'SVDControl': SVDControl.get_parameters_info(),
+            }
+        }
+
+
 class ZernikeControl:
 
-    def __init__(self, dm, calib, pars={}, h5f=None):
-        pars = merge_pars(get_default_parameters(), pars)
+    @staticmethod
+    def get_default_parameters():
+        return {
+            'include': [],
+            'exclude': [1, 2, 3, 4],
+            'min': 5,
+            'max': 6,
+            'all': 1,
+            'flipx': 0,
+            'flipy': 0,
+            'rotate': 0.0,
+            'flat_on': 1,
+            }
+
+    @staticmethod
+    def get_parameters_info():
+        return {
+            'include': (list, int, 'Zernike indices to include'),
+            'exclude': (list, int, 'Zernike indices to include'),
+            'min': (int, (1, None), 'Minimum Zernike index'),
+            'max': (int, (1, None), 'Maximum Zernike index'),
+            'all': (
+                int, (0, 1), 'Use all Zernike available in calibration'),
+            'flipx': (int, (0, 1), 'Flip pupil along x'),
+            'flipy': (int, (0, 1), 'Flip pupil along y'),
+            'rotate': (float, (None, None), 'Rotate pupil in degrees'),
+            'flat_on': (int, (0, 1), 'Apply flattening offset'),
+            }
+
+    def __init__(
+            self, dm, calib, pars={}, h5f=None):
+        self.log = logging.getLogger(self.__class__.__name__)
+        pars = merge_pars(self.get_default_parameters(), pars)
         self.saturation = 0
         self.pars = pars
-        self.log = logging.getLogger(self.__class__.__name__)
 
         nz = calib.H.shape[0]
         nu = calib.H.shape[1]
 
-        if pars['control']['Zernike']['all']:
+        # get controlled Zernike coefficients
+        if pars['all']:
             indices = np.arange(1, nz + 1)
         else:
             indices = get_noll_indices(pars)
@@ -56,31 +106,55 @@ class ZernikeControl:
         self.indices = indices
         self.h5f = h5f
 
-        self.h5_save('uflat', calib.uflat)
         self.h5_save('indices', indices)
         self.h5_save('rad_to_nm', calib.get_rad_to_nm())
-        # NOTE P is supposed to be orthonormal
-        self.P = None
+
+        # handle orthogonal pupil transform
+        try:
+            self.transform_pupil(pars['rotate'], pars['flipx'], pars['flipy'])
+        except Exception:
+            self.P = None
+            self.pars['flipx'] = 0
+            self.pars['flipy'] = 0
+            self.pars['rotate'] = 0.0
 
         self.z = np.zeros((nz,))
         self.z1 = np.zeros((nz,))
         self.ab = np.zeros((ndof,))
         self.u = np.zeros((nu,))
-        self.u0 = np.zeros((nu,))
 
-        self.flat_on = 1
+        # handle flattening
+        try:
+            self.flat_on = bool(pars['flat_on'])
+            self.uflat = np.array(pars['uflat'])
+            assert(self.uflat.size == calib.uflat.size)
+        except Exception:
+            self.flat_on = 1
+            self.uflat = calib.uflat
+
+        # handle initial value
+        try:
+            self.u[:] = np.array(pars['u'])
+            self.z1[:] = self.u2z()
+        except Exception:
+            pass
 
         if h5f:
             calib.save_h5py(h5f)
 
-        if h5f:
-            self.h5_make_empty('flat_on', (1,), np.bool)
-            self.h5_make_empty('x', (ndof,))
-            self.h5_make_empty('u', (nu,))
-
+        self.h5_make_empty('flat_on', (1,), np.bool)
+        self.h5_make_empty('uflat', (nu,))
+        self.h5_make_empty('x', (ndof,))
+        self.h5_make_empty('u', (nu,))
         self.h5_save('name', self.__class__.__name__)
         self.h5_save('ab', self.ab)
         self.h5_save('P', np.eye(nz))
+        self.h5_save('params', json.dumps(pars))
+
+    def save_parameters(self, merge={}):
+        d = {**merge, **self.pars}
+        d['flat_on'] = self.flat_on
+        d['uflat'] = self.uflat.tolist()
 
     def h5_make_empty(self, name, shape, dtype=np.float):
         if self.h5f:
@@ -106,15 +180,14 @@ class ZernikeControl:
             self.h5f[name] = what
 
     def u2z(self):
-        # for GUI purposes & does not include flat
+        "Get current Zernike coefficients (without uflat) for GUIs"
         # z1 = P*z
         # u = C*z1
         # z1 = H*u
         if self.flat_on:
-            tmp = self.u - self.calib.uflat
+            tmp = self.u - self.uflat
         else:
             tmp = self.u
-        tmp += self.u0
         z1 = np.dot(self.calib.H, tmp)
         if self.P is None:
             return z1
@@ -122,24 +195,32 @@ class ZernikeControl:
             return np.dot(self.P.T, z1)
 
     def write(self, x):
+        "Write Zernike coefficients"
         assert(x.shape == self.ab.shape)
+
+        # z controlled Zernike degrees of freedom
         self.z[self.indices - 1] = x[:] + self.ab[:]
+
+        # z1 transform all calibrated Zernike coefficients
         if self.P is not None:
             np.dot(self.P, self.z, self.z1)
         else:
             self.z1[:] = self.z[:]
 
+        # apply control matrix
         np.dot(self.calib.C, self.z1, self.u)
+
+        # apply flattening
         if self.flat_on:
-            self.u += self.calib.uflat
+            self.u += self.uflat
 
-        self.u += self.u0
+        # logging
+        self.h5_append('uflat', self.uflat)
+        self.h5_append('flat_on', self.flat_on)
+        self.h5_append('x', x)
+        self.h5_append('u', self.u)
 
-        if self.h5f:
-            self.h5_append('flat_on', self.flat_on)
-            self.h5_append('x', x)
-            self.h5_append('u', self.u)
-
+        # handle saturation
         if norm(self.u, np.inf) > 1:
             self.log.warn(
                 'Saturation {}'.format(str(np.abs(self.u).max())))
@@ -148,9 +229,9 @@ class ZernikeControl:
             self.saturation = 1
         else:
             self.saturation = 0
-
         assert(norm(self.u, np.inf) <= 1.)
 
+        # write raw voltages
         self.dm.write(self.u)
 
     def set_random_ab(self, rms=1.0):
@@ -160,18 +241,20 @@ class ZernikeControl:
             self.h5f['ZernikeControl/ab'][:] = self.ab[:]
 
     def transform_pupil(self, alpha=0., flipx=False, flipy=False):
+        rzern = self.calib.get_rzern()
+
         if alpha != 0.:
-            R = self.make_rot_matrix(alpha)
+            R = rzern.make_rotation(alpha)
         else:
             R = 1
 
         if flipx:
-            Fx = self.make_xflip_matrix()
+            Fx = rzern.make_xflip()
         else:
             Fx = 1
 
         if flipy:
-            Fy = self.make_yflip_matrix()
+            Fy = rzern.make_yflip()
         else:
             Fy = 1
 
@@ -201,74 +284,34 @@ class ZernikeControl:
                 del self.h5f['P']
                 self.h5f['P'][:] = self.P[:]
 
-    def make_rot_matrix(self, alpha):
-        cz = self.calib.get_rzern()
-        nml = list(zip(cz.ntab.tolist(), cz.mtab.tolist()))
-        R = np.zeros((cz.nk, cz.nk))
-        for i, nm in enumerate(nml):
-            n, m = nm[0], nm[1]
-            if m == 0:
-                R[i, i] = 1.0
-            elif m > 0:
-                R[i, i] = np.cos(m*alpha)
-                R[i, nml.index((n, -m))] = np.sin(m*alpha)
-            else:
-                R[i, nml.index((n, -m))] = -np.sin(abs(m)*alpha)
-                R[i, i] = np.cos(abs(m)*alpha)
-
-        # checks
-        assert(matrix_rank(R) == R.shape[0])
-        assert(norm((np.dot(R, R.T) - np.eye(cz.nk)).ravel()) < 1e-11)
-        assert(norm((np.dot(R.T, R) - np.eye(cz.nk)).ravel()) < 1e-11)
-        return R
-
-    def make_yflip_matrix(self):
-        cz = self.calib.get_rzern()
-        nml = list(zip(cz.ntab.tolist(), cz.mtab.tolist()))
-        R = np.zeros((cz.nk, cz.nk))
-        for i, nm in enumerate(nml):
-            m = nm[1]
-            if m < 0:
-                R[i, i] = -1.0
-            else:
-                R[i, i] = 1.0
-
-        # checks
-        assert(matrix_rank(R) == R.shape[0])
-        assert(norm((np.dot(R, R.T) - np.eye(cz.nk)).ravel()) < 1e-11)
-        assert(norm((np.dot(R.T, R) - np.eye(cz.nk)).ravel()) < 1e-11)
-        return R
-
-    def make_xflip_matrix(self):
-        cz = self.calib.get_rzern()
-        nml = list(zip(cz.ntab.tolist(), cz.mtab.tolist()))
-        R = np.zeros((cz.nk, cz.nk))
-        for i, nm in enumerate(nml):
-            m = nm[1]
-            if abs(m) % 2 == 0 and m < 0:
-                R[i, i] = -1.0
-            elif abs(m) % 2 == 1 and m > 0:
-                R[i, i] = -1.0
-            else:
-                R[i, i] = 1.0
-        # checks
-        assert(matrix_rank(R) == R.shape[0])
-        assert(norm((np.dot(R, R.T) - np.eye(cz.nk)).ravel()) < 1e-11)
-        assert(norm((np.dot(R.T, R) - np.eye(cz.nk)).ravel()) < 1e-11)
-        return R
-
-    def store_u0(self, u):
-        self.u0[:] = u
-        self.h5_save('u0', self.u0)
-
 
 class SVDControl(ZernikeControl):
 
-    def __init__(self, dm, calib, pars, h5=None):
-        super().__init__(dm, calib, pars, h5)
+    @staticmethod
+    def get_default_parameters():
+        return {
+            'modes': 5,
+            'exclude': [1, 2, 3, 4],
+            'flat_on': 1,
+            }
 
-        svd_modes = self.pars['control']['SVD']['modes']
-        nignore = self.pars['control']['SVD']['zernike_exclude'] - 1
+    @staticmethod
+    def get_parameters_info():
+        return {
+            'modes': (int, (1, None), 'Number of SVD modes'),
+            'zernike_exclude': (
+                int, (1, None),
+                'Exclude Zernike indices up to (inclusive)'),
+            'flat_on': (int, (0, 1), 'Apply flattening offset'),
+            }
+
+    def __init__(self, dm, calib, pars, h5=None):
+        super().__init__(dm, calib, super().get_default_parameters(), h5)
+        self.log = logging.getLogger(self.__class__.__name__)
+        svd_pars = merge_pars(self.get_default_parameters(), pars)
+
+        svd_modes = self.svd_pars['modes']
+        nignore = self.svd_pars['zernike_exclude'] - 1
 
         self.h5_save('svd_modes', svd_modes)
 
@@ -284,10 +327,9 @@ class SVDControl(ZernikeControl):
 
         U, s, Vt = svd(np.dot(H, Vl2))
         U1 = U[:, :s.size]
-        # U2 = U[:, s.size:]
         np.allclose(U1[:nignore, :], 0)
 
-        nmodes = pars.svd_modes
+        nmodes = svd_pars.svd_modes
         V1 = Vt[:nmodes, :].T
         s1i = np.power(s[:nmodes], -1)
         S1i = np.diag(s1i)
@@ -308,21 +350,24 @@ class SVDControl(ZernikeControl):
             f('V1', V1)
             f('S1i', S1i)
             f('K', self.K)
+            f('params', json.dumps(svd_pars))
 
     def write(self, x):
         assert(x.shape == self.ab.shape)
         z = x + self.ab
         np.dot(self.K, z, self.u)
+
+        # apply flattening
         if self.flat_on:
-            self.u += self.calib.uflat
+            self.u += self.uflat
 
-        self.u += self.u0
+        # logging
+        self.h5_append('uflat', self.uflat)
+        self.h5_append('flat_on', self.flat_on)
+        self.h5_append('x', x)
+        self.h5_append('u', self.u)
 
-        if self.h5f:
-            self.h5_append('flat_on', self.flat_on)
-            self.h5_append('x', x)
-            self.h5_append('u', self.u)
-
+        # handle saturation
         if norm(self.u, np.inf) > 1:
             self.log.warn(
                 'Saturation {}'.format(str(np.abs(self.u).max())))
@@ -335,6 +380,11 @@ class SVDControl(ZernikeControl):
         assert(norm(self.u, np.inf) <= 1.)
 
         self.dm.write(self.u)
+
+    def save_parameters(self, merge={}):
+        d = {**merge, **self.pars}
+        d['flat_on'] = self.flat_on
+        d['uflat'] = self.uflat.tolist()
 
     def set_random_ab(self, rms=1.0):
         raise NotImplementedError()
@@ -366,46 +416,19 @@ def get_noll_indices(params):
     return zernike_indices
 
 
-control_types = {
-    'Zernike': ZernikeControl,
-    'SVD': SVDControl,
+def get_controls():
+    return {
+        'ZernikeControl': ZernikeControl,
+        'SVDControl': SVDControl,
     }
 
 
-def get_default_parameters():
-    return {
-        'control': {
-            'Zernike': {
-                'include': [],
-                'exclude': [1, 2, 3, 4],
-                'min': 5,
-                'max': 6,
-                'all': 1,
-                },
-            'SVD': {
-                'modes': 5,
-                'exclude': [1, 2, 3, 4],
-                },
-            }
-        }
+def new_control(dm, calib, pars={'control': {'ZernikeControl': {}}}, h5f=None):
+    d = pars['control']
+    if len(d) != 1:
+        raise ValueError(
+            'Use singleton dictionary with either of ' +
+            f'{str(list(get_controls()))}')
 
-
-def get_parameters_info():
-    return {
-        'control': {
-            'Zernike': {
-                'include': (list, int, 'Zernike indices to include'),
-                'exclude': (list, int, 'Zernike indices to include'),
-                'min': (int, (1, None), 'Minimum Zernike index'),
-                'max': (int, (1, None), 'Maximum Zernike index'),
-                'all': (
-                    int, (0, 1), 'Use all Zernike available in calibration'),
-                },
-            'SVD': {
-                'modes': (int, (1, None), 'Number of SVD modes'),
-                'zernike_exclude': (
-                    int, (1, None),
-                    'Exclude Zernike indices up to (inclusive)'),
-                },
-            }
-        }
+    cname = d.keys()[0]
+    return get_controls()[cname](dm, calib, d[cname])
