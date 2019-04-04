@@ -6,28 +6,7 @@ import logging
 import numpy as np
 
 from numpy.random import normal
-from numpy.linalg import norm, svd
-
-
-def merge_pars(dp, up):
-    p = {}
-    for k, v in dp.items():
-        if type(v) == dict:
-            options = list(v.keys())
-            if k not in up:
-                p[k] = {options[0]: dp[k][options[0]]}
-            else:
-                choice = list(up[k].keys())
-                assert(len(choice) == 1)
-                choice = choice[0]
-                assert(choice in dp[k].keys())
-                p[k] = {choice: merge_pars(dp[k][choice], up[k][choice])}
-        else:
-            if k in up:
-                p[k] = up[k]
-            else:
-                p[k] = dp[k]
-    return p
+from numpy.linalg import norm, svd, pinv
 
 
 def get_default_parameters():
@@ -82,12 +61,14 @@ class ZernikeControl:
     def __init__(
             self, dm, calib, pars={}, h5f=None):
         self.log = logging.getLogger(self.__class__.__name__)
-        pars = merge_pars(self.get_default_parameters(), pars)
+        pars = {**self.get_default_parameters(), **pars}
         self.saturation = 0
         self.pars = pars
+        self.P = None
 
         nz = calib.H.shape[0]
         nu = calib.H.shape[1]
+        self.Cp = pinv(calib.C)
 
         # get controlled Zernike coefficients
         if pars['all']:
@@ -129,6 +110,7 @@ class ZernikeControl:
             self.uflat = np.array(pars['uflat'])
             assert(self.uflat.size == calib.uflat.size)
         except Exception:
+            self.log.info('failed load uflat')
             self.flat_on = 1
             self.uflat = calib.uflat
 
@@ -137,7 +119,7 @@ class ZernikeControl:
             self.u[:] = np.array(pars['u'])
             self.z1[:] = self.u2z()
         except Exception:
-            pass
+            self.log.info('failed load u')
 
         if h5f:
             calib.save_h5py(h5f)
@@ -151,10 +133,17 @@ class ZernikeControl:
         self.h5_save('P', np.eye(nz))
         self.h5_save('params', json.dumps(pars))
 
-    def save_parameters(self, merge={}):
+    def save_parameters(self, merge={}, asflat=False):
         d = {**merge, **self.pars}
-        d['flat_on'] = self.flat_on
-        d['uflat'] = self.uflat.tolist()
+        if asflat:
+            d['flat_on'] = 1
+            d['uflat'] = self.u.tolist()
+            d['u'] = self.u.tolist()
+        else:
+            d['flat_on'] = self.flat_on
+            d['uflat'] = self.uflat.tolist()
+            d['u'] = self.u.tolist()
+        return d
 
     def h5_make_empty(self, name, shape, dtype=np.float):
         if self.h5f:
@@ -188,7 +177,7 @@ class ZernikeControl:
             tmp = self.u - self.uflat
         else:
             tmp = self.u
-        z1 = np.dot(self.calib.H, tmp)
+        z1 = np.dot(self.Cp, tmp)
         if self.P is None:
             return z1
         else:
@@ -308,7 +297,7 @@ class SVDControl(ZernikeControl):
     def __init__(self, dm, calib, pars, h5=None):
         super().__init__(dm, calib, super().get_default_parameters(), h5)
         self.log = logging.getLogger(self.__class__.__name__)
-        svd_pars = merge_pars(self.get_default_parameters(), pars)
+        svd_pars = {**self.get_default_parameters(), **pars}
 
         svd_modes = self.svd_pars['modes']
         nignore = self.svd_pars['zernike_exclude'] - 1
