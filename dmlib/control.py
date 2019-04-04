@@ -61,7 +61,9 @@ class ZernikeControl:
         self.saturation = 0
         self.pars = pars
         self.P = None
+        self.gui_callback = None
 
+        nz = calib.H.shape[0]
         nz = calib.H.shape[0]
         nu = calib.H.shape[1]
         self.Cp = pinv(calib.C)
@@ -218,6 +220,9 @@ class ZernikeControl:
 
         # write raw voltages
         self.dm.write(self.u)
+
+        if self.gui_callback:
+            self.gui_callback()
 
     def set_random_ab(self, rms=1.0):
         self.ab[:] = normal(size=self.ab.size)

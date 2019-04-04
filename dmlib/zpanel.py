@@ -84,16 +84,16 @@ class OptionsPanel(QFrame):
         self.addr_options = addr_options
         self.addr_selection = addr_selection
 
-        selection = combo.currentText()
+        self.selection = combo.currentText()
         if addr_options not in self.pars:
             self.pars[addr_options] = defaultd
         if addr_selection not in self.pars:
-            self.pars[addr_selection] = selection
+            self.pars[addr_selection] = self.selection
 
         self.from_dict(
-            selection,
-            self.infod[selection],
-            self.pars[self.addr_options][selection])
+            self.selection,
+            self.infod[self.selection],
+            self.pars[self.addr_options][self.selection])
 
         def f():
             def f(selection):
@@ -102,9 +102,16 @@ class OptionsPanel(QFrame):
                     selection,
                     self.infod[selection],
                     self.pars[self.addr_options][selection])
+                self.selection = selection
             return f
 
         combo.currentTextChanged.connect(f())
+
+    def get_options(self):
+        return (
+            self.selection,
+            dict(self.pars[self.addr_options][self.selection])
+            )
 
     def from_dict(self, selection, infod, valuesd):
         count = 0
@@ -578,6 +585,7 @@ class ZernikeWindow(QMainWindow):
 
     sig_acquire = pyqtSignal(tuple)
     sig_release = pyqtSignal(tuple)
+    sig_draw = pyqtSignal(tuple)
 
     def __init__(self, app, dm, calib, pars={}, parent=None):
         super().__init__(parent)
@@ -615,9 +623,11 @@ class ZernikeWindow(QMainWindow):
 
         ax, ima, img, fig = make_figs()
 
-        def make_write_fun():
-            def f(z):
-                self.zcontrol.write(z)
+        def make_write_dm():
+            def f(z, do_write=True):
+                # callback for zpanel
+                if do_write:
+                    self.zcontrol.write(z)
 
                 if self.zcontrol.saturation:
                     satind = 'SAT'
@@ -634,13 +644,15 @@ class ZernikeWindow(QMainWindow):
                 ax[0].figure.canvas.draw()
             return f
 
-        write_fun = make_write_fun()
+        write_dm = make_write_dm()
+        self.write_dm = write_dm
 
         if 'ZernikePanel' not in pars:
             pars['ZernikePanel'] = {}
         self.zpanel = ZernikePanel(
             self.zcontrol.calib.wavelength, self.zcontrol.calib.get_rzern().n,
-            self.zcontrol.z, callback=write_fun, pars=pars['ZernikePanel'])
+            self.zcontrol.z, callback=write_dm, pars=pars['ZernikePanel'])
+        write_dm(self.zpanel.z)
 
         def make_select_cb():
             def f(e):
@@ -663,8 +675,6 @@ class ZernikeWindow(QMainWindow):
         ax[0].figure.canvas.callbacks.connect(
             'button_press_event', make_select_cb())
 
-        write_fun(self.zpanel.z)
-
         dmstatus.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         split = QSplitter(Qt.Horizontal)
@@ -678,12 +688,11 @@ class ZernikeWindow(QMainWindow):
         layout.addWidget(split, 0, 0, 1, 4)
         layout.addWidget(dmstatus, 1, 0, 1, 4)
 
-        self.add_lower(layout, write_fun)
+        self.add_lower(layout)
         self.tabs.addTab(front, self.zcontrol.dm.get_serial_number())
         self.make_control_tab()
 
         self.setCentralWidget(self.tabs)
-        self.write_fun = write_fun
 
         def make_release_hand():
             def f(t):
@@ -691,7 +700,8 @@ class ZernikeWindow(QMainWindow):
                 self.zpanel.z[:] = self.zcontrol.u2z()
                 self.zpanel.update_gui_controls()
                 self.zpanel.update_phi_plot()
-                self.setEnabled(True)
+                for i in range(self.tabs.count()):
+                    self.tabs.widget(i).setEnabled(True)
                 self.can_close = True
                 self.mutex.unlock()
             return f
@@ -700,11 +710,25 @@ class ZernikeWindow(QMainWindow):
             def f(t):
                 self.mutex.lock()
                 self.can_close = False
-                self.setEnabled(False)
+                for i in range(self.tabs.count()):
+                    self.tabs.widget(i).setEnabled(False)
+
             return f
 
         self.sig_release.connect(make_release_hand())
         self.sig_acquire.connect(make_acquire_hand())
+
+        def f():
+            def f(t):
+                u = t[0]
+                self.zcontrol.u[:] = u
+                z = self.zcontrol.u2z()
+                self.zpanel.z[:] = z
+                self.zpanel.update_phi_plot(run_callback=False)
+                self.write_dm(z, do_write=False)
+            return f
+
+        self.sig_draw.connect(f())
 
     def make_control_tab(self):
         control_options = OptionsPanel()
@@ -712,6 +736,7 @@ class ZernikeWindow(QMainWindow):
             self.pars, 'control',
             control.get_default_parameters(),
             control.get_parameters_info())
+        self.control_options = control_options
         self.tabs.addTab(control_options, 'control')
 
     def instance_control(self):
@@ -745,7 +770,7 @@ class ZernikeWindow(QMainWindow):
         self.pars['ZernikePanel'] = self.zpanel.save_parameters()
         return self.pars
 
-    def add_lower(self, layout, write_fun):
+    def add_lower(self, layout):
         def hold():
             self.mutex.lock()
             self.setDisabled(True)
@@ -817,7 +842,7 @@ class ZernikeWindow(QMainWindow):
         def hand_flat():
             def f(b):
                 self.zcontrol.flat_on = b
-                write_fun(self.zpanel.z)
+                self.write_dm(self.zpanel.z)
             return f
 
         calibname = QLabel(self.pars['calibration'])
@@ -848,38 +873,24 @@ class ZernikeWindow(QMainWindow):
     def acquire_control(self, h5f):
         self.sig_acquire.emit((h5f,))
 
-        def make_gui_update():
-            def f(u):
-                self.zcontrol.u[:] = u
-                self.zpanel.z[:] = self.zcontrol.u2z()
-                self.zpanel.update_phi_plot()
+        cname, pars = self.control_options.get_options()
+        pars['flat_on'] = self.zcontrol.flat_on
+        pars['uflat'] = self.zcontrol.uflat.tolist()
+        pars['u'] = self.zcontrol.u.tolist()
+        pars['all'] = 0
+        c = control.new_control(
+            self.zcontrol.dm,
+            self.zcontrol.calib,
+            cname, pars, h5f)
+
+        def make_gui_callback():
+            def f():
+                self.sig_draw.emit((c.u,))
             return f
 
-        class DummyControl(self.zcontrol.__class__):
+        c.gui_callback = make_gui_callback()
 
-            def set_gui_update(self, gui_update):
-                self.gui_update = gui_update
-
-            def write(self, x):
-                super().write(x)
-                self.gui_update(self.u)
-
-        pars = {
-            'control': {
-                'Zernike': {
-                    'include': [],
-                    'exclude': [1, 2, 3, 4],
-                    'min': 5,
-                    'max': 6,
-                    'all': 0,
-                    }
-                }
-            }
-
-        dc = DummyControl(
-            self.zcontrol.dm, self.zcontrol.calib, pars=pars, h5f=h5f)
-        dc.set_gui_update(make_gui_update())
-        return dc
+        return c
 
     def release_control(self, control, h5f):
         self.sig_release.emit((control, h5f))
