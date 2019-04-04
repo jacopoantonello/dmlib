@@ -16,7 +16,7 @@ from matplotlib.figure import Figure
 from datetime import datetime
 
 from PyQt5.QtCore import Qt, QMutex, pyqtSignal
-from PyQt5.QtGui import QIntValidator, QDoubleValidator, QKeySequence
+from PyQt5.QtGui import QIntValidator, QDoubleValidator, QKeySequence, QPalette
 from PyQt5.QtWidgets import (
     QWidget, QFileDialog, QGroupBox, QGridLayout, QLabel, QPushButton,
     QLineEdit, QCheckBox, QScrollArea, QSlider, QDoubleSpinBox, QFrame,
@@ -51,6 +51,7 @@ class MyQIntValidator(QIntValidator):
 
 
 class RelSlider:
+
     def __init__(self, val, cb):
         self.old_val = None
         self.fto100mul = 100
@@ -58,6 +59,10 @@ class RelSlider:
 
         self.sba = QDoubleSpinBox()
         self.sba.setValue(val)
+        self.pal = self.sba.palette()
+        self.col_zero = self.pal.color(QPalette.Background)
+        self.col_dark = self.col_zero.darker()
+        self.sba_color(val)
         self.sba.setSingleStep(1.25e-3)
         self.sba.setToolTip('Effective value')
         self.sba.setMinimum(-1000)
@@ -80,7 +85,9 @@ class RelSlider:
         def sba_cb():
             def f():
                 self.block()
-                self.cb(self.sba.value())
+                val = self.sba.value()
+                self.sba_color(val)
+                self.cb(val)
                 self.unblock()
             return f
 
@@ -95,6 +102,7 @@ class RelSlider:
 
                 val = self.old_val + self.qsr.value()/100*self.sbm.value()
                 self.sba.setValue(val)
+                self.sba_color(val)
                 self.cb(val)
 
                 self.unblock()
@@ -125,6 +133,14 @@ class RelSlider:
         self.qsr.sliderPressed.connect(self.qs1_start)
         self.qsr.sliderReleased.connect(self.qs1_end)
 
+    def sba_color(self, val):
+        if val != 0.0:
+            self.pal.setColor(QPalette.Background, self.col_dark)
+        else:
+            self.pal.setColor(QPalette.Background, self.col_zero)
+        self.sba.setPalette(self.pal)
+        self.sba.update()
+
     def block(self):
         self.sba.blockSignals(True)
         self.qsr.blockSignals(True)
@@ -152,6 +168,7 @@ class RelSlider:
         return self.sba.value()
 
     def set_value(self, v):
+        self.sba_color(v)
         return self.sba.setValue(v)
 
     def add_to_layout(self, l1, ind1, ind2):
@@ -824,8 +841,7 @@ def new_zernike_window(app, args, params={}):
         quit('error loading calibration {}: {}'.format(
             params['calibration'], str(e)))
 
-    control = ZernikeControl(dm, calib)
-    zwindow = ZernikeWindow(None, control, params)
+    zwindow = ZernikeWindow(None, dm, calib, params)
     zwindow.show()
 
     return zwindow
