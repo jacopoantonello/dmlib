@@ -347,7 +347,7 @@ class ZernikePanel(QWidget):
     def_pars = {'zernike_labels': {}, 'shown_modes': 21}
 
     def __init__(
-            self, wavelength, n_radial, z0, callback=None, pars=None,
+            self, wavelength, n_radial, z0=None, callback=None, pars={},
             parent=None):
         super().__init__(parent=parent)
         self.log = logging.getLogger(self.__class__.__name__)
@@ -361,16 +361,20 @@ class ZernikePanel(QWidget):
         self.im = None
         self.cb = None
         self.shape = (128, 128)
-        self.z = z0.copy()
 
         self.rzern = RZern(n_radial)
-        assert(self.rzern.nk == self.z.size)
         dd = np.linspace(-1, 1, self.shape[0])
         xv, yv = np.meshgrid(dd, dd)
         self.rzern.make_cart_grid(xv, yv)
         self.rad_to_nm = wavelength/(2*np.pi)
         self.callback = callback
         self.zernike_rows = []
+
+        if z0 is None:
+            self.z = np.zeros(self.rzern.nk)
+        else:
+            self.z = z0.copy()
+        assert(self.rzern.nk == self.z.size)
 
         top1 = QGroupBox('phase')
         toplay1 = QGridLayout()

@@ -1078,6 +1078,8 @@ class Control(QMainWindow):
                     if not bootstrap():
                         enable()
                         return False
+                status.setText(f'loading {calib[0]} ...')
+                status.repaint()
                 shared.iq.put(('query_calib', calib[0]))
                 ndata = check_err()
                 if ndata == -1:
@@ -1088,7 +1090,8 @@ class Control(QMainWindow):
                     self.dmplot.update_txs(ndata[3])
                     if self.zernikePanel:
                         self.zernikePanel.close()
-                    self.zernikePanel = ZernikePanel(ndata[0], ndata[1], cb)
+                    self.zernikePanel = ZernikePanel(
+                        ndata[0], ndata[1], callback=cb)
                     self.zernikePanel.show()
                     status.setText('{} {:.3f} mm'.format(
                         calib[0], ndata[2]/1000))
