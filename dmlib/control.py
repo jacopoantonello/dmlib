@@ -276,7 +276,7 @@ class SVDControl(ZernikeControl):
     def get_default_parameters():
         return {
             'modes': 5,
-            'exclude': [1, 2, 3, 4],
+            'zernike_exclude': 4,
             'flat_on': 1,
             }
 

@@ -93,9 +93,20 @@ class OptionsPanel(QFrame):
         self.from_dict(
             selection,
             self.infod[selection],
-            self.pars[addr_options][selection])
+            self.pars[self.addr_options][selection])
 
-    def from_dict(self, option, infod, valuesd):
+        def f():
+            def f(selection):
+                self.clear_all()
+                self.from_dict(
+                    selection,
+                    self.infod[selection],
+                    self.pars[self.addr_options][selection])
+            return f
+
+        combo.currentTextChanged.connect(f())
+
+    def from_dict(self, selection, infod, valuesd):
         count = 0
         for k, v in infod.items():
             lab = QLabel(k)
@@ -110,13 +121,14 @@ class OptionsPanel(QFrame):
             def fle(k, le, val, type1):
                 def f():
                     newval = type1(le.text())
-                    self.control_pars[option][k] = type1(le.text())
+                    self.pars[
+                        self.addr_options][selection][k] = type1(le.text())
                     val.setFixup(newval)
                 return f
 
-            def ledisc():
+            def ledisc(w, hand):
                 def f():
-                    le.editingFinished.disconnect(hand)
+                    w.editingFinished.disconnect(hand)
                 return f
 
             curval = valuesd[k]
@@ -135,39 +147,41 @@ class OptionsPanel(QFrame):
                 le.setValidator(vv)
                 hand = fle(k, le, vv, type1)
                 le.editingFinished.connect(hand)
-                disc = ledisc()
+                disc = ledisc(le, hand)
             elif type1 == list:
                 le = QLineEdit(', '.join([str(c) for c in curval]))
                 le.setToolTip(desc)
 
-                def make_validator(k, le, type1):
+                def make_validator(k, le, type1, bounds):
                     def f():
                         try:
                             tmp = [bounds(s) for s in le.text().split(',')]
-                            self.control_pars[option][k] = tmp
+                            self.pars[self.addr_options][selection][k] = tmp
                         except Exception:
                             le.blockSignals(True)
                             le.setText(
                                 ', '.join([
                                     str(c) for c in
-                                    self.control_pars[option][k]]))
+                                    self.pars[self.addr_options][selection][k]
+                                    ]))
                             le.blockSignals(False)
                     return f
 
-                hand = make_validator(k, le, type1)
+                hand = make_validator(k, le, type1, bounds)
                 le.editingFinished.connect(hand)
-                disc = ledisc()
+                disc = ledisc(le, hand)
             else:
                 raise RuntimeError()
 
             self.lay.addWidget(le, count, 1)
-            self.lines.append((le, disc))
+            self.lines.append(((le, lab), disc))
             count += 1
 
     def clear_all(self):
         for l in self.lines:
-            self.lay.removeWidget(l[0])
-            l[0].setParent(None)
+            for w in l[0]:
+                self.lay.removeWidget(w)
+                w.setParent(None)
             l[1]()
         self.lines.clear()
 
