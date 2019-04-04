@@ -874,9 +874,9 @@ class ZernikeWindow(QMainWindow):
         self.sig_acquire.emit((h5f,))
 
         cname, pars = self.control_options.get_options()
-        pars['flat_on'] = self.zcontrol.flat_on
-        pars['uflat'] = self.zcontrol.uflat.tolist()
-        pars['u'] = self.zcontrol.u.tolist()
+        pars['flat_on'] = 1
+        pars['uflat'] = self.zcontrol.u.tolist()
+        pars['u'] = np.zeros_like(self.zcontrol.u).tolist()
         pars['all'] = 0
         c = control.new_control(
             self.zcontrol.dm,
