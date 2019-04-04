@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import logging
 import sys
 import numpy as np
 import json
@@ -189,6 +190,7 @@ class ZernikePanel(QWidget):
             self, wavelength, n_radial, z0, callback=None, pars=None,
             parent=None):
         super().__init__(parent=parent)
+        self.log = logging.getLogger(self.__class__.__name__)
 
         self.pars = {**self.def_pars, **pars}
         self.units = 'rad'
@@ -426,6 +428,7 @@ class ZernikeWindow(QMainWindow):
 
     def __init__(self, app, dm, calib, pars={}, parent=None):
         super().__init__(parent)
+        self.log = logging.getLogger(self.__class__.__name__)
         self.can_close = True
         self.pars = pars
 
@@ -592,7 +595,7 @@ class ZernikeWindow(QMainWindow):
                 hold()
                 fileName, _ = QFileDialog.getOpenFileName(
                     None, 'Select a parameters file',
-                    'JSON (*.json);;All Files (*)')
+                    filter='JSON (*.json);;All Files (*)')
                 if fileName:
                     try:
                         calibration = self.pars['calibration']
@@ -605,7 +608,8 @@ class ZernikeWindow(QMainWindow):
                                 self.pars['ZernikePanel'])
                     except Exception as ex:
                         self.log.error(f'error loading parameters {str(ex)}')
-                        QMessageBox.information(self, 'error', str(ex))
+                        QMessageBox.information(
+                            self, 'error loading parameters', str(ex))
                 release()
             return f
 
@@ -614,7 +618,7 @@ class ZernikeWindow(QMainWindow):
                 hold()
                 fileName, _ = QFileDialog.getOpenFileName(
                     None, 'Select a calibration file',
-                    'H5 (*.h5);;All Files (*)')
+                    filter='H5 (*.h5);;All Files (*)')
                 if fileName:
                     try:
                         with File(fileName, 'r') as f:
@@ -624,8 +628,9 @@ class ZernikeWindow(QMainWindow):
                         if 'ZernikePanel' in pars:
                             self.zpanel.load_parameters(pars['ZernikePanel'])
                     except Exception as ex:
-                        self.log.error(f'error loading parameters {str(ex)}')
-                        QMessageBox.information(self, 'error', str(ex))
+                        self.log.error(f'error loading calibration {str(ex)}')
+                        QMessageBox.information(
+                            self, 'error loading calibration', str(ex))
                 release()
             return f
 
@@ -633,14 +638,16 @@ class ZernikeWindow(QMainWindow):
             def f():
                 fdiag, _ = QFileDialog.getSaveFileName(directory=(
                     self.control.calib.dm_serial +
-                    datetime.now().strftime('_%Y%m%d_%H%M%S.json')))
+                    datetime.now().strftime('_%Y%m%d_%H%M%S.json')),
+                    filter='JSON (*.json);;All Files (*)')
                 if fdiag:
                     try:
                         with open(fdiag, 'w') as f:
                             json.dump(self.save_parameters(flat), f)
                     except Exception as ex:
-                        self.log.error(f'error loading parameters {str(ex)}')
-                        QMessageBox.information(self, 'error', str(ex))
+                        self.log.error(f'error saving parameters {str(ex)}')
+                        QMessageBox.information(
+                            self, 'error saving parameters', str(ex))
             return f
 
         def hand_flat():
