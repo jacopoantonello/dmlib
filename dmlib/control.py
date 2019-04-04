@@ -11,19 +11,15 @@ from numpy.linalg import norm, svd, pinv
 
 def get_default_parameters():
     return {
-        'control': {
-            'ZernikeControl': ZernikeControl.get_default_parameters(),
-            'SVDControl': SVDControl.get_default_parameters(),
-            }
+        'ZernikeControl': ZernikeControl.get_default_parameters(),
+        'SVDControl': SVDControl.get_default_parameters(),
         }
 
 
 def get_parameters_info():
     return {
-        'control': {
-            'ZernikeControl': ZernikeControl.get_parameters_info(),
-            'SVDControl': SVDControl.get_parameters_info(),
-            }
+        'ZernikeControl': ZernikeControl.get_parameters_info(),
+        'SVDControl': SVDControl.get_parameters_info(),
         }
 
 
@@ -382,16 +378,11 @@ class SVDControl(ZernikeControl):
         raise NotImplementedError()
 
 
-def get_noll_indices(params):
-    p = params['control']
-    if 'Zernike' in p:
-        z = p['Zernike']
-        noll_min = np.array(z['min'], dtype=np.int)
-        noll_max = np.array(z['max'], dtype=np.int)
-        minclude = np.array(z['include'], dtype=np.int)
-        mexclude = np.array(z['exclude'], dtype=np.int)
-    else:
-        RuntimeError()
+def get_noll_indices(pars):
+    noll_min = np.array(pars['min'], dtype=np.int)
+    noll_max = np.array(pars['max'], dtype=np.int)
+    minclude = np.array(pars['include'], dtype=np.int)
+    mexclude = np.array(pars['exclude'], dtype=np.int)
 
     mrange = np.arange(noll_min, noll_max + 1, dtype=np.int)
     zernike_indices = np.setdiff1d(
@@ -412,12 +403,10 @@ def get_controls():
     }
 
 
-def new_control(dm, calib, pars={'control': {'ZernikeControl': {}}}, h5f=None):
-    d = pars['control']
-    if len(d) != 1:
+def new_control(dm, calib, name, pars={}, h5f=None):
+    options = get_controls()
+    if name not in options.keys():
         raise ValueError(
-            'Use singleton dictionary with either of ' +
-            f'{str(list(get_controls()))}')
+            f'name must be one of {", ".join(options.keys())}')
 
-    cname = d.keys()[0]
-    return get_controls()[cname](dm, calib, d[cname])
+    return options[name](dm, calib, pars, h5f)

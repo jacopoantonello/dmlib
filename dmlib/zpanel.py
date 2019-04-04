@@ -21,8 +21,9 @@ from PyQt5.QtWidgets import (
     QWidget, QFileDialog, QGroupBox, QGridLayout, QLabel, QPushButton,
     QLineEdit, QCheckBox, QScrollArea, QSlider, QDoubleSpinBox, QFrame,
     QErrorMessage, QApplication, QMainWindow, QSplitter, QShortcut,
-    QMessageBox, QSizePolicy, QInputDialog,
+    QMessageBox, QSizePolicy, QInputDialog, QTabWidget, QComboBox,
     )
+
 
 from zernike.czernike import RZern
 
@@ -31,6 +32,7 @@ from dmlib.dmplot import DMPlot
 from dmlib.core import (
     add_dm_parameters, open_dm, add_log_parameters, setup_logging)
 from dmlib.calibration import WeightedLSCalib
+from dmlib import control
 from dmlib.control import ZernikeControl
 
 
@@ -48,6 +50,126 @@ class MyQIntValidator(QIntValidator):
 
     def fixup(self, txt):
         return str(self.fixupval)
+
+
+class OptionsPanel(QFrame):
+
+    def setup(self, pars, name, defaultd, infod):
+        self.lines = []
+        self.pars = pars
+        self.name = name
+        self.defaultd = defaultd
+        self.infod = infod
+
+        layout = QGridLayout()
+        self.setLayout(layout)
+
+        combo = QComboBox()
+        for k in defaultd.keys():
+            combo.addItem(k)
+        layout.addWidget(combo, 0, 0)
+        combo.setCurrentIndex(0)
+        self.combo = combo
+
+        scroll = QScrollArea()
+        scroll.setWidget(QWidget())
+        scroll.setWidgetResizable(True)
+        lay = QGridLayout(scroll.widget())
+        self.scroll = scroll
+        self.lay = lay
+
+        layout.addWidget(scroll, 1, 0)
+        addr_options = name + '_options'
+        addr_selection = name + '_name'
+        self.addr_options = addr_options
+        self.addr_selection = addr_selection
+
+        selection = combo.currentText()
+        if addr_options not in self.pars:
+            self.pars[addr_options] = defaultd
+        if addr_selection not in self.pars:
+            self.pars[addr_selection] = selection
+
+        self.from_dict(
+            selection,
+            self.infod[selection],
+            self.pars[addr_options][selection])
+
+    def from_dict(self, option, infod, valuesd):
+        count = 0
+        for k, v in infod.items():
+            lab = QLabel(k)
+
+            type1 = v[0]
+            bounds = v[1]
+            desc = v[2]
+
+            lab.setToolTip(desc)
+            self.lay.addWidget(lab, count, 0)
+
+            def fle(k, le, val, type1):
+                def f():
+                    newval = type1(le.text())
+                    self.control_pars[option][k] = type1(le.text())
+                    val.setFixup(newval)
+                return f
+
+            def ledisc():
+                def f():
+                    le.editingFinished.disconnect(hand)
+                return f
+
+            curval = valuesd[k]
+            if type1 in (int, float):
+                le = QLineEdit(str(curval))
+                le.setToolTip(desc)
+                if type1 == int:
+                    vv = MyQIntValidator()
+                else:
+                    vv = MyQDoubleValidator()
+                vv.setFixup(curval)
+                if bounds[0] is not None:
+                    vv.setBottom(bounds[0])
+                if bounds[1] is not None:
+                    vv.setTop(bounds[1])
+                le.setValidator(vv)
+                hand = fle(k, le, vv, type1)
+                le.editingFinished.connect(hand)
+                disc = ledisc()
+            elif type1 == list:
+                le = QLineEdit(', '.join([str(c) for c in curval]))
+                le.setToolTip(desc)
+
+                def make_validator(k, le, type1):
+                    def f():
+                        try:
+                            tmp = [bounds(s) for s in le.text().split(',')]
+                            self.control_pars[option][k] = tmp
+                        except Exception:
+                            le.blockSignals(True)
+                            le.setText(
+                                ', '.join([
+                                    str(c) for c in
+                                    self.control_pars[option][k]]))
+                            le.blockSignals(False)
+                    return f
+
+                hand = make_validator(k, le, type1)
+                le.editingFinished.connect(hand)
+                disc = ledisc()
+            else:
+                raise RuntimeError()
+
+            self.lay.addWidget(le, count, 1)
+            self.lines.append((le, disc))
+            count += 1
+
+    def clear_all(self):
+        for l in self.lines:
+            self.lay.removeWidget(l[0])
+            l[0].setParent(None)
+            l[1]()
+        self.lines.clear()
 
 
 class RelSlider:
@@ -452,10 +574,10 @@ class ZernikeWindow(QMainWindow):
         self.dm = dm
         self.calib = calib
         try:
-            self.control = ZernikeControl(
+            self.zcontrol = ZernikeControl(
                 self.dm, self.calib, self.pars['ZernikeControl'])
         except Exception:
-            self.control = ZernikeControl(self.dm, self.calib)
+            self.zcontrol = ZernikeControl(self.dm, self.calib)
 
         self.app = app
         self.mutex = QMutex()
@@ -464,14 +586,14 @@ class ZernikeWindow(QMainWindow):
         QShortcut(QKeySequence("Ctrl+Q"), self, self.close)
 
         self.dmplot = DMPlot()
-        self.dmplot.update_txs(self.control.calib.dmplot_txs)
+        self.dmplot.update_txs(self.zcontrol.calib.dmplot_txs)
         dmstatus = QLabel()
 
         def make_figs():
             fig = FigureCanvas(Figure(figsize=(2, 2)))
             ax = fig.figure.subplots(2, 1)
-            ima = self.dmplot.draw(ax[0], self.control.u)
-            img = ax[1].imshow(self.dmplot.compute_gauss(self.control.u))
+            ima = self.dmplot.draw(ax[0], self.zcontrol.u)
+            img = ax[1].imshow(self.dmplot.compute_gauss(self.zcontrol.u))
             ax[0].axis('off')
             ax[1].axis('off')
 
@@ -481,19 +603,18 @@ class ZernikeWindow(QMainWindow):
 
         def make_write_fun():
             def f(z):
-                self.control.write(z)
+                self.zcontrol.write(z)
 
-                if self.control.saturation:
+                if self.zcontrol.saturation:
                     satind = 'SAT'
                 else:
                     satind = 'OK'
                 dmstatus.setText(
-                    f'DM {self.control.dm.get_serial_number()} ' +
-                    f'u [{self.control.u.min():+0.3f} ' +
-                    f'{self.control.u.max():+0.3f}] {satind}')
+                    f'u [{self.zcontrol.u.min():+0.3f} ' +
+                    f'{self.zcontrol.u.max():+0.3f}] {satind}')
 
-                ima.set_data(self.dmplot.compute_pattern(self.control.u))
-                g = self.dmplot.compute_gauss(self.control.u)
+                ima.set_data(self.dmplot.compute_pattern(self.zcontrol.u))
+                g = self.dmplot.compute_gauss(self.zcontrol.u)
                 img.set_data(g)
                 img.set_clim(g.min(), g.max())
                 ax[0].figure.canvas.draw()
@@ -504,8 +625,8 @@ class ZernikeWindow(QMainWindow):
         if 'ZernikePanel' not in pars:
             pars['ZernikePanel'] = {}
         self.zpanel = ZernikePanel(
-            self.control.calib.wavelength, self.control.calib.get_rzern().n,
-            self.control.z, callback=write_fun, pars=pars['ZernikePanel'])
+            self.zcontrol.calib.wavelength, self.zcontrol.calib.get_rzern().n,
+            self.zcontrol.z, callback=write_fun, pars=pars['ZernikePanel'])
 
         def make_select_cb():
             def f(e):
@@ -515,11 +636,11 @@ class ZernikeWindow(QMainWindow):
                     if ind != -1:
                         val, ok = QInputDialog.getDouble(
                             self, f'Actuator {ind} ' + str(ind),
-                            'range [-1, 1]', self.control.u[ind],
+                            'range [-1, 1]', self.zcontrol.u[ind],
                             -1., 1., 4)
                         if ok:
-                            self.control.u[ind] = val
-                            self.zpanel.z[:] = self.control.u2z()
+                            self.zcontrol.u[ind] = val
+                            self.zpanel.z[:] = self.zcontrol.u2z()
                             self.zpanel.update_gui_controls()
                             self.zpanel.update_phi_plot()
                 self.mutex.unlock()
@@ -536,20 +657,24 @@ class ZernikeWindow(QMainWindow):
         split.addWidget(self.zpanel)
         split.addWidget(fig)
 
-        central = QFrame()
+        self.tabs = QTabWidget()
+        front = QFrame()
         layout = QGridLayout()
-        central.setLayout(layout)
+        front.setLayout(layout)
         layout.addWidget(split, 0, 0, 1, 4)
         layout.addWidget(dmstatus, 1, 0, 1, 4)
 
         self.add_lower(layout, write_fun)
-        self.setCentralWidget(central)
+        self.tabs.addTab(front, self.zcontrol.dm.get_serial_number())
+        self.make_control_tab()
+
+        self.setCentralWidget(self.tabs)
         self.write_fun = write_fun
 
         def make_release_hand():
             def f(t):
-                self.control.u[:] = t[0].u
-                self.zpanel.z[:] = self.control.u2z()
+                self.zcontrol.u[:] = t[0].u
+                self.zpanel.z[:] = self.zcontrol.u2z()
                 self.zpanel.update_gui_controls()
                 self.zpanel.update_phi_plot()
                 self.setEnabled(True)
@@ -567,20 +692,28 @@ class ZernikeWindow(QMainWindow):
         self.sig_release.connect(make_release_hand())
         self.sig_acquire.connect(make_acquire_hand())
 
+    def make_control_tab(self):
+        control_options = OptionsPanel()
+        control_options.setup(
+            self.pars, 'control',
+            control.get_default_parameters(),
+            control.get_parameters_info())
+        self.tabs.addTab(control_options, 'control')
+
     def instance_control(self):
         try:
-            self.control = ZernikeControl(
+            self.zcontrol = ZernikeControl(
                 self.dm, self.calib, self.pars['ZernikeControl'])
         except Exception as ex:
             self.log.error(f'instance_control {str(ex)}')
-            self.control = ZernikeControl(self.dm, self.calib)
+            self.zcontrol = ZernikeControl(self.dm, self.calib)
         self.bflat.blockSignals(True)
-        if self.control.flat_on:
+        if self.zcontrol.flat_on:
             self.bflat.setChecked(True)
         else:
             self.bflat.setChecked(False)
         self.bflat.blockSignals(False)
-        self.zpanel.z[:] = self.control.u2z()
+        self.zpanel.z[:] = self.zcontrol.u2z()
         self.zpanel.update_gui_controls()
         self.zpanel.update_phi_plot()
 
@@ -593,7 +726,7 @@ class ZernikeWindow(QMainWindow):
             self.zpanel.load_parameters(pars['ZernikePanel'])
 
     def save_parameters(self, asflat=False):
-        self.pars['ZernikeControl'] = self.control.save_parameters(
+        self.pars['ZernikeControl'] = self.zcontrol.save_parameters(
             asflat=asflat)
         self.pars['ZernikePanel'] = self.zpanel.save_parameters()
         return self.pars
@@ -654,7 +787,7 @@ class ZernikeWindow(QMainWindow):
         def hand_save(flat):
             def f():
                 fdiag, _ = QFileDialog.getSaveFileName(directory=(
-                    self.control.calib.dm_serial +
+                    self.zcontrol.calib.dm_serial +
                     datetime.now().strftime('_%Y%m%d_%H%M%S.json')),
                     filter='JSON (*.json);;All Files (*)')
                 if fdiag:
@@ -669,7 +802,7 @@ class ZernikeWindow(QMainWindow):
 
         def hand_flat():
             def f(b):
-                self.control.flat_on = b
+                self.zcontrol.flat_on = b
                 write_fun(self.zpanel.z)
             return f
 
@@ -682,7 +815,7 @@ class ZernikeWindow(QMainWindow):
         bsaveflat = QPushButton('save flat')
         bload = QPushButton('load params')
         bflat = QCheckBox('flat')
-        bflat.setChecked(self.control.flat_on)
+        bflat.setChecked(self.zcontrol.flat_on)
 
         bcalib.clicked.connect(hand_calib())
         bsave.clicked.connect(hand_save(False))
@@ -703,12 +836,12 @@ class ZernikeWindow(QMainWindow):
 
         def make_gui_update():
             def f(u):
-                self.control.u[:] = u
-                self.zpanel.z[:] = self.control.u2z()
+                self.zcontrol.u[:] = u
+                self.zpanel.z[:] = self.zcontrol.u2z()
                 self.zpanel.update_phi_plot()
             return f
 
-        class DummyControl(self.control.__class__):
+        class DummyControl(self.zcontrol.__class__):
 
             def set_gui_update(self, gui_update):
                 self.gui_update = gui_update
@@ -729,10 +862,10 @@ class ZernikeWindow(QMainWindow):
                 }
             }
 
-        control = DummyControl(
-            self.control.dm, self.control.calib, pars=pars, h5f=h5f)
-        control.set_gui_update(make_gui_update())
-        return control
+        dc = DummyControl(
+            self.zcontrol.dm, self.zcontrol.calib, pars=pars, h5f=h5f)
+        dc.set_gui_update(make_gui_update())
+        return dc
 
     def release_control(self, control, h5f):
         self.sig_release.emit((control, h5f))
