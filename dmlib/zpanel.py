@@ -700,11 +700,12 @@ class ZernikeWindow(QMainWindow):
 
         def make_release_hand():
             def f(t):
-                if norm(t[0].u) != 0:
-                    self.zcontrol.u[:] = t[0].u
-                self.zpanel.z[:] = self.zcontrol.u2z()
-                self.zpanel.update_gui_controls()
-                self.zpanel.update_phi_plot()
+                if t[0] is not None:
+                    if norm(t[0].u) != 0:
+                        self.zcontrol.u[:] = t[0].u
+                    self.zpanel.z[:] = self.zcontrol.u2z()
+                    self.zpanel.update_gui_controls()
+                    self.zpanel.update_phi_plot()
                 for i in range(self.tabs.count()):
                     self.tabs.widget(i).setEnabled(True)
                 self.can_close = True
@@ -881,22 +882,26 @@ class ZernikeWindow(QMainWindow):
     def acquire_control(self, h5f):
         self.sig_acquire.emit((h5f,))
 
-        cname, pars = self.control_options.get_options()
-        pars['flat_on'] = 1
-        pars['uflat'] = self.zcontrol.u.tolist()
-        pars['u'] = np.zeros_like(self.zcontrol.u).tolist()
-        pars['all'] = 0
-        c = control.new_control(
-            self.zcontrol.dm,
-            self.zcontrol.calib,
-            cname, pars, h5f)
+        try:
+            cname, pars = self.control_options.get_options()
+            pars['flat_on'] = 1
+            pars['uflat'] = self.zcontrol.u.tolist()
+            pars['u'] = np.zeros_like(self.zcontrol.u).tolist()
+            pars['all'] = 0
+            c = control.new_control(
+                self.zcontrol.dm,
+                self.zcontrol.calib,
+                cname, pars, h5f)
 
-        def make_gui_callback():
-            def f():
-                self.sig_draw.emit((c.u,))
-            return f
+            def make_gui_callback():
+                def f():
+                    self.sig_draw.emit((c.u,))
+                return f
 
-        c.gui_callback = make_gui_callback()
+            c.gui_callback = make_gui_callback()
+        except Exception as ex:
+            self.sig_release.emit((None, h5f))
+            raise ex
 
         return c
 
