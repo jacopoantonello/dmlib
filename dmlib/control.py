@@ -131,6 +131,11 @@ class ZernikeControl:
         self.h5_save('P', np.eye(nz))
         self.h5_save('params', json.dumps(pars))
 
+    def __str__(self):
+        return (
+            f'<dmlib.control.{self.__class__.__name__} ' +
+            f'ndof={self.ndof} indices={self.indices}>')
+
     def save_parameters(self, merge={}, asflat=False):
         d = {**merge, **self.pars}
         if asflat:

@@ -734,6 +734,9 @@ class ZernikeWindow(QMainWindow):
 
         self.sig_draw.connect(f())
 
+    def __str__(self):
+        return f'<dmlib.zpanel.{self.__class__.__name__}>'
+
     def make_control_tab(self):
         control_options = OptionsPanel()
         control_options.setup(
