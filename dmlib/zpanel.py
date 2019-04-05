@@ -700,7 +700,8 @@ class ZernikeWindow(QMainWindow):
 
         def make_release_hand():
             def f(t):
-                self.zcontrol.u[:] = t[0].u
+                if norm(t[0].u) != 0:
+                    self.zcontrol.u[:] = t[0].u
                 self.zpanel.z[:] = self.zcontrol.u2z()
                 self.zpanel.update_gui_controls()
                 self.zpanel.update_phi_plot()
