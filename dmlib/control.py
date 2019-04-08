@@ -9,6 +9,9 @@ from numpy.random import normal
 from numpy.linalg import norm, svd, pinv
 
 
+h5_prefix = 'dmlib/control/'
+
+
 def get_default_parameters():
     return {
         'ZernikeControl': ZernikeControl.get_default_parameters(),
@@ -120,7 +123,7 @@ class ZernikeControl:
             self.log.info('failed load u')
 
         if h5f:
-            calib.save_h5py(h5f)
+            calib.save_h5py(h5f, prepend=h5_prefix)
 
         self.h5_make_empty('flat_on', (1,), np.bool)
         self.h5_make_empty('uflat', (nu,))
@@ -150,7 +153,7 @@ class ZernikeControl:
 
     def h5_make_empty(self, name, shape, dtype=np.float):
         if self.h5f:
-            name = 'ZernikeControl/' + name
+            name = h5_prefix + 'ZernikeControl/' + name
             if name in self.h5f:
                 del self.h5f[name]
             self.h5f.create_dataset(
@@ -159,14 +162,14 @@ class ZernikeControl:
 
     def h5_append(self, name, what):
         if self.h5f:
-            name = 'ZernikeControl/' + name
+            name = h5_prefix + 'ZernikeControl/' + name
             self.h5f[name].resize((
                 self.h5f[name].shape[0], self.h5f[name].shape[1] + 1))
             self.h5f[name][:, -1] = what
 
     def h5_save(self, where, what):
         if self.h5f:
-            name = 'ZernikeControl/' + where
+            name = h5_prefix + 'ZernikeControl/' + where
             if name in self.h5f:
                 del self.h5f[name]
             self.h5f[name] = what
@@ -233,7 +236,7 @@ class ZernikeControl:
         self.ab[:] = normal(size=self.ab.size)
         self.ab[:] /= norm(self.ab.size)
         if self.h5f:
-            self.h5f['ZernikeControl/ab'][:] = self.ab[:]
+            self.h5f[h5_prefix + 'ZernikeControl/ab'][:] = self.ab[:]
 
     def transform_pupil(self, alpha=0., flipx=False, flipy=False):
         rzern = self.calib.get_rzern()
@@ -260,12 +263,14 @@ class ZernikeControl:
             self.set_P(tot)
 
     def set_P(self, P):
+        addr = h5_prefix + 'ZernikeControl/P'
+
         if P is None:
             self.P = None
 
             if self.h5f:
-                del self.h5f['P']
-                self.h5f['P'][:] = np.eye(self.nz)
+                del self.h5f[addr]
+                self.h5f[addr][:] = np.eye(self.nz)
         else:
             assert(P.ndim == 2)
             assert(P.shape[0] == P.shape[1])
@@ -276,8 +281,8 @@ class ZernikeControl:
                 np.dot(P, self.P.copy(), self.P)
 
             if self.h5f:
-                del self.h5f['P']
-                self.h5f['P'][:] = self.P[:]
+                del self.h5f[addr]
+                self.h5f[addr][:] = self.P[:]
 
 
 class SVDControl(ZernikeControl):
@@ -336,7 +341,7 @@ class SVDControl(ZernikeControl):
         self.h5_save('ab', self.ab)
 
         def f(n, w):
-            self.h5f['ZernikeControl/SVDControl/' + n] = w
+            self.h5f[h5_prefix + 'ZernikeControl/SVDControl/' + n] = w
 
         if self.h5f:
             f('nignore', nignore)
