@@ -801,7 +801,7 @@ class ZernikeWindow(QMainWindow):
                             self.pars = json.load(f)
                         self.pars['calibration'] = calibration
                         self.instance_control()
-                        if 'ZernikePanel' in pars:
+                        if 'ZernikePanel' in self.pars:
                             self.zpanel.load_parameters(
                                 self.pars['ZernikePanel'])
                     except Exception as ex:
@@ -823,8 +823,9 @@ class ZernikeWindow(QMainWindow):
                             self.calib = WeightedLSCalib.load_h5py(
                                 f, lazy_cart_grid=True)
                         self.instance_control()
-                        if 'ZernikePanel' in pars:
-                            self.zpanel.load_parameters(pars['ZernikePanel'])
+                        if 'ZernikePanel' in self.pars:
+                            self.zpanel.load_parameters(
+                                self.pars['ZernikePanel'])
                     except Exception as ex:
                         self.log.error(f'error loading calibration {str(ex)}')
                         QMessageBox.information(
