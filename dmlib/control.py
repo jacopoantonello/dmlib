@@ -153,7 +153,7 @@ class ZernikeControl:
 
     def h5_make_empty(self, name, shape, dtype=np.float):
         if self.h5f:
-            name = h5_prefix + 'ZernikeControl/' + name
+            name = h5_prefix + self.__class__.__name__ + '/' + name
             if name in self.h5f:
                 del self.h5f[name]
             self.h5f.create_dataset(
@@ -162,14 +162,14 @@ class ZernikeControl:
 
     def h5_append(self, name, what):
         if self.h5f:
-            name = h5_prefix + 'ZernikeControl/' + name
+            name = h5_prefix + self.__class__.__name__ + '/' + name
             self.h5f[name].resize((
                 self.h5f[name].shape[0], self.h5f[name].shape[1] + 1))
             self.h5f[name][:, -1] = what
 
     def h5_save(self, where, what):
         if self.h5f:
-            name = h5_prefix + 'ZernikeControl/' + where
+            name = h5_prefix + self.__class__.__name__ + '/' + where
             if name in self.h5f:
                 del self.h5f[name]
             self.h5f[name] = what
@@ -236,7 +236,8 @@ class ZernikeControl:
         self.ab[:] = normal(size=self.ab.size)
         self.ab[:] /= norm(self.ab.size)
         if self.h5f:
-            self.h5f[h5_prefix + 'ZernikeControl/ab'][:] = self.ab[:]
+            self.h5f[
+                h5_prefix + self.__class__.__name__ + '/ab'][:] = self.ab[:]
 
     def transform_pupil(self, alpha=0., flipx=False, flipy=False):
         rzern = self.calib.get_rzern()
@@ -263,7 +264,7 @@ class ZernikeControl:
             self.set_P(tot)
 
     def set_P(self, P):
-        addr = h5_prefix + 'ZernikeControl/P'
+        addr = h5_prefix + self.__class__.__name__ + '/P'
 
         if P is None:
             self.P = None
@@ -341,7 +342,8 @@ class SVDControl(ZernikeControl):
         self.h5_save('ab', self.ab)
 
         def f(n, w):
-            self.h5f[h5_prefix + 'ZernikeControl/SVDControl/' + n] = w
+            a = h5_prefix + self.__class__.__name__ + '/svd/' + n
+            self.h5f[a] = w
 
         if self.h5f:
             f('nignore', nignore)
