@@ -836,8 +836,8 @@ class ZernikeWindow(QMainWindow):
         def hand_save(flat):
             def f():
                 fdiag, _ = QFileDialog.getSaveFileName(directory=(
-                    self.zcontrol.calib.dm_serial +
-                    datetime.now().strftime('_%Y%m%d_%H%M%S.json')),
+                    datetime.now().strftime('%Y%m%d_%H%M%S_') +
+                    self.zcontrol.calib.dm_serial + '.json'),
                     filter='JSON (*.json);;All Files (*)')
                 if fdiag:
                     try:
