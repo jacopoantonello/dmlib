@@ -12,7 +12,9 @@ from h5py import File
 from numpy.linalg import norm
 from matplotlib import ticker
 from matplotlib.backends.backend_qt5agg import FigureCanvas
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 from matplotlib.figure import Figure
+from matplotlib.gridspec import GridSpec
 from datetime import datetime
 
 from PyQt5.QtCore import Qt, QMutex, pyqtSignal
@@ -21,7 +23,7 @@ from PyQt5.QtWidgets import (
     QWidget, QFileDialog, QGroupBox, QGridLayout, QLabel, QPushButton,
     QLineEdit, QCheckBox, QScrollArea, QSlider, QDoubleSpinBox, QFrame,
     QErrorMessage, QApplication, QMainWindow, QSplitter, QShortcut,
-    QMessageBox, QSizePolicy, QInputDialog, QTabWidget, QComboBox,
+    QMessageBox, QSizePolicy, QInputDialog, QTabWidget, QComboBox, QDialog,
     )
 
 
@@ -402,11 +404,11 @@ class ZernikePanel(QWidget):
 
         brad = QCheckBox('rad')
         brad.setChecked(True)
-        reset = QPushButton('reset')
+        breset = QPushButton('reset')
         toplay.addWidget(labzm, 0, 0)
         toplay.addWidget(lezm, 0, 1)
         toplay.addWidget(brad, 0, 2)
-        toplay.addWidget(reset, 0, 3)
+        toplay.addWidget(breset, 0, 3)
 
         scroll = QScrollArea()
         toplay.addWidget(scroll, 1, 0, 1, 5)
@@ -531,7 +533,7 @@ class ZernikePanel(QWidget):
         self.update_zernike_rows(nmodes())
 
         brad.stateChanged.connect(f2())
-        reset.clicked.connect(reset_fun)
+        breset.clicked.connect(reset_fun)
         lezm.editingFinished.connect(change_nmodes)
 
         split = QSplitter(Qt.Vertical)
@@ -579,6 +581,41 @@ class ZernikePanel(QWidget):
 
         if self.callback and run_callback:
             self.callback(self.z)
+
+
+class PlotDMState(QDialog):
+
+    def set_data(self, u, z):
+        self.setWindowTitle('DM state')
+        frame = QFrame()
+        fig = FigureCanvas(Figure(figsize=(7, 5)))
+        layout = QGridLayout()
+        frame.setLayout(layout)
+        nav = NavigationToolbar2QT(fig, frame)
+        layout.addWidget(nav, 0, 0)
+        layout.addWidget(fig, 1, 0)
+        fig.figure.subplots_adjust(
+            left=.125, right=.9,
+            bottom=.1, top=.9,
+            wspace=0.45, hspace=0.45)
+        self.fig = fig
+
+        gs = GridSpec(2, 1)
+        ax0 = fig.figure.add_subplot(gs[0, 0])
+        ax1 = fig.figure.add_subplot(gs[1, 0])
+        ax0.plot(u)
+        ax0.set_xlabel('actuators')
+        ax0.set_ylim((-1, 1))
+        ax1.plot(range(1, z.size + 1), z)
+        ax1.set_xlabel('Noll')
+        ax1.set_ylabel('[rad]')
+
+        self.ax0 = ax0
+        self.ax1 = ax1
+
+        l1 = QGridLayout()
+        self.setLayout(l1)
+        l1.addWidget(frame)
 
 
 class ZernikeWindow(QMainWindow):
@@ -860,6 +897,8 @@ class ZernikeWindow(QMainWindow):
         calibname.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(calibname, 2, 0, 1, 4)
 
+        bplot = QPushButton('plot')
+
         bcalib = QPushButton('load calib')
         bsave = QPushButton('save params')
         bsaveflat = QPushButton('save flat')
@@ -867,17 +906,30 @@ class ZernikeWindow(QMainWindow):
         bflat = QCheckBox('flat')
         bflat.setChecked(self.zcontrol.flat_on)
 
+        layout.addWidget(bplot, 3, 0)
+
+        layout.addWidget(bflat, 4, 0)
+        layout.addWidget(bcalib, 5, 0)
+        layout.addWidget(bload, 5, 1)
+        layout.addWidget(bsave, 5, 2)
+        layout.addWidget(bsaveflat, 5, 3)
+
         bcalib.clicked.connect(hand_calib())
         bsave.clicked.connect(hand_save(False))
         bsaveflat.clicked.connect(hand_save(True))
         bload.clicked.connect(hand_load())
         bflat.stateChanged.connect(hand_flat())
 
-        layout.addWidget(bflat, 3, 0)
-        layout.addWidget(bcalib, 4, 0)
-        layout.addWidget(bload, 4, 1)
-        layout.addWidget(bsave, 4, 2)
-        layout.addWidget(bsaveflat, 4, 3)
+        def plotf():
+            def f():
+                self.mutex.lock()
+                p = PlotDMState()
+                p.set_data(self.zcontrol.u, self.zcontrol.z)
+                p.exec_()
+                self.mutex.unlock()
+            return f
+
+        bplot.clicked.connect(plotf())
 
         self.bflat = bflat
 
