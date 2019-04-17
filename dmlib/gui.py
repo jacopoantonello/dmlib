@@ -258,8 +258,8 @@ class Control(QMainWindow):
         def f4():
             def f():
                 fileName, _ = QFileDialog.getOpenFileName(
-                    self, 'Select factory flat file', '',
-                    'TXT (*.txt);;All Files (*)')
+                    self, 'Select factory flat file',
+                    filter='TXT (*.txt);;All Files (*)')
                 if fileName:
                     try:
                         uflat = np.loadtxt(fileName, delimiter='\n')
@@ -681,8 +681,8 @@ class Control(QMainWindow):
         def bootstrap():
             if not dataset:
                 fileName, _ = QFileDialog.getOpenFileName(
-                    self, 'Select dataset', '',
-                    'H5 (*.h5);;All Files (*)')
+                    self, 'Select dataset',
+                    filter='H5 (*.h5);;All Files (*)')
                 if not fileName:
                     return False
                 else:
@@ -1057,8 +1057,8 @@ class Control(QMainWindow):
         def bootstrap():
             if not calib:
                 fileName, _ = QFileDialog.getOpenFileName(
-                    self, 'Select a calibration', '',
-                    'H5 (*.h5);;All Files (*)')
+                    self, 'Select a calibration',
+                    filter='H5 (*.h5);;All Files (*)')
                 if not fileName:
                     return False
                 else:

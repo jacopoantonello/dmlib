@@ -830,7 +830,7 @@ class ZernikeWindow(QMainWindow):
             def f():
                 hold()
                 fileName, _ = QFileDialog.getOpenFileName(
-                    None, 'Select a parameters file',
+                    self, 'Select a parameters file',
                     filter='JSON (*.json);;All Files (*)')
                 if fileName:
                     try:
@@ -853,7 +853,7 @@ class ZernikeWindow(QMainWindow):
             def f():
                 hold()
                 fileName, _ = QFileDialog.getOpenFileName(
-                    None, 'Select a calibration file',
+                    self, 'Select a calibration file',
                     filter='H5 (*.h5);;All Files (*)')
                 if fileName:
                     try:
@@ -873,9 +873,10 @@ class ZernikeWindow(QMainWindow):
 
         def hand_save(flat):
             def f():
-                fdiag, _ = QFileDialog.getSaveFileName(directory=(
-                    datetime.now().strftime('%Y%m%d_%H%M%S_') +
-                    self.zcontrol.calib.dm_serial + '.json'),
+                fdiag, _ = QFileDialog.getSaveFileName(
+                    self, 'Save parameters', directory=(
+                        datetime.now().strftime('%Y%m%d_%H%M%S_') +
+                        self.zcontrol.calib.dm_serial + '.json'),
                     filter='JSON (*.json);;All Files (*)')
                 if fdiag:
                     try:
@@ -1007,7 +1008,7 @@ def load_parameters(app, args):
 
     def choose_calib_file():
         fileName, _ = QFileDialog.getOpenFileName(
-            None, 'Select a calibration', '', 'H5 (*.h5);;All Files (*)')
+            None, 'Select a calibration', filter='H5 (*.h5);;All Files (*)')
         if not fileName:
             sys.exit()
         else:
@@ -1048,7 +1049,7 @@ def new_zernike_window(app, args, pars={}):
     # no calibration found, ask user for calibration
     if calib_file is None:
         fileName, _ = QFileDialog.getOpenFileName(
-            None, 'Select a DM calibration', '', 'H5 (*.h5);;All Files (*)')
+            None, 'Select a DM calibration', filter='H5 (*.h5);;All Files (*)')
         if not fileName:
             sys.exit()
         else:
