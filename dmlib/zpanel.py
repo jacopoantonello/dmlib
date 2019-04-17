@@ -16,7 +16,7 @@ from matplotlib.figure import Figure
 from datetime import datetime
 
 from PyQt5.QtCore import Qt, QMutex, pyqtSignal
-from PyQt5.QtGui import QIntValidator, QDoubleValidator, QKeySequence, QPalette
+from PyQt5.QtGui import QIntValidator, QDoubleValidator, QKeySequence
 from PyQt5.QtWidgets import (
     QWidget, QFileDialog, QGroupBox, QGridLayout, QLabel, QPushButton,
     QLineEdit, QCheckBox, QScrollArea, QSlider, QDoubleSpinBox, QFrame,
@@ -202,9 +202,6 @@ class RelSlider:
 
         self.sba = QDoubleSpinBox()
         self.sba.setValue(val)
-        self.pal = self.sba.palette()
-        self.col_zero = self.pal.color(QPalette.Background)
-        self.col_dark = self.col_zero.darker()
         self.sba_color(val)
         self.sba.setSingleStep(1.25e-3)
         self.sba.setToolTip('Effective value')
@@ -278,11 +275,10 @@ class RelSlider:
 
     def sba_color(self, val):
         if val != 0.0:
-            self.pal.setColor(QPalette.Background, self.col_dark)
+            self.sba.setStyleSheet("font-weight: bold;")
         else:
-            self.pal.setColor(QPalette.Background, self.col_zero)
-        self.sba.setPalette(self.pal)
-        self.sba.update()
+            self.sba.setStyleSheet("font-weight: normal;")
+        # self.sba.update()
 
     def block(self):
         self.sba.blockSignals(True)
