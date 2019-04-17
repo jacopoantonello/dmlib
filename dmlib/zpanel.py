@@ -602,7 +602,8 @@ class ZernikeWindow(QMainWindow):
         try:
             self.zcontrol = ZernikeControl(
                 self.dm, self.calib, self.pars['ZernikeControl'])
-        except Exception:
+        except Exception as ex:
+            self.log.info(f'failed to load control parameters {str(ex)}')
             self.zcontrol = ZernikeControl(self.dm, self.calib)
 
         self.app = app
@@ -924,6 +925,9 @@ def add_arguments(parser):
     parser.add_argument(
         '--dm-calibration', type=argparse.FileType('rb'), default=None,
         metavar='HDF5')
+    parser.add_argument(
+        '--dm-parameters', type=argparse.FileType('r'), default=None,
+        metavar='JSON', help='Load a previous configuration file')
 
 
 def load_parameters(app, args):
@@ -968,9 +972,7 @@ def load_parameters(app, args):
     return dminfo, pars
 
 
-def new_zernike_window(app, args, params={}):
-    # args can override params
-
+def new_zernike_window(app, args, pars={}):
     def quit(str1):
         e = QErrorMessage()
         e.showMessage(str1)
@@ -978,12 +980,20 @@ def new_zernike_window(app, args, params={}):
 
     calib_file = None
 
-    if 'calibration' in params:
-        calib_file = params['calibration']
+    # argparse specified parameters can override pars
+    if args.dm_parameters is not None:
+        d = json.loads(args.dm_parameters.read())
+        pars = {**pars, **d}
+        args.dm_parameters = args.dm_parameters.name
+
+    # calibration from pars
+    if 'calibration' in pars:
+        calib_file = pars['calibration']
+    # calibration from argparse
     if args.dm_calibration is not None:
         calib_file = args.dm_calibration.name
         args.dm_calibration = calib_file
-
+    # no calibration found, ask user for calibration
     if calib_file is None:
         fileName, _ = QFileDialog.getOpenFileName(
             None, 'Select a DM calibration', '', 'H5 (*.h5);;All Files (*)')
@@ -991,8 +1001,7 @@ def new_zernike_window(app, args, params={}):
             sys.exit()
         else:
             calib_file = path.abspath(fileName)
-
-    params['calibration'] = calib_file
+    pars['calibration'] = calib_file
 
     try:
         dminfo = WeightedLSCalib.query_calibration(calib_file)
@@ -1010,10 +1019,9 @@ def new_zernike_window(app, args, params={}):
         with File(calib_file, 'r') as f:
             calib = WeightedLSCalib.load_h5py(f, lazy_cart_grid=True)
     except Exception as e:
-        quit('error loading calibration {}: {}'.format(
-            params['calibration'], str(e)))
+        quit(f'error loading calibration {pars["calibration"]}: {str(e)}')
 
-    zwindow = ZernikeWindow(None, dm, calib, params)
+    zwindow = ZernikeWindow(None, dm, calib, pars)
     zwindow.show()
 
     return zwindow
