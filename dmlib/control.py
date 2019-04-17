@@ -94,7 +94,8 @@ class ZernikeControl:
         # handle orthogonal pupil transform
         try:
             self.transform_pupil(pars['rotate'], pars['flipx'], pars['flipy'])
-        except Exception:
+        except Exception as ex:
+            self.log.info(f'error in transform_pupil {str(ex)}')
             self.P = None
             self.pars['flipx'] = 0
             self.pars['flipy'] = 0
@@ -110,8 +111,8 @@ class ZernikeControl:
             self.flat_on = bool(pars['flat_on'])
             self.uflat = np.array(pars['uflat'])
             assert(self.uflat.size == calib.uflat.size)
-        except Exception:
-            self.log.info('failed load uflat')
+        except Exception as ex:
+            self.log.info(f'fail to load uflat {str(ex)}')
             self.flat_on = 1
             self.uflat = calib.uflat
 
@@ -119,8 +120,8 @@ class ZernikeControl:
         try:
             self.u[:] = np.array(pars['u'])
             self.z1[:] = self.u2z()
-        except Exception:
-            self.log.info('failed load u')
+        except Exception as ex:
+            self.log.info(f'fail to load u {str(ex)}')
 
         if h5f:
             calib.save_h5py(h5f, prepend=h5_prefix)

@@ -602,6 +602,7 @@ class ZernikeWindow(QMainWindow):
         try:
             self.zcontrol = ZernikeControl(
                 self.dm, self.calib, self.pars['ZernikeControl'])
+            self.log.info('loaded control parameters')
         except Exception as ex:
             self.log.info(f'failed to load control parameters {str(ex)}')
             self.zcontrol = ZernikeControl(self.dm, self.calib)
@@ -657,6 +658,9 @@ class ZernikeWindow(QMainWindow):
         self.zpanel = ZernikePanel(
             self.zcontrol.calib.wavelength, self.zcontrol.calib.get_rzern().n,
             self.zcontrol.z, callback=write_dm, pars=pars['ZernikePanel'])
+        self.zpanel.z[:] = self.zcontrol.u2z()
+        self.zpanel.update_gui_controls()
+        self.zpanel.update_phi_plot()
         write_dm(self.zpanel.z)
 
         def make_select_cb():
@@ -754,7 +758,7 @@ class ZernikeWindow(QMainWindow):
             self.zcontrol = ZernikeControl(
                 self.dm, self.calib, self.pars['ZernikeControl'])
         except Exception as ex:
-            self.log.error(f'instance_control {str(ex)}')
+            self.log.error(f'failed instance_control {str(ex)}')
             self.zcontrol = ZernikeControl(self.dm, self.calib)
         self.bflat.blockSignals(True)
         if self.zcontrol.flat_on:

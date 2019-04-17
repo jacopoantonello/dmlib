@@ -162,6 +162,7 @@ class FakeDM():
         return 140
 
     def write(self, v):
+        print(repr(v))
         if self.transform:
             v = self.transform(v)
 
@@ -396,7 +397,7 @@ def setup_logging(args):
     elif args.log_level == 'CRITICAL':
         level = logging.CRITICAL
     else:
-        raise NotImplementedError('Unknown logging level {args.log_level}')
+        raise NotImplementedError(f'Unknown logging level {args.log_level}')
 
     if not args.no_file_log:
         fn = datetime.now().strftime(
