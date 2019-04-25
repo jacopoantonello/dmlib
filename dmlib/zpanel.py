@@ -622,6 +622,8 @@ class ZernikeWindow(QMainWindow):
 
     sig_acquire = pyqtSignal(tuple)
     sig_release = pyqtSignal(tuple)
+    sig_lock = pyqtSignal()
+    sig_unlock = pyqtSignal()
     sig_draw = pyqtSignal(tuple)
 
     def __init__(self, app, dm, calib, pars={}, parent=None):
@@ -736,6 +738,18 @@ class ZernikeWindow(QMainWindow):
 
         self.setCentralWidget(self.tabs)
 
+        def lock():
+            self.mutex.lock()
+            self.can_close = False
+            for i in range(self.tabs.count()):
+                self.tabs.widget(i).setEnabled(False)
+
+        def unlock():
+            for i in range(self.tabs.count()):
+                self.tabs.widget(i).setEnabled(True)
+            self.can_close = True
+            self.mutex.unlock()
+
         def make_release_hand():
             def f(t):
                 if t[0] is not None:
@@ -744,22 +758,29 @@ class ZernikeWindow(QMainWindow):
                     self.zpanel.z[:] = self.zcontrol.u2z()
                     self.zpanel.update_gui_controls()
                     self.zpanel.update_phi_plot()
-                for i in range(self.tabs.count()):
-                    self.tabs.widget(i).setEnabled(True)
-                self.can_close = True
-                self.mutex.unlock()
+                unlock()
             return f
 
         def make_acquire_hand():
             def f(t):
-                self.mutex.lock()
-                self.can_close = False
-                for i in range(self.tabs.count()):
-                    self.tabs.widget(i).setEnabled(False)
+                lock()
             return f
 
         self.sig_release.connect(make_release_hand())
         self.sig_acquire.connect(make_acquire_hand())
+
+        def make_lock_hand():
+            def f():
+                lock()
+            return f
+
+        def make_unlock_hand():
+            def f():
+                unlock()
+            return f
+
+        self.sig_lock.connect(make_lock_hand())
+        self.sig_unlock.connect(make_unlock_hand())
 
         def f():
             def f(t):
@@ -961,6 +982,12 @@ class ZernikeWindow(QMainWindow):
 
     def release_control(self, control, h5f):
         self.sig_release.emit((control, h5f))
+
+    def lock_gui(self):
+        self.sig_lock.emit()
+
+    def unlock_gui(self):
+        self.sig_unlock.emit()
 
     def closeEvent(self, event):
         if self.can_close:
