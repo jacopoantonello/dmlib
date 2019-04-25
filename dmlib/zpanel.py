@@ -902,7 +902,9 @@ class ZernikeWindow(QMainWindow):
                 if fdiag:
                     try:
                         with open(fdiag, 'w') as f:
-                            json.dump(self.save_parameters(flat), f)
+                            json.dump(
+                                self.save_parameters(flat), f,
+                                sort_keys=True, indent=4)
                     except Exception as ex:
                         self.log.error(f'error saving parameters {str(ex)}')
                         QMessageBox.information(
