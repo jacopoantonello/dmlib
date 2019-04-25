@@ -16,6 +16,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 from matplotlib.figure import Figure
 from matplotlib.gridspec import GridSpec
 from datetime import datetime
+from copy import deepcopy
 
 from PyQt5.QtCore import Qt, QMutex, pyqtSignal
 from PyQt5.QtGui import QIntValidator, QDoubleValidator, QKeySequence
@@ -835,7 +836,7 @@ class ZernikeWindow(QMainWindow):
         self.pars['ZernikeControl'] = self.zcontrol.save_parameters(
             asflat=asflat)
         self.pars['ZernikePanel'] = self.zpanel.save_parameters()
-        return self.pars
+        return deepcopy(self.pars)
 
     def add_lower(self, layout):
         def hold():
