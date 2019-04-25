@@ -756,7 +756,6 @@ class ZernikeWindow(QMainWindow):
                 self.can_close = False
                 for i in range(self.tabs.count()):
                     self.tabs.widget(i).setEnabled(False)
-
             return f
 
         self.sig_release.connect(make_release_hand())
@@ -804,12 +803,12 @@ class ZernikeWindow(QMainWindow):
         self.zpanel.update_phi_plot()
 
     def load_parameters(self, d):
-        self.pars = d
-        with File(d['calibration'], 'r') as f:
+        self.pars = {**self.pars, **d}
+        with File(self.pars['calibration'], 'r') as f:
             self.calib = WeightedLSCalib.load_h5py(f, lazy_cart_grid=True)
         self.instance_control()
-        if 'ZernikePanel' in pars:
-            self.zpanel.load_parameters(pars['ZernikePanel'])
+        if 'ZernikePanel' in self.pars:
+            self.zpanel.load_parameters(self.pars['ZernikePanel'])
 
     def save_parameters(self, asflat=False):
         self.pars['ZernikeControl'] = self.zcontrol.save_parameters(
