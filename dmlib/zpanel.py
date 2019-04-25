@@ -277,7 +277,7 @@ class RelSlider:
         self.qsr.sliderReleased.connect(self.qs1_end)
 
     def sba_color(self, val):
-        if val != 0.0:
+        if abs(val) > 1e-4:
             self.sba.setStyleSheet("font-weight: bold;")
         else:
             self.sba.setStyleSheet("font-weight: normal;")
