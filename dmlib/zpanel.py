@@ -204,13 +204,13 @@ class RelSlider:
         self.cb = cb
 
         self.sba = QDoubleSpinBox()
-        self.sba.setValue(val)
-        self.sba_color(val)
-        self.sba.setSingleStep(1.25e-3)
-        self.sba.setToolTip('Effective value')
         self.sba.setMinimum(-1000)
         self.sba.setMaximum(1000)
         self.sba.setDecimals(3)
+        self.sba.setToolTip('Effective value')
+        self.sba.setValue(val)
+        self.sba_color(val)
+        self.sba.setSingleStep(1.25e-3)
 
         self.qsr = QSlider(Qt.Horizontal)
         self.qsr.setMinimum(-100)
@@ -219,11 +219,12 @@ class RelSlider:
         self.qsr.setToolTip('Drag to apply relative delta')
 
         self.sbm = QDoubleSpinBox()
-        self.sbm.setValue(4.0)
+        self.sbm.setMinimum(0.01)
+        self.sbm.setMaximum(1000)
         self.sbm.setSingleStep(1.25e-3)
         self.sbm.setToolTip('Maximum relative delta')
         self.sbm.setDecimals(2)
-        self.sbm.setMinimum(0.01)
+        self.sbm.setValue(4.0)
 
         def sba_cb():
             def f():
