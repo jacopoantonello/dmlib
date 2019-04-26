@@ -8,10 +8,9 @@ from PyQt5.QtWidgets import QInputDialog
 
 class DMPlot():
 
-    txs = [0, 0, 0]
-    floor = -1.5
-
     def __init__(self, sampling=128, nact=12, pitch=.3, roll=2, mapmul=.3):
+        self.txs = [0, 0, 0]
+        self.floor = -1.5
         self.make_grids(sampling, nact, pitch, roll, mapmul)
 
     def update_txs(self, txs):

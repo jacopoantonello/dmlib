@@ -40,6 +40,7 @@ from dmlib.control import ZernikeControl
 
 
 class MyQDoubleValidator(QDoubleValidator):
+
     def setFixup(self, val):
         self.fixupval = val
 
@@ -48,6 +49,7 @@ class MyQDoubleValidator(QDoubleValidator):
 
 
 class MyQIntValidator(QIntValidator):
+
     def setFixup(self, val):
         self.fixupval = val
 
@@ -206,7 +208,7 @@ class RelSlider:
         self.sba = QDoubleSpinBox()
         self.sba.setMinimum(-1000)
         self.sba.setMaximum(1000)
-        self.sba.setDecimals(3)
+        self.sba.setDecimals(6)
         self.sba.setToolTip('Effective value')
         self.sba.setValue(val)
         self.sba_color(val)
@@ -585,10 +587,10 @@ class ZernikePanel(QWidget):
             self.callback(self.z)
 
 
-class PlotDMState(QDialog):
+class PlotCoeffs(QDialog):
 
     def set_data(self, u, z):
-        self.setWindowTitle('DM state')
+        self.setWindowTitle('Zernike coefficients')
         frame = QFrame()
         fig = FigureCanvas(Figure(figsize=(7, 5)))
         layout = QGridLayout()
@@ -604,11 +606,13 @@ class PlotDMState(QDialog):
 
         gs = GridSpec(2, 1)
         ax0 = fig.figure.add_subplot(gs[0, 0])
-        ax1 = fig.figure.add_subplot(gs[1, 0])
-        ax0.plot(u)
+        ax0.plot(u, marker='.')
+        ax0.grid()
         ax0.set_xlabel('actuators')
         ax0.set_ylim((-1, 1))
-        ax1.plot(range(1, z.size + 1), z)
+        ax1 = fig.figure.add_subplot(gs[1, 0])
+        ax1.plot(range(1, z.size + 1), z, marker='.')
+        ax1.grid()
         ax1.set_xlabel('Noll')
         ax1.set_ylabel('[rad]')
 
@@ -948,7 +952,7 @@ class ZernikeWindow(QMainWindow):
         def plotf():
             def f():
                 self.mutex.lock()
-                p = PlotDMState()
+                p = PlotCoeffs()
                 p.set_data(self.zcontrol.u, self.zcontrol.z)
                 p.exec_()
                 self.mutex.unlock()

@@ -287,22 +287,22 @@ def call_unwrap(phase, mask=None, seed=None):
 
 class FringeAnalysis:
 
-    order_shape = None
-
-    fxcfyc = None
-    img = None
-    ext3 = None
-    xv = None
-    yv = None
-    ext4 = None
-    gp = None
-    unwrapped = None
-    mask = None
-
-    centre = None
-    radius = 0.
-
     def __init__(self, shape, P):
+        self.order_shape = None
+
+        self.fxcfyc = None
+        self.img = None
+        self.ext3 = None
+        self.xv = None
+        self.yv = None
+        self.ext4 = None
+        self.gp = None
+        self.unwrapped = None
+        self.mask = None
+
+        self.centre = None
+        self.radius = 0.
+
         self.shape = shape
         self.P = P
 

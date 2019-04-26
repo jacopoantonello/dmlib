@@ -52,10 +52,9 @@ def write_h5_header(h5f, libver, now):
 
 class SquareRoot:
 
-    name = 'v = 2.0*np.sqrt((u + 1.0)/2.0) - 1.0'
-
     def __init__(self):
         self.log = logging.getLogger('SquareRoot')
+        self.name = 'v = 2.0*np.sqrt((u + 1.0)/2.0) - 1.0'
 
     def __call__(self, u):
         assert(np.all(np.isfinite(u)))
@@ -78,13 +77,12 @@ class SquareRoot:
 
 
 class FakeCam():
-    exp = 0.06675 + 5*0.06675
-    fps = 4
-
-    name = None
 
     def __init__(self, shape, pxsize):
         self.log = logging.getLogger(self.__class__.__name__)
+        self.exp = 0.06675 + 5*0.06675
+        self.fps = 4
+        self.name = None
         self._shape = shape
         self._pxsize = pxsize
 
@@ -142,11 +140,10 @@ class FakeCam():
 
 class FakeDM():
 
-    name = None
-    transform = None
-
     def __init__(self):
         self.log = logging.getLogger(self.__class__.__name__)
+        self.name = None
+        self.transform = None
 
     def open(self, name):
         self.name = name

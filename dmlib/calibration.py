@@ -61,11 +61,9 @@ class PhaseExtract:
 
 class WeightedLSCalib:
 
-    zfA1 = None
-    zfA2 = None
-
     def __init__(self):
-        pass
+        self.zfA1 = None
+        self.zfA2 = None
 
     def _make_zfAs(self):
         if not hasattr(self.cart, 'ZZ'):

@@ -44,15 +44,14 @@ from dmlib.core import (
 
 class Control(QMainWindow):
 
-    align_bauto = None
-
-    zernikePanel = None
-    can_close = True
-
     def __init__(
             self, worker, shared, cam_name, dm_name, settings={}, parent=None):
         super().__init__()
         self.log = logging.getLogger(self.__class__.__name__)
+
+        self.align_bauto = None
+        self.zernikePanel = None
+        self.can_close = True
 
         self.worker = worker
         self.shared = shared
@@ -1240,16 +1239,15 @@ class Control(QMainWindow):
 
 class AlignListener(QThread):
 
-    auto = True
-    repeat = False
-    poke = False
-    sleep = .5
-    unwrap = True
-
     sig_update = pyqtSignal(tuple)
 
     def __init__(self, shared):
         super().__init__()
+        self.auto = True
+        self.repeat = False
+        self.poke = False
+        self.sleep = .5
+        self.unwrap = True
         self.shared = shared
         self.log = logging.getLogger('AlignListener')
 
@@ -1270,6 +1268,7 @@ class AlignListener(QThread):
 
 
 class CalibListener(QThread):
+
     sig_update = pyqtSignal(tuple)
 
     def __init__(self, shared, dset, centre, radius):
@@ -1290,12 +1289,12 @@ class CalibListener(QThread):
 
 class DataAcqListener(QThread):
 
-    busy = False
-    run = True
     sig_update = pyqtSignal(tuple)
 
     def __init__(self, shared, wavelength, dmplot):
         super().__init__()
+        self.busy = False
+        self.run = True
         self.shared = shared
         self.wavelength = wavelength
         self.dmplot = dmplot
@@ -1322,17 +1321,17 @@ class DataAcqListener(QThread):
 
 class LoopListener(QThread):
 
-    sleep = .1
-    busy = False
-    run = True
-    calib = False
-    flat = True
-    noflat_index = 0
-    closed_loop = True
     sig_update = pyqtSignal(tuple)
 
     def __init__(self, shared):
         super().__init__()
+        self.sleep = .1
+        self.busy = False
+        self.run = True
+        self.calib = False
+        self.flat = True
+        self.noflat_index = 0
+        self.closed_loop = True
         self.shared = shared
         self.log = logging.getLogger('LoopListener')
 
@@ -1438,17 +1437,16 @@ def run_worker(shared, args):
 
 class Worker:
 
-    dfname = None
-    dset = None
-
-    calib_name = None
-    calib = None
-
-    # lastpoke
-    run_align_state = [0]
-
     def __init__(self, shared, args):
         setup_logging(args)
+
+        self.dfname = None
+        self.dset = None
+        self.calib_name = None
+        self.calib = None
+        # lastpoke
+        self.run_align_state = [0]
+
         self.log = logging.getLogger('Worker')
         dm = open_dm(None, args)
         cam = open_cam(None, args)
