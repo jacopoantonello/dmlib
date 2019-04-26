@@ -52,9 +52,10 @@ def write_h5_header(h5f, libver, now):
 
 class SquareRoot:
 
+    name = 'v = 2.0*np.sqrt((u + 1.0)/2.0) - 1.0'
+
     def __init__(self):
         self.log = logging.getLogger('SquareRoot')
-        self.name = 'v = 2.0*np.sqrt((u + 1.0)/2.0) - 1.0'
 
     def __call__(self, u):
         assert(np.all(np.isfinite(u)))
