@@ -805,7 +805,9 @@ class Control(QMainWindow):
 
                 val, ok = QInputDialog.getDouble(
                         self, 'Aperture radius',
-                        'radius in mm [0, {:.3f}]'.format(radmax), rad, 0.,
+                        f'Radius [mm] (max {radmax:.3f} mm)<br>' +
+                        'As seen by the camera (including magnification)',
+                        rad, 0.,
                         radmax, 3)
                 if ok and val >= 0.:
                     if radius:

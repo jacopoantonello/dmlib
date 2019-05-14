@@ -499,6 +499,7 @@ class FringeAnalysis:
         self.radius = 0.
 
     def estimate_aperture(self, img_zero, img_centre, radius):
+        "radius is in um"
         if radius <= 0.:
             self.clear_aperture()
         else:
