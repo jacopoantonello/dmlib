@@ -67,6 +67,7 @@ class ZernikeControl:
         self.saturation = 0
         self.pars = pars
         self.P = None
+        self.R = None
         self.gui_callback = None
 
         nz = calib.H.shape[0]
@@ -99,7 +100,6 @@ class ZernikeControl:
             self.transform_pupil()
         except Exception as ex:
             self.log.info(f'error in transform_pupil {str(ex)}')
-            self.P = None
             self.pars['flipx'] = 0
             self.pars['flipy'] = 0
             self.pars['rotate'] = 0.0
@@ -137,6 +137,7 @@ class ZernikeControl:
         self.h5_save('name', self.__class__.__name__)
         self.h5_save('ab', self.ab)
         self.h5_save('P', np.eye(nz))
+        self.h5_save('R', np.eye(nz))
         self.h5_save('params', json.dumps(pars))
 
     def __str__(self):
@@ -267,31 +268,42 @@ class ZernikeControl:
 
         tot = np.dot(Fy, np.dot(Fx, R))
         if tot.size == 1:
-            self.set_P(None)
+            self.R = None
         else:
-            self.set_P(tot)
+            self.R = tot
+        self.save_R()
+        self.make_P()
 
-    def set_P(self, P):
-        addr = h5_prefix + self.__class__.__name__ + '/P'
-
-        if P is None:
+    def make_P(self):
+        if self.R is None:
             self.P = None
-
-            if self.h5f:
-                del self.h5f[addr]
-                self.h5f[addr][:] = np.eye(self.nz)
         else:
-            assert(P.ndim == 2)
-            assert(P.shape[0] == P.shape[1])
-            assert(np.allclose(np.dot(P, P.T), np.eye(P.shape[0])))
-            if self.P is None:
-                self.P = P.copy()
-            else:
-                np.dot(P, self.P.copy(), self.P)
+            self.P = self.R.copy()
 
-            if self.h5f:
-                del self.h5f[addr]
-                self.h5f[addr][:] = self.P[:]
+        if self.P is None:
+            P = np.eye(self.nz)
+        else:
+            P = self.P
+
+        addr = h5_prefix + self.__class__.__name__ + '/P'
+        if self.h5f:
+            if addr in self.h5f:
+                self.h5f[addr][:] = P[:]
+            else:
+                self.h5f[addr] = P
+
+    def save_R(self):
+        addr = h5_prefix + self.__class__.__name__ + '/R'
+        if self.R is None:
+            R = np.eye(self.nz)
+        else:
+            R = self.R
+
+        if self.h5f:
+            if addr in self.h5f:
+                self.h5f[addr][:] = R[:]
+            else:
+                self.h5f[addr] = R
 
 
 class SVDControl(ZernikeControl):
@@ -398,9 +410,6 @@ class SVDControl(ZernikeControl):
         d['uflat'] = self.uflat.tolist()
 
     def set_random_ab(self, rms=1.0):
-        raise NotImplementedError()
-
-    def set_P(self, P):
         raise NotImplementedError()
 
 
