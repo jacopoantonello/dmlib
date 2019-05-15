@@ -112,10 +112,23 @@ class OptionsPanel(QFrame):
 
         combo.currentTextChanged.connect(f())
 
+    def update(self, selection, k, v):
+        self.pars[self.addr_options][selection][k] = v
+        if selection == self.combo.currentText():
+            found = 0
+            for l in self.lines:
+                if l[0][1].text() == k:
+                    type1 = self.infod[selection][k][0]
+                    l[0][0].setText(str(type1(v)))
+                    found = 1
+                    break
+            if found == 0:
+                raise RuntimeError()
+
     def get_options(self):
         return (
             self.selection,
-            dict(self.pars[self.addr_options][self.selection])
+            deepcopy(self.pars[self.addr_options][self.selection])
             )
 
     def from_dict(self, selection, infod, valuesd):
@@ -363,6 +376,7 @@ class ZernikePanel(QWidget):
         self.im = None
         self.cb = None
         self.shape = (128, 128)
+        self.P = 1
 
         self.rzern = RZern(n_radial)
         dd = np.linspace(-1, 1, self.shape[0])
@@ -383,7 +397,7 @@ class ZernikePanel(QWidget):
         top1.setLayout(toplay1)
         self.fig = FigureCanvas(Figure(figsize=(2, 2)))
         self.ax = self.fig.figure.add_subplot(1, 1, 1)
-        phi = self.rzern.matrix(self.rzern.eval_grid(self.z))
+        phi = self.rzern.matrix(self.rzern.eval_grid(np.dot(self.P, self.z)))
         self.im = self.ax.imshow(phi, origin='lower')
         self.cb = self.fig.figure.colorbar(self.im)
         self.cb.locator = ticker.MaxNLocator(nbins=5)
@@ -571,7 +585,8 @@ class ZernikePanel(QWidget):
             slider.unblock()
 
     def update_phi_plot(self, run_callback=True):
-        phi = self.mul*self.rzern.matrix(self.rzern.eval_grid(self.z))
+        phi = self.mul*self.rzern.matrix(
+            self.rzern.eval_grid(np.dot(self.P, self.z)))
         inner = phi[np.isfinite(phi)]
         min1 = inner.min()
         max1 = inner.max()
@@ -934,14 +949,31 @@ class ZernikeWindow(QMainWindow):
         bload = QPushButton('load params')
         bflat = QCheckBox('flat')
         bflat.setChecked(self.zcontrol.flat_on)
+        bflipx = QCheckBox('flipx')
+        bflipx.setChecked(self.zcontrol.pars['flipx'])
+        bflipy = QCheckBox('flipy')
+        bflipy.setChecked(self.zcontrol.pars['flipy'])
+        lerotate = QLineEdit(str(self.zcontrol.pars['rotate']))
 
-        layout.addWidget(bplot, 3, 0)
+        g1 = QGroupBox()
+        l1 = QGridLayout()
+        l1.addWidget(bflat, 0, 0)
+        l1.addWidget(bflipx, 0, 1)
+        l1.addWidget(bflipy, 0, 2)
+        l1.addWidget(QLabel('rotate'), 0, 3)
+        l1.addWidget(lerotate, 0, 4)
+        l1.addWidget(bplot, 0, 5)
+        g1.setLayout(l1)
+        layout.addWidget(g1, 3, 0, 1, 4)
 
-        layout.addWidget(bflat, 4, 0)
-        layout.addWidget(bcalib, 5, 0)
-        layout.addWidget(bload, 5, 1)
-        layout.addWidget(bsave, 5, 2)
-        layout.addWidget(bsaveflat, 5, 3)
+        g2 = QGroupBox()
+        l2 = QGridLayout()
+        l2.addWidget(bcalib, 0, 0)
+        l2.addWidget(bload, 0, 1)
+        l2.addWidget(bsave, 0, 2)
+        l2.addWidget(bsaveflat, 0, 3)
+        g2.setLayout(l2)
+        layout.addWidget(g2, 4, 0, 1, 4)
 
         bcalib.clicked.connect(hand_calib())
         bsave.clicked.connect(hand_save(False))
@@ -959,6 +991,40 @@ class ZernikeWindow(QMainWindow):
             return f
 
         bplot.clicked.connect(plotf())
+
+        def handle1(name, cb):
+            def f(b):
+                self.control_options.update('ZernikeControl', name, b)
+                self.zcontrol.pars[name] = b
+                self.zcontrol.transform_pupil()
+                if self.zcontrol.P is not None:
+                    self.zpanel.P = self.zcontrol.P
+                else:
+                    self.zpanel.P = 1
+                self.zpanel.update_phi_plot()
+                self.write_dm(self.zpanel.z)
+            return f
+
+        def handle2():
+            def f():
+                try:
+                    f = float(lerotate.text())
+                    self.control_options.update('ZernikeControl', 'rotate', f)
+                    self.zcontrol.pars['rotate'] = f
+                    self.zcontrol.transform_pupil()
+                    if self.zcontrol.P is not None:
+                        self.zpanel.P = self.zcontrol.P
+                    else:
+                        self.zpanel.P = 1
+                    self.zpanel.update_phi_plot()
+                    self.write_dm(self.zpanel.z)
+                except ValueError:
+                    lerotate.setText(str(self.zcontrol.pars['rotate']))
+            return f
+
+        bflipx.clicked.connect(handle1('flipx', bflipx))
+        bflipy.clicked.connect(handle1('flipy', bflipy))
+        lerotate.editingFinished.connect(handle2())
 
         self.bflat = bflat
 

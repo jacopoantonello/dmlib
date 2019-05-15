@@ -96,13 +96,14 @@ class ZernikeControl:
 
         # handle orthogonal pupil transform
         try:
-            self.transform_pupil(pars['rotate'], pars['flipx'], pars['flipy'])
+            self.transform_pupil()
         except Exception as ex:
             self.log.info(f'error in transform_pupil {str(ex)}')
             self.P = None
             self.pars['flipx'] = 0
             self.pars['flipy'] = 0
             self.pars['rotate'] = 0.0
+            self.transform_pupil()
 
         self.z = np.zeros((nz,))
         self.z1 = np.zeros((nz,))
@@ -243,7 +244,10 @@ class ZernikeControl:
             self.h5f[
                 h5_prefix + self.__class__.__name__ + '/ab'][:] = self.ab[:]
 
-    def transform_pupil(self, alpha=0., flipx=False, flipy=False):
+    def transform_pupil(self):
+        alpha = self.pars['rotate']
+        flipx = self.pars['flipx']
+        flipy = self.pars['flipy']
         rzern = self.calib.get_rzern()
 
         if alpha != 0.:
@@ -263,7 +267,7 @@ class ZernikeControl:
 
         tot = np.dot(Fy, np.dot(Fx, R))
         if tot.size == 1:
-            return
+            self.set_P(None)
         else:
             self.set_P(tot)
 
