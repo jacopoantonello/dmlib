@@ -354,7 +354,7 @@ class ZernikePanel(QWidget):
         super().__init__(parent=parent)
         self.log = logging.getLogger(self.__class__.__name__)
 
-        self.pars = {**self.def_pars, **pars}
+        self.pars = {**deepcopy(self.def_pars), **deepcopy(pars)}
         self.units = 'rad'
         self.status = None
         self.mul = 1.0
@@ -554,7 +554,7 @@ class ZernikePanel(QWidget):
         return d
 
     def load_parameters(self, d):
-        self.pars = {**self.def_pars, **d}
+        self.pars = {**deepcopy(self.def_pars), **deepcopy(d)}
         nmodes = min(self.pars['shown_modes'], self.rzern.nk)
         self.pars['shown_modes'] = nmodes
         self.lezm.blockSignals(True)
@@ -830,7 +830,7 @@ class ZernikeWindow(QMainWindow):
         self.zpanel.update_phi_plot()
 
     def load_parameters(self, d):
-        self.pars = {**self.pars, **d}
+        self.pars = {**deepcopy(self.pars), **deepcopy(d)}
         with File(self.pars['calibration'], 'r') as f:
             self.calib = WeightedLSCalib.load_h5py(f, lazy_cart_grid=True)
         self.instance_control()

@@ -5,6 +5,7 @@ import json
 import logging
 import numpy as np
 
+from copy import deepcopy
 from numpy.random import normal
 from numpy.linalg import norm, svd, pinv
 
@@ -60,7 +61,9 @@ class ZernikeControl:
     def __init__(
             self, dm, calib, pars={}, h5f=None):
         self.log = logging.getLogger(self.__class__.__name__)
-        pars = {**self.get_default_parameters(), **pars}
+        pars = {
+            **deepcopy(self.get_default_parameters()),
+            **deepcopy(pars)}
         self.saturation = 0
         self.pars = pars
         self.P = None
@@ -310,7 +313,8 @@ class SVDControl(ZernikeControl):
     def __init__(self, dm, calib, pars, h5=None):
         super().__init__(dm, calib, super().get_default_parameters(), h5)
         self.log = logging.getLogger(self.__class__.__name__)
-        svd_pars = {**self.get_default_parameters(), **pars}
+        svd_pars = {
+            **deepcopy(self.get_default_parameters()), **deepcopy(pars)}
 
         svd_modes = self.svd_pars['modes']
         nignore = self.svd_pars['zernike_exclude'] - 1
