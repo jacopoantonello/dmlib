@@ -807,8 +807,7 @@ class Control(QMainWindow):
                         self, 'Aperture radius',
                         f'Radius [mm] (max {radmax:.3f} mm)<br>' +
                         'As seen by the camera (including magnification)',
-                        rad, 0.,
-                        radmax, 3)
+                        rad, 0., radmax, 6)
                 if ok and val >= 0.:
                     if radius:
                         radius[0] = val*1000
