@@ -652,6 +652,7 @@ class ZernikeWindow(QMainWindow):
         self.log = logging.getLogger(self.__class__.__name__)
         self.can_close = True
         self.pars = pars
+        self.control_enabled = True
 
         self.dm = dm
         self.calib = calib
@@ -1033,6 +1034,7 @@ class ZernikeWindow(QMainWindow):
 
         try:
             cname, pars = self.control_options.get_options()
+            pars['enabled'] = self.control_enabled
             pars['flat_on'] = 1
             pars['uflat'] = self.zcontrol.u.tolist()
             pars['u'] = np.zeros_like(self.zcontrol.u).tolist()
@@ -1056,6 +1058,9 @@ class ZernikeWindow(QMainWindow):
 
     def release_control(self, control, h5f):
         self.sig_release.emit((control, h5f))
+
+    def enable_control(self, b):
+        self.control_enabled = b
 
     def lock_gui(self):
         self.sig_lock.emit()

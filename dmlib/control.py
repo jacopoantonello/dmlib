@@ -75,11 +75,19 @@ class ZernikeControl:
         nu = calib.H.shape[1]
         self.Cp = pinv(calib.C)
 
+        try:
+            enabled = self.pars['enabled']
+        except KeyError:
+            enabled = 1
+
         # get controlled Zernike coefficients
-        if pars['all']:
-            indices = np.arange(1, nz + 1)
+        if enabled:
+            if pars['all']:
+                indices = np.arange(1, nz + 1)
+            else:
+                indices = get_noll_indices(pars)
         else:
-            indices = get_noll_indices(pars)
+            indices = np.array([], dtype=np.int)
         assert(calib.get_rzern().nk == nz)
         ndof = indices.size
 
