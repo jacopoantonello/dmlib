@@ -639,7 +639,7 @@ class PlotCoeffs(QDialog):
         l1.addWidget(frame)
 
 
-class ZernikeWindow(QMainWindow):
+class DMWindow(QMainWindow):
 
     sig_acquire = pyqtSignal(tuple)
     sig_release = pyqtSignal(tuple)
@@ -667,7 +667,7 @@ class ZernikeWindow(QMainWindow):
         self.app = app
         self.mutex = QMutex()
 
-        self.setWindowTitle('ZernikeWindow ' + __version__)
+        self.setWindowTitle(f'{self.__class__.__name__} ' + __version__)
         QShortcut(QKeySequence("Ctrl+Q"), self, self.close)
 
         self.dmplot = DMPlot()
@@ -1179,7 +1179,7 @@ def new_zernike_window(app, args, pars={}):
     except Exception as e:
         quit(f'error loading calibration {pars["calibration"]}: {str(e)}')
 
-    zwindow = ZernikeWindow(None, dm, calib, pars)
+    zwindow = DMWindow(None, dm, calib, pars)
     zwindow.show()
 
     return zwindow
@@ -1214,7 +1214,7 @@ if __name__ == '__main__':
         quit(
             f'error loading calibration {pars["calibration"]}: {str(e)}')
 
-    zwindow = ZernikeWindow(app, dm, calib, pars)
+    zwindow = DMWindow(app, dm, calib, pars)
     zwindow.show()
 
     sys.exit(app.exec_())
