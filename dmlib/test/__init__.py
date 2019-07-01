@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from numpy.random import uniform
-from scipy.misc import imresize
+from skimage.transform import resize
 
 
 def load_int3(shape):
@@ -14,4 +14,4 @@ def load_int3(shape):
         os.path.dirname(__file__), 'int3.tif'))
     img = np.roll(img, int(np.round(uniform(-200, 200))), axis=0)
     img = np.roll(img, int(np.round(uniform(-200, 200))), axis=1)
-    return imresize(img, shape)
+    return resize(img, shape)
