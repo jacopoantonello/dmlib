@@ -79,7 +79,7 @@ class SquareRoot:
 
 class FakeCam():
 
-    def __init__(self, shape, pxsize):
+    def __init__(self, shape=(1024, 1280), pxsize=7.4):
         self.log = logging.getLogger(self.__class__.__name__)
         self.exp = 0.06675 + 5*0.06675
         self.fps = 4
@@ -87,7 +87,7 @@ class FakeCam():
         self._shape = shape
         self._pxsize = pxsize
 
-    def open(self, name):
+    def open(self, name=''):
         self.name = name
         self.log.info(f'open {name:}')
 
@@ -146,7 +146,7 @@ class FakeDM():
         self.name = None
         self.transform = None
 
-    def open(self, name):
+    def open(self, name=''):
         self.name = name
         self.log.info(f'open {name:}')
 

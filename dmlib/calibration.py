@@ -25,6 +25,39 @@ HDF5_options = {
     'compression_opts': 6}
 
 
+def u2v(u, vmin, vmax, sqrt=False):
+    u = np.array(u, copy=True)
+    u[u > 1.] = 1.
+    u[u < -1.] = -1.
+    v = (u + 1.)/2.
+    if sqrt:
+        v = np.sqrt(v)
+    return v*(vmax - vmin) + vmin
+
+
+def v2u(v, vmin, vmax, sqrt=False):
+    v = np.array(v, copy=True)
+    v[v > vmax] = vmax
+    v[v < vmin] = vmin
+    u = (v - vmin)/(vmax - vmin)
+    if sqrt:
+        u = np.power(u, 2)
+    return 2*u - 1
+
+
+def make_normalised_input_matrix(nacts, nsteps, mag):
+    if nsteps < 3:
+        raise RuntimeError('nsteps < 3')
+    elif nsteps % 2 != 1:
+        raise RuntimeError('nsteps % 2 != 1')
+
+    return np.hstack((
+        np.zeros((nacts, 1)),
+        np.kron(np.eye(nacts), np.linspace(-mag, mag, nsteps)),
+        np.zeros((nacts, 1))
+        ))
+
+
 def fix_principal_val(U, phases):
     ns = phases.shape[0]
     norms = np.square(U).sum(axis=0)
@@ -86,8 +119,10 @@ class WeightedLSCalib:
         return zfA1, zfA2, mask
 
     def calibrate(
-            self, U, images, fringe, wavelength, dm_serial, dm_transform,
-            cam_pixel_size, cam_serial, dmplot_txs, dname, hash1,
+            self, U, images, fringe, wavelength, cam_pixel_size,
+            cam_serial='',
+            dname='', dm_serial='', dmplot_txs=(), dm_transform='',
+            hash1='',
             n_radial=25, alpha=.75, lambda1=5e-3, status_cb=False):
 
         if status_cb:

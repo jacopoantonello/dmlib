@@ -35,7 +35,7 @@ from dmlib.version import __version__
 from dmlib.dmplot import DMPlot
 from dmlib.zpanel import ZernikePanel
 from dmlib.interf import FringeAnalysis
-from dmlib.calibration import WeightedLSCalib
+from dmlib.calibration import WeightedLSCalib, make_normalised_input_matrix
 from dmlib.control import ZernikeControl
 from dmlib.core import (
     hash_file, write_h5_header, add_log_parameters, setup_logging,
@@ -1678,10 +1678,12 @@ class Worker:
 
             calib = WeightedLSCalib()
             calib.calibrate(
-                self.dset['data/U'][()], self.dset['data/images'],
-                self.fringe, wavelength, dm_serial, dm_transform,
-                cam_pixel_size, cam_serial, dmplot_txs, dname,
-                hash1, status_cb=notify_fun)
+                U=self.dset['data/U'][()], images=self.dset['data/images'],
+                fringe=self.fringe, wavelength=wavelength,
+                dm_serial=dm_serial, dm_transform=dm_transform,
+                cam_pixel_size=cam_pixel_size, cam_serial=cam_serial,
+                dmplot_txs=dmplot_txs, dname=dname,
+                hash1=hash1, status_cb=notify_fun)
 
             now = datetime.now(timezone.utc)
             libver = 'latest'
@@ -1829,11 +1831,7 @@ class Worker:
         if dmsn:
             h5fn = dmsn + '_' + h5fn
 
-        U = np.hstack((
-                np.zeros((dm.size(), 1)),
-                np.kron(np.eye(dm.size()), np.linspace(-.7, .7, 5)),
-                np.zeros((dm.size(), 1))
-                ))
+        U = make_normalised_input_matrix(dm.size(), 5, .7)
 
         with h5py.File(h5fn, 'w', libver=libver) as h5f:
             write_h5_header(h5f, libver, now)
@@ -2006,7 +2004,6 @@ if __name__ == '__main__':
 
     app = QApplication(sys.argv)
     if platform.system() == 'Windows':
-        print(QStyleFactory.keys())
         try:
             app.setStyle(QStyleFactory.create('Fusion'))
         except Exception:
