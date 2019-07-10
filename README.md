@@ -16,13 +16,13 @@ Python library for calibration and control of deformable mirrors (DM).
 The calibration GUI can be used to interferometrically calibrate and test a DM. To run the calibration GUI, open an Anaconda Prompt and query the available drivers with `python -m dmlib.gui --help`. After selecting the appropriate drivers flags you can run the GUI without the `--help` flag.
 
 For example
-```python
+```bash
 python -m dmlib.gui --dm-driver bmc --dm-name DM_SERIAL_NUMBER --cam-driver thorcam --cam-name CAM_SERIAL_NUMBER
 ```
 would run the calibration GUI using the Boston BMC Multi-DM with serial number `DM_SERIAL_NUMBER` and the Thorlabs camera with serial number `CAM_SERIAL_NUMBER`.
 
 To run the calibration GUI in simulation mode without any hardware, use
-```python
+```bash
 python -m dmlib.gui --dm-driver sim --cam-driver sim
 ```
 
