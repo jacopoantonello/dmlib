@@ -95,7 +95,11 @@ class FakeCam():
         self.log.info(f'close {self.name:}')
 
     def grab_image(self):
-        return dmlib.test.load_int3(self._shape)
+        img = dmlib.test.load_int3(self._shape)
+        img = img.astype(self.get_image_dtype())
+        assert(img.dtype == self.get_image_dtype())
+        assert(img.shape == self.shape())
+        return img
 
     def shape(self):
         return self._shape

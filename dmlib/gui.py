@@ -1544,8 +1544,9 @@ class Worker:
                 else:
                     shared.cam_sat.value = 0
                 shared.cam[:] = img[:]
-            except Exception:
+            except Exception as ex:
                 state = ('ERR1', 'STOP', 'Camera read error')
+                self.log.error(ex, exc_info=True)
 
             if state[0] == 'OK' and not unwrap:
                 if not poke:
