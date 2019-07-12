@@ -46,16 +46,16 @@ class ZernikeControl:
     @staticmethod
     def get_parameters_info():
         return {
-            'include': (list, int, 'Zernike indices to include'),
-            'exclude': (list, int, 'Zernike indices to include'),
-            'min': (int, (1, None), 'Minimum Zernike index'),
-            'max': (int, (1, None), 'Maximum Zernike index'),
+            'include': (list, int, 'Zernike indices to include', 1),
+            'exclude': (list, int, 'Zernike indices to include', 1),
+            'min': (int, (1, None), 'Minimum Zernike index', 1),
+            'max': (int, (1, None), 'Maximum Zernike index', 1),
             'all': (
-                int, (0, 1), 'Use all Zernike available in calibration'),
-            'flipx': (int, (0, 1), 'Flip pupil along x'),
-            'flipy': (int, (0, 1), 'Flip pupil along y'),
-            'rotate': (float, (None, None), 'Rotate pupil in degrees'),
-            'flat_on': (int, (0, 1), 'Apply flattening offset'),
+                int, (0, 1), 'Use all Zernike available in calibration', 0),
+            'flipx': (int, (0, 1), 'Flip pupil along x', 0),
+            'flipy': (int, (0, 1), 'Flip pupil along y', 0),
+            'rotate': (float, (None, None), 'Rotate pupil in degrees', 0),
+            'flat_on': (int, (0, 1), 'Apply flattening offset', 0),
             }
 
     def __init__(
@@ -321,17 +321,15 @@ class SVDControl(ZernikeControl):
         return {
             'modes': 5,
             'zernike_exclude': 4,
-            'flat_on': 1,
             }
 
     @staticmethod
     def get_parameters_info():
         return {
-            'modes': (int, (1, None), 'Number of SVD modes'),
+            'modes': (int, (1, None), 'Number of SVD modes', 1),
             'zernike_exclude': (
                 int, (1, None),
-                'Exclude Zernike indices up to (inclusive)'),
-            'flat_on': (int, (0, 1), 'Apply flattening offset'),
+                'Exclude Zernike indices up to (inclusive)', 1),
             }
 
     def __init__(self, dm, calib, pars, h5=None):

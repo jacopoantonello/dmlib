@@ -134,6 +134,9 @@ class OptionsPanel(QFrame):
     def from_dict(self, selection, infod, valuesd):
         count = 0
         for k, v in infod.items():
+            if v[-1] == 0:
+                continue
+
             lab = QLabel(k)
 
             type1 = v[0]
