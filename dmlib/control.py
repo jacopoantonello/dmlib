@@ -340,6 +340,7 @@ class SVDControl(ZernikeControl):
         svd_pars = {
             **deepcopy(self.get_default_parameters()), **deepcopy(pars)}
 
+        self.svd_pars = svd_pars
         svd_modes = self.svd_pars['modes']
         nignore = self.svd_pars['zernike_exclude'] - 1
 
@@ -359,15 +360,14 @@ class SVDControl(ZernikeControl):
         U1 = U[:, :s.size]
         np.allclose(U1[:nignore, :], 0)
 
-        nmodes = svd_pars.svd_modes
-        V1 = Vt[:nmodes, :].T
-        s1i = np.power(s[:nmodes], -1)
+        V1 = Vt[:svd_modes, :].T
+        s1i = np.power(s[:svd_modes], -1)
         S1i = np.diag(s1i)
 
-        self.h5_make_empty('x', (nmodes,))
+        self.h5_make_empty('x', (svd_modes,))
         self.K = Vl2@V1@S1i
-        self.ndof = nmodes
-        self.ab = np.zeros(nmodes)
+        self.ndof = svd_modes
+        self.ab = np.zeros(svd_modes)
         self.h5_save('ab', self.ab)
 
         def f(n, w):
@@ -376,7 +376,7 @@ class SVDControl(ZernikeControl):
 
         if self.h5f:
             f('nignore', nignore)
-            f('nmodes', nmodes)
+            f('svd_modes', svd_modes)
             f('Vl2', Vl2)
             f('V1', V1)
             f('S1i', S1i)
@@ -411,6 +411,9 @@ class SVDControl(ZernikeControl):
         assert(norm(self.u, np.inf) <= 1.)
 
         self.dm.write(self.u)
+
+        if self.gui_callback:
+            self.gui_callback()
 
     def save_parameters(self, merge={}):
         d = {**merge, **self.pars}
