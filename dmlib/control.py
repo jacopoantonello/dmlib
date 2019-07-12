@@ -254,6 +254,7 @@ class ZernikeControl:
                 h5_prefix + self.__class__.__name__ + '/ab'][:] = self.ab[:]
 
     def transform_pupil(self):
+        "Make pupil rotation matrix"
         alpha = self.pars['rotate']
         flipx = self.pars['flipx']
         flipy = self.pars['flipy']
@@ -283,6 +284,7 @@ class ZernikeControl:
         self.make_P()
 
     def make_P(self):
+        "Total orthogonal matrix"
         if self.R is None:
             self.P = None
         else:
@@ -301,6 +303,7 @@ class ZernikeControl:
                 self.h5f[addr] = P
 
     def save_R(self):
+        "Save pupil rotation matrix"
         addr = h5_prefix + self.__class__.__name__ + '/R'
         if self.R is None:
             R = np.eye(self.nz)
@@ -344,7 +347,9 @@ class SVDControl(ZernikeControl):
 
         self.h5_save('svd_modes', svd_modes)
 
-        H = self.calib.H
+        self.make_P()
+        H = np.dot(self.P.T, self.calib.H)
+
         Hl = H[:nignore, :]
         # Hh = H[nignore:, :]
         _, _, Vt = svd(Hl)
