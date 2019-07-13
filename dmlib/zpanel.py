@@ -36,7 +36,7 @@ from dmlib.core import (
     add_dm_parameters, open_dm, add_log_parameters, setup_logging)
 from dmlib.calibration import WeightedLSCalib
 from dmlib import control
-from dmlib.control import ZernikeControl
+from dmlib.control import ZernikeControl, get_noll_indices
 
 
 class MyQDoubleValidator(QDoubleValidator):
@@ -132,7 +132,25 @@ class OptionsPanel(QFrame):
             )
 
     def from_dict(self, selection, infod, valuesd):
+        def get_noll():
+            indices = [str(s) for s in get_noll_indices(
+                self.pars[self.addr_options][selection]).tolist()]
+            return ', '.join(indices)
+
         count = 0
+        if selection == 'ZernikeControl':
+            lab = QLabel('Noll indices')
+            self.lay.addWidget(lab, count, 0)
+            le = QLineEdit(get_noll())
+            le.setReadOnly(True)
+            self.lay.addWidget(le, count, 1)
+            self.lines.append(((le, lab), None))
+
+            le_noll = le
+            count = 1
+        else:
+            le_noll = None
+
         for k, v in infod.items():
             if v[-1] == 0:
                 continue
@@ -152,6 +170,8 @@ class OptionsPanel(QFrame):
                     self.pars[
                         self.addr_options][selection][k] = type1(le.text())
                     val.setFixup(newval)
+                    if le_noll:
+                        le_noll.setText(get_noll())
                 return f
 
             def ledisc(w, hand):
@@ -193,6 +213,8 @@ class OptionsPanel(QFrame):
                         le.blockSignals(True)
                         le.setText(', '.join([str(c) for c in tmp]))
                         le.blockSignals(False)
+                        if le_noll:
+                            le_noll.setText(get_noll())
                     return f
 
                 hand = make_validator(k, le, type1, bounds)
@@ -210,7 +232,8 @@ class OptionsPanel(QFrame):
             for w in l[0]:
                 self.lay.removeWidget(w)
                 w.setParent(None)
-            l[1]()
+            if l[1]:
+                l[1]()
         self.lines.clear()
 
 
