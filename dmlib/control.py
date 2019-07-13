@@ -434,9 +434,18 @@ def get_noll_indices(pars):
     mexclude = np.array(pars['exclude'], dtype=np.int)
 
     mrange = np.arange(noll_min, noll_max + 1, dtype=np.int)
-    zernike_indices = np.setdiff1d(
+    zernike_indices1 = np.setdiff1d(
         np.union1d(np.unique(mrange), np.unique(minclude)),
         np.unique(mexclude))
+    zernike_indices = []
+    for k in minclude:
+        if k in zernike_indices1 and k not in zernike_indices:
+            zernike_indices.append(k)
+    remaining = np.setdiff1d(zernike_indices1, np.unique(zernike_indices))
+    for k in remaining:
+        zernike_indices.append(k)
+    assert(len(zernike_indices) == zernike_indices1.size)
+    zernike_indices = np.array(zernike_indices, dtype=np.int)
 
     log = logging.getLogger('ZernikeControl')
     log.info(f'selected Zernikes {zernike_indices}')
