@@ -323,7 +323,7 @@ class SVDControl(ZernikeControl):
     def get_default_parameters():
         return {
             'modes': 5,
-            'zernike_exclude': 4,
+            'zernike_exclude': [4],
             }
 
     @staticmethod
@@ -331,7 +331,7 @@ class SVDControl(ZernikeControl):
         return {
             'modes': (int, (1, None), 'Number of SVD modes', 1),
             'zernike_exclude': (
-                int, (1, None),
+                list, int,
                 'Exclude Zernike indices up to (inclusive)', 1),
             }
 
@@ -343,12 +343,27 @@ class SVDControl(ZernikeControl):
 
         self.svd_pars = svd_pars
         svd_modes = self.svd_pars['modes']
-        nignore = self.svd_pars['zernike_exclude'] - 1
+        ignore = np.array(self.svd_pars['zernike_exclude'], dtype=np.int)
+        nignore = ignore.size
 
         self.h5_save('svd_modes', svd_modes)
+        self.h5_save('ignore', ignore)
 
         self.make_P()
-        H = np.dot(self.P.T, self.calib.H)
+        if self.P:
+            H = np.dot(self.P.T, self.calib.H)
+        else:
+            H = self.calib.H
+        smap = np.zeros(H.shape[0], dtype=np.bool)
+        smap[ignore - 1] = 1
+        O1 = np.eye(H.shape[0])
+        O1 = np.hstack((O1[:, smap], O1[:, np.invert(smap)])).T
+        test = np.zeros(H.shape[0])
+        test[smap] = 1
+        assert(np.dot(O1, test)[:ignore.size].sum() == ignore.size)
+        self.h5_save('O1', O1)
+        H = np.dot(O1, H)
+        self.h5_save('Htot', H)
 
         Hl = H[:nignore, :]
         # Hh = H[nignore:, :]
