@@ -1538,12 +1538,12 @@ class Worker:
                 time.sleep(sleep)
 
             try:
-                img = cam.grab_image()
+                img = cam.grab_image().copy()  # copy immediately
+                shared.cam[:] = img[:]
                 if img.max() == cam.get_image_max():
                     shared.cam_sat.value = 1
                 else:
                     shared.cam_sat.value = 0
-                shared.cam[:] = img[:]
             except Exception as ex:
                 state = ('ERR1', 'STOP', 'Camera read error')
                 self.log.error(ex, exc_info=True)
@@ -1589,14 +1589,6 @@ class Worker:
                 break
             else:
                 self.log.debug('run_align continue')
-
-    def cam_pull(self):
-        img = cam.grab_image()
-        self.fringe.analyse(
-            img, auto_find_orders=False, store_logf2=False,
-            store_logf3=False, store_gp=False, store_mag=False,
-            store_wrapped=False, do_unwrap=True, use_mask=True)
-        return self.fringe.unwrapped[np.invert(self.fringe.mask)]
 
     def open_dset(self, dname):
         estr = None
@@ -1886,7 +1878,7 @@ class Worker:
                     try:
                         dm.write(U1[:, i])
                         time.sleep(sleep)
-                        img = cam.grab_image()
+                        img = cam.grab_image().copy()  # copy immediately
                     except Exception as e:
                         self.log.error('run_dataacq', exc_info=True)
                         shared.oq.put((str(e),))
@@ -1949,7 +1941,7 @@ class Worker:
                 t2 = time.time()
 
                 time.sleep(sleep)
-                img = cam.grab_image()
+                img = cam.grab_image().copy()
 
                 t3 = time.time()
                 fringe.analyse(img, use_mask=True)
