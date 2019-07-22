@@ -124,9 +124,10 @@ class ZernikeControl:
             self.uflat = np.array(pars['uflat'])
             assert(self.uflat.size == calib.uflat.size)
         except Exception as ex:
-            self.log.info(f'fail to load uflat {str(ex)}')
+            self.log.info(f'failed to load uflat {str(ex)}')
             self.flat_on = 1
-            self.uflat = calib.uflat
+            self.calib.reflatten()
+            self.uflat = calib.uflat.copy()
 
         # handle initial value
         try:
