@@ -124,7 +124,7 @@ class ZernikeControl:
             self.uflat = np.array(pars['uflat'])
             assert(self.uflat.size == calib.uflat.size)
         except Exception as ex:
-            self.log.info(f'failed to load uflat {str(ex)}')
+            self.log.info(f'failed loading uflat {str(ex)}')
             self.flat_on = 1
             self.calib.reflatten()
             self.uflat = calib.uflat.copy()
@@ -135,6 +135,8 @@ class ZernikeControl:
             self.z1[:] = self.u2z()
         except Exception as ex:
             self.log.info(f'fail to load u {str(ex)}')
+            self.u[:] = self.uflat[:]
+            self.z1[:] = self.u2z()
 
         if h5f:
             calib.save_h5py(h5f, prepend=h5_prefix)
