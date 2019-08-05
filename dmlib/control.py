@@ -345,7 +345,15 @@ class SVDControl(ZernikeControl):
             **deepcopy(self.get_default_parameters()), **deepcopy(pars)}
 
         self.svd_pars = svd_pars
-        svd_modes = self.svd_pars['modes']
+        try:
+            enabled = self.svd_pars['enabled']
+        except KeyError:
+            enabled = 1
+
+        if enabled:
+            svd_modes = self.svd_pars['modes']
+        else:
+            svd_modes = 0
         ignore = np.array(self.svd_pars['zernike_exclude'], dtype=np.int)
         nignore = ignore.size
 
