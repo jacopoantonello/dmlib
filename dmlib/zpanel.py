@@ -115,15 +115,11 @@ class OptionsPanel(QFrame):
     def update(self, selection, k, v):
         self.pars[self.addr_options][selection][k] = v
         if selection == self.combo.currentText():
-            found = 0
             for l in self.lines:
                 if l[0][1].text() == k:
                     type1 = self.infod[selection][k][0]
                     l[0][0].setText(str(type1(v)))
-                    found = 1
                     break
-            if found == 0:
-                raise RuntimeError()
 
     def get_options(self):
         return (
