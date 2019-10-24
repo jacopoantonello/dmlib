@@ -73,4 +73,10 @@ setup(
         'user interface': ['pyqt5'],
         'plot': ['matplotlib'],
         },
+    entry_points={
+        'console_scripts': [
+            'dmlib.calibrate = dmlib.gui:main',
+            'dmlib.control = dmlib.zpanel:main'
+        ]
+    }
 )

@@ -1991,7 +1991,7 @@ class Worker:
         shared.oq.put(('finished',))
 
 
-if __name__ == '__main__':
+def main():
     multiprocessing.freeze_support()
     multiprocessing.set_start_method('spawn')
 
@@ -2032,3 +2032,7 @@ if __name__ == '__main__':
     shared.iq.put('STOP')
     p.join()
     sys.exit(exit)
+
+if __name__ == '__main__':
+    main()
+    
