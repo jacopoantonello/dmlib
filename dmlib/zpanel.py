@@ -1207,7 +1207,7 @@ def new_zernike_window(app, args, pars={}):
     return zwindow
 
 
-if __name__ == '__main__':
+def main():
     app = QApplication(sys.argv)
     args = app.arguments()
     parser = argparse.ArgumentParser(
@@ -1240,3 +1240,6 @@ if __name__ == '__main__':
     zwindow.show()
 
     sys.exit(app.exec_())
+
+if __name__ == '__main__':
+    main()
