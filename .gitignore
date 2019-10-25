@@ -9,3 +9,4 @@ dist/
 /dmlib/version.py
 /.eggs
 /examples/calib.h5
+*.log
