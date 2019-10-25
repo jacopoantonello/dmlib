@@ -1080,7 +1080,7 @@ class Control(QMainWindow):
                         return False
                 status.setText(f'loading {calib[0]} ...')
                 status.repaint()
-                shared.iq.put(('query_calib', calib[0]))
+                self.shared.iq.put(('query_calib', calib[0]))
                 ndata = check_err()
                 if ndata == -1:
                     clearup()
@@ -2033,6 +2033,6 @@ def main():
     p.join()
     sys.exit(exit)
 
+
 if __name__ == '__main__':
     main()
-    
