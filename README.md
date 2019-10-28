@@ -7,7 +7,7 @@ Python library for calibration and control of deformable mirrors (DM).
 
 ## Installation
 ### Windows
-* first install the hardware drivers and external requirements listed in [devwraps](https://github.com/jacopoantonello/devwraps)
+* install the hardware drivers and external requirements listed in [devwraps](https://github.com/jacopoantonello/devwraps) if you need to run real hardware, otherwise simulation only will be available
 * clone recursively this repository with `git clone --recurse-submodules https://github.com/jacopoantonello/dmlib`
 * double-click on `install.bat`
 
