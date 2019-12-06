@@ -499,7 +499,7 @@ class FringeAnalysis:
         self.radius = 0.
 
     def estimate_aperture(self, img_zero, img_centre, radius):
-        "radius is in um"
+        "radius [um]"
         if radius <= 0.:
             self.clear_aperture()
         else:
@@ -518,6 +518,10 @@ class FringeAnalysis:
                 self.xv, self.yv, mag_zero, phi_zero, mag_centre,
                 phi_centre, radius)
 
-            self.centre = centre
-            self.radius = radius
-            self._make_mask()
+            self.set_aperture(centre, radius)
+
+    def set_aperture(self, centre, radius):
+        "[um]"
+        self.centre = centre
+        self.radius = radius
+        self._make_mask()

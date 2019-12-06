@@ -14,6 +14,7 @@ from skimage.restoration import unwrap_phase
 
 from zernike.czernike import RZern
 
+from dmlib.core import SquareRoot
 from dmlib.interf import FringeAnalysis
 
 LOG = logging.getLogger('calibration')
@@ -85,11 +86,12 @@ class PhaseExtract:
 
     def __init__(self, fringe):
         self.fringe = fringe
+        self.mask = np.invert(self.fringe.mask)
 
     def __call__(self, img):
         self.fringe.analyse(img)
         unwrapped = self.fringe.unwrapped
-        return unwrapped[np.invert(self.fringe.mask)]
+        return unwrapped[self.mask]
 
 
 class WeightedLSCalib:
@@ -121,8 +123,8 @@ class WeightedLSCalib:
     def calibrate(
             self, U, images, fringe, wavelength, cam_pixel_size,
             cam_serial='',
-            dname='', dm_serial='', dmplot_txs=(), dm_transform='',
-            hash1='',
+            dname='', dm_serial='', dmplot_txs=(0, 0, 0),
+            dm_transform=SquareRoot.name, hash1='',
             n_radial=25, alpha=.75, lambda1=5e-3, status_cb=False):
 
         if status_cb:
@@ -153,7 +155,7 @@ class WeightedLSCalib:
         assert(np.allclose(fringe.mask, mask1))
 
         if status_cb:
-            status_cb('Computing phases 0.00% ...')
+            status_cb('Computing phases 00.00% ...')
         t1 = time()
 
         def make_progress():
@@ -164,7 +166,7 @@ class WeightedLSCalib:
                 dt = t - prevts[0]
                 prevts[0] = t
                 if dt > 1.5 or pc > 99:
-                    status_cb(f'Computing phases {pc:.2f}% ...')
+                    status_cb(f'Computing phases {pc:05.2f}% ...')
             return f
 
         with Pool() as p:
