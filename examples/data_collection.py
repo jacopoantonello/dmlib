@@ -10,20 +10,21 @@ from h5py import File
 
 from dmlib.core import FakeDM, FakeCam
 from dmlib.interf import FringeAnalysis
-from dmlib.calibration import WeightedLSCalib
 from dmlib.calibration import make_normalised_input_matrix, u2v
 
-"""DM calibration example
+"""Example script to collect DM calibration data.
 
-This script shows how to use dmlib to calibrate a DM. You can adapt this script
-to work with your own hardware which is not supported by dmlib. In order to do
-so, adjust the camera and DM parameters accordingly.  Then replace the calls
-to dmlib's dummy camera (FakeCam) and DM objects (FakeDM) with calls to your
-manufacturer libraries.
+This script shows how you should collect the DM calibration data. It generates
+an HDF5 file that can be later supplied to the calibration.py script.
+
+You can adapt this script to work with your own hardware that is not supported
+by dmlib. In order to do so, adjust the camera and DM parameters accordingly.
+Then replace the calls to dmlib's dummy camera (FakeCam) and DM objects
+(FakeDM) with actual calls to your manufacturer libraries.
 
 You can still run this script from beginning to end using FakeCam and FakeDM,
-without using any real hardware. Note however that these objects are for code
-testing purposes and only produce random data. As a result the output
+without using any real hardware. Note however that these objects are for GUI
+testing purposes only, and produce random data. As a result the output
 calibration is meaningless.
 
 """
@@ -137,33 +138,16 @@ for i in range(U.shape[1]):
     Ucheck.append(u.reshape(-1, 1))
     images.append(img)
 
-# you MUST take the images in the right order
+# you MUST take the DM pokes in the right order!
 assert(np.allclose(U, np.hstack(Ucheck)))
 
-
-with File('dm-calib-data.h5', 'r') as f:
-    align = f['align/images'][()]
-    names = f['align/names'][()].split(',')
-    images = f['data/images'][()]
-    P = f['cam/pixel_size'][()]
-    U = f['data/U'][()]
-    wavelength = f['wavelength'][()]
-
-img_centre = align[names.index('centre'), ...]
-zero = images[0, ...]
-
-fringe = FringeAnalysis(images[0, ...].shape, P)
-fringe.analyse(
-    zero, auto_find_orders=True, do_unwrap=True,
-    use_mask=False)
-
-# compute the calibration
-calib = WeightedLSCalib()
-calib.calibrate(
-    U, np.stack(images), fringe, wavelength_nm, cam_pixel_size_um,
-    status_cb=print)
-
-# save the calibration to a file
-with File('calib.h5', 'w', libver='latest') as h5f:
-    calib.save_h5py(h5f)
-print('calibration saved to calib.h5')
+# save the collected interferometric data
+fout = 'calib-data2.h5'
+with File(fout, 'w') as f:
+    f['align/images'] = img_centre.reshape((1,) + cam_shape)
+    f['align/names'] = 'centre'
+    f['data/images'] = images
+    f['data/U'] = U
+    f['wavelength'] = wavelength_nm
+    f['cam/pixel_size'] = cam_pixel_size_um
+print(f'Saved {fout}')
