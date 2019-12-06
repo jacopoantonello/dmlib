@@ -9,7 +9,7 @@ SET CURDIR=%~dp0
 REM choose a GUI by modifying the following line
 SET MODULE=dmlib.zpanel
 REM choose your parameters by modifying the following line
-SET PARAMETERS=--dm-driver sim --dm-name simdm0 --dm-calibration '%CURDIR%\example_calibration.h5'
+SET PARAMETERS=--dm-driver sim --dm-name simdm0 --dm-calibration '%CURDIR%\data\calib-example.h5'
 REM use "SET PARAMETERS=--help" to get a list of the possible parameters
 
 REM do not edit below

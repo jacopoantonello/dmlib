@@ -17,7 +17,7 @@ from dmlib.calibration import make_normalised_input_matrix, u2v
 
 This script shows how to use dmlib to calibrate a DM. You can adapt this script
 to work with your own hardware which is not supported by dmlib. In order to do
-this, adjust the camera and DM parameters accordingly.  Then replace the calls
+so, adjust the camera and DM parameters accordingly.  Then replace the calls
 to dmlib's dummy camera (FakeCam) and DM objects (FakeDM) with calls to your
 manufacturer libraries.
 
@@ -139,6 +139,23 @@ for i in range(U.shape[1]):
 
 # you MUST take the images in the right order
 assert(np.allclose(U, np.hstack(Ucheck)))
+
+
+with File('dm-calib-data.h5', 'r') as f:
+    align = f['align/images'][()]
+    names = f['align/names'][()].split(',')
+    images = f['data/images'][()]
+    P = f['cam/pixel_size'][()]
+    U = f['data/U'][()]
+    wavelength = f['wavelength'][()]
+
+img_centre = align[names.index('centre'), ...]
+zero = images[0, ...]
+
+fringe = FringeAnalysis(images[0, ...].shape, P)
+fringe.analyse(
+    zero, auto_find_orders=True, do_unwrap=True,
+    use_mask=False)
 
 # compute the calibration
 calib = WeightedLSCalib()

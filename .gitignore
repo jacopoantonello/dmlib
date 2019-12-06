@@ -8,5 +8,6 @@ dist/
 *.json
 /dmlib/version.py
 /.eggs
-/examples/calib.h5
+/examples/*.h5
+/examples/*.log
 *.log
