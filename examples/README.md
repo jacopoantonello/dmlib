@@ -18,6 +18,14 @@ Camera objects with the correct function calls for your hardware. Once the data
 has been collected, it is saved into a file `calib-data2.h5`. You can then
 compute the DM calibration using this file and the script above.
 
+## control_voltages
+This example shows how to drive the DM using raw actuator voltages. It uses the
+built-in wrappers from the `devwraps` package.
+
+## control_zernike
+This example shows how to drive the DM using Zernike modes. It loads a
+calibration computed using `calibration.py`.
+
 ## run_calibration_gui
 Example BAT file to launch the calibration GUI ` dmlib.gui` from Windows.
 
