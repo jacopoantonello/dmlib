@@ -34,7 +34,7 @@ from dmlib.version import __version__
 from dmlib.dmplot import DMPlot
 from dmlib.core import (
     add_dm_parameters, open_dm, add_log_parameters, setup_logging)
-from dmlib.calibration import WeightedLSCalib
+from dmlib.calibration import RegLSCalib
 from dmlib import control
 from dmlib.control import ZernikeControl, get_noll_indices
 
@@ -870,7 +870,7 @@ class DMWindow(QMainWindow):
     def load_parameters(self, d):
         self.pars = {**deepcopy(self.pars), **deepcopy(d)}
         with File(self.pars['calibration'], 'r') as f:
-            self.calib = WeightedLSCalib.load_h5py(f, lazy_cart_grid=True)
+            self.calib = RegLSCalib.load_h5py(f, lazy_cart_grid=True)
         self.instance_control()
         if 'ZernikePanel' in self.pars:
             self.zpanel.load_parameters(self.pars['ZernikePanel'])
@@ -922,7 +922,7 @@ class DMWindow(QMainWindow):
                 if fileName:
                     try:
                         with File(fileName, 'r') as f:
-                            self.calib = WeightedLSCalib.load_h5py(
+                            self.calib = RegLSCalib.load_h5py(
                                 f, lazy_cart_grid=True)
                         self.instance_control()
                         if 'ZernikePanel' in self.pars:
@@ -1145,7 +1145,7 @@ def load_parameters(app, args):
         choose_calib_file()
 
     try:
-        dminfo = WeightedLSCalib.query_calibration(pars['calibration'])
+        dminfo = RegLSCalib.query_calibration(pars['calibration'])
     except Exception as e:
         quit(str(e))
 
@@ -1184,7 +1184,7 @@ def new_zernike_window(app, args, pars={}):
     pars['calibration'] = calib_file
 
     try:
-        dminfo = WeightedLSCalib.query_calibration(calib_file)
+        dminfo = RegLSCalib.query_calibration(calib_file)
     except Exception as e:
         quit(str(e))
 
@@ -1197,7 +1197,7 @@ def new_zernike_window(app, args, pars={}):
 
     try:
         with File(calib_file, 'r') as f:
-            calib = WeightedLSCalib.load_h5py(f, lazy_cart_grid=True)
+            calib = RegLSCalib.load_h5py(f, lazy_cart_grid=True)
     except Exception as e:
         quit(f'error loading calibration {pars["calibration"]}: {str(e)}')
 
@@ -1231,7 +1231,7 @@ def main():
 
     try:
         with File(pars['calibration'], 'r') as f:
-            calib = WeightedLSCalib.load_h5py(f, lazy_cart_grid=True)
+            calib = RegLSCalib.load_h5py(f, lazy_cart_grid=True)
     except Exception as e:
         quit(
             f'error loading calibration {pars["calibration"]}: {str(e)}')

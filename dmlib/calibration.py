@@ -94,7 +94,8 @@ class PhaseExtract:
         return unwrapped[self.mask]
 
 
-class WeightedLSCalib:
+class RegLSCalib:
+    """Compute a DM calibration using regularised least-squares."""
 
     def __init__(self):
         self.zfA1 = None
@@ -319,14 +320,14 @@ class WeightedLSCalib:
     @classmethod
     def query_calibration(cls, f):
         with File(f, 'r') as f:
-            if 'WeightedLSCalib' not in f:
+            if 'RegLSCalib' not in f:
                 raise ValueError(f.filename + ' is not a calibration file')
             else:
                 return (
-                    f['WeightedLSCalib/dm_serial'][()],
-                    f['WeightedLSCalib/dm_transform'][()],
-                    f['WeightedLSCalib/dmplot_txs'][()],
-                    f['WeightedLSCalib/H'].shape,
+                    f['RegLSCalib/dm_serial'][()],
+                    f['RegLSCalib/dm_transform'][()],
+                    f['RegLSCalib/dmplot_txs'][()],
+                    f['RegLSCalib/H'].shape,
                     )
 
     @classmethod

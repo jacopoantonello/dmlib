@@ -4,7 +4,7 @@
 from h5py import File
 
 from dmlib.interf import FringeAnalysis
-from dmlib.calibration import WeightedLSCalib
+from dmlib.calibration import RegLSCalib
 
 """Example about using dmlib to compute a calibration.
 
@@ -50,7 +50,7 @@ fringe.estimate_aperture(img_zero, img_centre, radius_um)
 # or set the position manually with fringe.set_aperture(centre, radius)
 
 # compute the calibration
-calib = WeightedLSCalib()
+calib = RegLSCalib()
 calib.calibrate(
     U, images, fringe, wavelength_nm, cam_pixel_size_um, status_cb=print)
 
