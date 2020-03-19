@@ -56,13 +56,17 @@ setup(
     version=lookup_version(),
     description='Python tools for deformable mirror calibration',
     long_description=long_description,
-    url='',
+    url='https://github.com/jacopoantonello/dmlib',
     author='The DMLib Project Contributors',
     author_email='jacopo@antonello.org',
-    license='to be defined',
+    license='GPLv3+',
     classifiers=[
-        'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
+        'Topic :: Scientific/Engineering :: Physics',
+        (
+            'License :: OSI Approved :: ' +
+            'GNU General Public License v3 or later (GPLv3+)'
+        ),
         'Programming Language :: Python :: 3',
     ],
     packages=['dmlib', 'dmlib.test'],
