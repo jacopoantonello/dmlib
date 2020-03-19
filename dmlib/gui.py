@@ -1538,7 +1538,7 @@ class Worker:
                 time.sleep(sleep)
 
             try:
-                img = cam.grab_image().copy()  # copy immediately
+                img = cam.grab_image()  # copy immediately
                 shared.cam[:] = img[:]
                 if img.max() == cam.get_image_max():
                     shared.cam_sat.value = 1
@@ -1878,7 +1878,7 @@ class Worker:
                     try:
                         dm.write(U1[:, i])
                         time.sleep(sleep)
-                        img = cam.grab_image().copy()  # copy immediately
+                        img = cam.grab_image()  # copy immediately
                     except Exception as e:
                         self.log.error('run_dataacq', exc_info=True)
                         shared.oq.put((str(e),))
@@ -1941,7 +1941,7 @@ class Worker:
                 t2 = time.time()
 
                 time.sleep(sleep)
-                img = cam.grab_image().copy()
+                img = cam.grab_image()
 
                 t3 = time.time()
                 fringe.analyse(img, use_mask=True)
