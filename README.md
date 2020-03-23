@@ -24,18 +24,33 @@ There are two possible use cases
   `examples/calibration.py`.
 
 ## Installation
-### Windows
+Hardware devices such as deformable mirrors and scientific cameras are only
+supported in Windows via the
+[devwraps](https://github.com/jacopoantonello/devwraps) subpackage. You can
+still install `dmlib` under Linux and run the GUIs in simulation mode (using
+dummy virtual devices). To install `dmlib` in Windows, follow the steps below.
 
-* install the hardware drivers and external requirements listed in
-	[devwraps](https://github.com/jacopoantonello/devwraps) if you need to run
-	real hardware, otherwise simulation only will be available
-* clone recursively this repository with `git clone --recurse-submodules
-  https://github.com/jacopoantonello/dmlib`
-* double-click on `install.bat`
+* You should then install the following software requirements:
+    * [Anaconda for Python 3](https://www.anaconda.com/download). This includes
+      Python as well as some necessary scientific libraries.
+    * [Build Tools for Visual
+      Studio](https://go.microsoft.com/fwlink/?linkid=840931). Note that this
+      is not *Visual Studio* ifself, but the command-line interface *Build
+      Tools for Visual Studio 2019*. You can find that under *Tools for Visual
+      Studio*.
+    * [Git](https://git-scm.com/download/win). This is necessary for the
+      automatic version numbering of this package. Also make sure you choose
+      *Git from the command line and also 3rd-party software* in *Adjusting
+      your PATH environment*.
+* *Clone* this repository using Git. Right-click on a folder and hit *Git Bash
+  here*. Paste `git clone --recurse-submodules
+  https://github.com/jacopoantonello/dmlib` and hit enter. Do not use GitHub's
+  *Download ZIP* button above.
+* Finally double-click on `install.bat`. This script installs `dmlib` and its
+  two subpackages `zernike` and `devwraps`.
 
 ## Running dmlib GUIs
 ### DM calibration (dmlib.gui)
-
 The calibration GUI can be used to interferometrically calibrate and test a DM.
 To run the calibration GUI, open an Anaconda Prompt and query the available
 drivers with `python -m dmlib.gui --help`. After selecting the appropriate
@@ -46,7 +61,7 @@ For example
 python -m dmlib.gui --dm-driver bmc --dm-name DM_SERIAL_NUMBER --cam-driver
 thorcam --cam-name CAM_SERIAL_NUMBER
 ```
-would run the calibration GUI using the Boston BMC Multi-DM with serial number
+would run the calibration GUI using the Boston Multi-DM with serial number
 `DM_SERIAL_NUMBER` and the Thorlabs camera with serial number
 `CAM_SERIAL_NUMBER`.
 
@@ -67,4 +82,4 @@ You can create a `BAT` file with the correct parameters so that you can open
 the GUI by double-clicking on it (see `examples/run_control_gui.bat`).
 
 ## References
-<a id="1">[1]</a> J. Antonello, J. Wang, C. He, M. Phillips, and M. Booth, "Interferometric calibration of a deformable mirror," [10.5281/zenodo.3714951](http://doi.org/10.5281/zenodo.3714951).
+<a id="1">[1]</a> J. Antonello, J. Wang, C. He, M. Phillips, and M. Booth, "Interferometric calibration of a deformable mirror," [10.5281/zenodo.3714951](https://doi.org/10.5281/zenodo.3714951).
