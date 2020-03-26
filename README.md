@@ -1,6 +1,10 @@
 # dmlib
 Python library for calibration and control of deformable mirrors (DM). This
-library implements the methods described in detail within [[1]](#1).
+library implements the methods described in detail in this
+[tutorial](https://doi.org/10.5281/zenodo.3714951) [[1]](#1) from
+[aomicroscopy.org](https://aomicroscopy.org).
+
+![](./doc/Pictures/1000000000000559000002DB24F1DF50DA7FE641.png)
 
 `dmlib` is meant to be used as an external library in a Python application that
 needs to control deformable mirrors. `dmlib` is not bound to particular
