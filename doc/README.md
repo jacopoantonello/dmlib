@@ -7,7 +7,7 @@ implements the calibration method outlined in this
 [tutorial](https://doi.org/10.5281/zenodo.3714951) from
 [aomicroscopy.org](https://aomicroscopy.org).
 
-![](./Pictures/100002010000071D000004CAEB2303A11AFA607C.png){width=602}
+![](./Pictures/100002010000071D000004CAEB2303A11AFA607C.png)
 
 The library includes two GUIs. The first one, `dmlib.gui`, is used to acquire
 interferometric data and compute the calibration itself. All parameters of the
@@ -39,8 +39,7 @@ select which one to use by specifying the serial number with `--dm-name
 SERIAL_NUMBER`. Append the `--dm-list` flag to get a list of the detected DMs
 for the selected driver. Similar flags exist for the camera devices.
 
-![](./Pictures/1000000000000391000002C44B5D43E77FD40B68.png){width="6.2709in"
-height="4.861in"}
+![](./Pictures/1000000000000391000002C44B5D43E77FD40B68.png)
 
 In principle, you can acquire a *calibration dataset* once only. This dataset
 stores the images collected by the interferometer and can be subsequently
@@ -56,8 +55,7 @@ objectives with different back aperture sizes.
 2.  In the **align** tab, hit **run** and adjust the exposure time of the
     camera or the power of the laser until the saturation warning (SAT) is not
     displayed anymore in the **cam** figure (top-left).<br>
-    ![](./Pictures/1000000000000391000002C43B5C72B13FC47FE2.png){width="6.2709in"
-    height="4.861in"}
+    ![](./Pictures/1000000000000391000002C43B5C72B13FC47FE2.png)
 3.  Enable **repeat** and hit **run** to acquire continuously. Then
     adjust the tilt **ɑ** of the reference mirror **FM** until the red
     crosses in the **FT** figure are at 45 degrees as shown below. Hit
@@ -65,8 +63,7 @@ objectives with different back aperture sizes.
     for an accurate measurement of the phase. When the GUI is stopped,
     you can zoom in any of the graphs by clicking on the home icon in
     the top-left hand corner.<br>
-    ![](./Pictures/1000000000000391000002C47CDACB2B9E5E1876.png){width="6.2709in"
-    height="4.861in"}
+    ![](./Pictures/1000000000000391000002C47CDACB2B9E5E1876.png)
 4.  Disable **repeat**. Pull up the **dm:** panel (bottom-left) and click
     **arrows**. Then **run** again. Use **flipx**, **flipy**, **rotate cw**,
     and **rotate acw** to adjust the orientation of the actuators plot until
@@ -75,12 +72,10 @@ objectives with different back aperture sizes.
     of the first-order and only works when the DM is at rest after pressing
     **reset** on the **dm:** panel. When **auto** is disabled, the previous
     location of the first-order is used to extract the phase.<br>
-    ![](./Pictures/1000000000000391000002C45F0EDF008CF3A18A.png){width="6.2709in"
-    height="4.861in"}
+    ![](./Pictures/1000000000000391000002C45F0EDF008CF3A18A.png)
 5.  Move to the **calibration** panel and hit **run** to record a
     *calibration dataset*.<br>
-    ![](./Pictures/1000000000000391000002C4F0001C654EBD5EFC.png){width="6.2709in"
-    height="4.861in"}
+    ![](./Pictures/1000000000000391000002C4F0001C654EBD5EFC.png)
 
 Note that the interferometer is very sensitive to vibrations, which should be
 minimised to ensure a good quality dataset. For example, if using a pellicle
@@ -101,8 +96,7 @@ due to cooling fans in the equipment or people speaking in the vicinity.
     interferometer is $M_2$. Then the radius to enter would be $R_a M_1 M_2$.
     You may have to tune the illumination and the fringe contrast if the GUI
     fails to detect the centre of the DM.<br>
-    ![](./Pictures/1000000000000391000002C4C08F0C18571AB99F.png){width="6.2709in"
-    height="4.861in"}
+    ![](./Pictures/1000000000000391000002C4C08F0C18571AB99F.png)
 3.  Click on **calibrate**. The time necessary to compute a *calibration
     file* can vary significantly depending on the fill factor of the
     aperture with respect to the full camera size and on the performance
@@ -110,15 +104,13 @@ due to cooling fans in the equipment or people speaking in the vicinity.
     reported besides the *calibration file* name. This indicator is
     between 0% and 100%. Good calibration results are expected for
     around 90% or more.<br>
-    ![](./Pictures/1000000000000391000002C46CB5E6C97285BC55.png){width="6.2709in"
-    height="4.861in"}
+    ![](./Pictures/1000000000000391000002C46CB5E6C97285BC55.png)
 
 ## Testing a calibration file with the interferometer
 
 1.  Move to the the **test** tab to test a *calibration file* with the
     interferometer.<br>
-    ![](./Pictures/1000000000000559000002DB289452FA49F1A433.png){width="6.2709in"
-    height="3.3472in"}
+    ![](./Pictures/1000000000000559000002DB289452FA49F1A433.png)
 
 2.  Click on **\# Zernike** to select the maximum number of Zernike
     coefficients plotted in the **Zernike **figure (top-right hand corner). The
@@ -130,8 +122,7 @@ due to cooling fans in the equipment or people speaking in the vicinity.
     changing the tilt **ɑ** of the reference mirror **FM**, you will
     generally measure a large error. This error is of no concern as it only
     reflects the change in the alignment of the interferometer.<br>
-    ![](./Pictures/1000000000000559000002DB24F1DF50DA7FE641.png){width="6.2709in"
-    height="3.3472in"}
+    ![](./Pictures/1000000000000559000002DB24F1DF50DA7FE641.png)
 
 ## Example calibration dataset
 
@@ -149,8 +140,7 @@ your have poor fringe contrast or an uneven illumination profile.
     you also specify a DM serial number, the GUI will try to open the serial
     number saved inside the *calibration file*.
 2.  Use the control panel to set the right amount of Zernike aberration.<br>
-    ![](./Pictures/100000000000028F000002FF17AE3614F8CA25C3.png){width="6.2709in"
-    height="7.3472in"}
+    ![](./Pictures/100000000000028F000002FF17AE3614F8CA25C3.png)
 
 # References
 <a id="1">[1]</a> J. Antonello, J. Wang, C. He, M. Phillips, and M. Booth, "Interferometric calibration of a deformable mirror," [10.5281/zenodo.3714951](https://doi.org/10.5281/zenodo.3714951).
