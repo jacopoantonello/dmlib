@@ -51,6 +51,10 @@ try:
     with File(calib_file, 'r') as f:
         calib = RegLSCalib.load_h5py(f, lazy_cart_grid=True)
 
+    # The control matrix can be retrieved as `calib.C`. You can also read the
+    # control matrix using any HDF5 viewer or library from the address
+    # "/RegLSCalib/C"
+
     # instance an object to control using Zernike modes
     zcontrol = ZernikeControl(dm, calib)
 
