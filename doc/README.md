@@ -7,7 +7,7 @@ implements the calibration method outlined in this
 [tutorial](https://doi.org/10.5281/zenodo.3714951) from
 [aomicroscopy.org](https://aomicroscopy.org).
 
-![](./Pictures/100002010000071D000004CAEB2303A11AFA607C.png){width="6.2709in"
+![](./Pictures/100002010000071D000004CAEB2303A11AFA607C.png){:width="6.2709in"
 height="4.222in"}
 
 The library includes two GUIs. The first one, `dmlib.gui`, is used to acquire
