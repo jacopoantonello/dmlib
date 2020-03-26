@@ -15,7 +15,7 @@ subpackage [devwraps](https://github.com/jacopoantonello/devwraps).
 
 There are two possible use cases:
 
-- Full calibration and control using `dmlib`; You can use `dmlib`'s GUIs and
+- Full calibration and control using `dmlib`. You can use `dmlib`'s GUIs and
   embed them into your Python application. In this case your DM and scientific
   camera must be directly supported via the hardware wrappers subpackage
   [devwraps](https://github.com/jacopoantonello/devwraps). A guide explaining
@@ -23,12 +23,13 @@ There are two possible use cases:
   [here](https://github.com/jacopoantonello/dmlib/tree/master/doc).
 - Calibration with `dmlib` and control using your *own code*. If your DM is
   directly supported by `dmlib`, then you can use `dmlib`'s calibration GUI to
-  collect the calibration data and to generate a calibration file. Then you can
-  load the control matrix from the calibration file and use it in your own
-  code.  Instead, if your hardware is not directly supported by `dmlib`, you
-  can adjust the data collection script `data_collection.py` in `examples` and
-  collect the calibration data with this script. Afterwards, you can generate
-  the calibration as shown in the `examples/calibration.py` script.
+  collect the calibration data and to generate a calibration file. Subsequently
+  you can load the control matrix from the calibration file and use it in your
+  own code.  Instead, if your hardware is not directly supported by `dmlib`,
+  you can adjust the data collection script `data_collection.py` in the
+  `examples` folder and collect the calibration data with this script.
+  Afterwards, you can generate the calibration as shown in the
+  `examples/calibration.py` script.
 
 ## Installation
 
@@ -54,8 +55,8 @@ To install `dmlib` in Windows, follow the steps below.
 - *Clone* this repository using Git. From any folder in File Explorer,
   right-click and hit *Git Bash here*. Paste `git clone --recurse-submodules
   https://github.com/jacopoantonello/dmlib` and hit enter. Do not use GitHub's
-  *Download ZIP* button above, as the installation script will not work if you
-  download the ZIP.
+  *Download ZIP* button above, as the installation script will not work in that
+  case.
 - Finally, double-click on `install.bat`. This script installs `dmlib` and its
   two subpackages `zernike` and `devwraps`.
 
@@ -95,8 +96,8 @@ The control GUI `dmlib.zpanel` can load a DM calibration file and control the
 DM in open-loop using Zernike modes. You can start the GUI using a BAT script
 as outlined in the
 [guide](https://github.com/jacopoantonello/dmlib/tree/master/doc).
-Alternatively, open an *Anaconda Prompt* and use the `-m dmlib.gui` flag to
-start the GUI. You can query the GUIs flags with `--help` as seen above.
+Alternatively, open an *Anaconda Prompt* and use the `-m dmlib.zpanel` flag to
+start this GUI. You can query the GUIs flags with `--help` as seen above.
 
 ## References
 
