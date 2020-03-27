@@ -28,7 +28,7 @@ from PyQt5.QtWidgets import (
     )
 
 
-from zernike.czernike import RZern
+from zernike import RZern
 
 from dmlib.version import __version__
 from dmlib.dmplot import DMPlot

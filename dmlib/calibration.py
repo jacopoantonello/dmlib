@@ -12,7 +12,7 @@ from scipy.linalg import cholesky, solve_triangular
 from time import time
 from skimage.restoration import unwrap_phase
 
-from zernike.czernike import RZern
+from zernike import RZern
 
 from dmlib.core import SquareRoot
 from dmlib.interf import FringeAnalysis
