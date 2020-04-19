@@ -26,6 +26,12 @@ built-in wrappers from the `devwraps` package.
 This example shows how to drive the DM using Zernike modes. It loads a
 calibration computed using `calibration.py`.
 
+## export_calibration
+This example exports the calibration into a text file (JSON), so that it can be
+more easily loaded by an external application like LabVIEW. It also shows how
+to scale correctly the control variable to compute the raw voltage to apply to
+the DM. You can open, edit and run this example with Spyder.
+
 ## run_calibration_gui
 Example BAT file to launch the calibration GUI ` dmlib.gui` from Windows.
 
