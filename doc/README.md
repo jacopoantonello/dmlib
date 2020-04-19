@@ -135,12 +135,17 @@ your have poor fringe contrast or an uneven illumination profile.
 
 # Deformable mirror control using Zernike modes (dmlib.zpanel)
 
-1.  Open the Zernike control GUI (`dmlib.zpanel`). This GUI accepts flags similar
-    to the ones of `dmlib.gui`, so you can specify a DM driver accordingly. Unless
-    you also specify a DM serial number, the GUI will try to open the serial
-    number saved inside the *calibration file*.
+1.  Open the Zernike control GUI (`dmlib.zpanel`). This GUI accepts flags
+    similar to the ones of `dmlib.gui`, so you can specify a DM driver and DM
+    name accordingly. The GUI will ask for a *calibration file*. Note that
+    unless you force use of a particular DM with the `--dm-name` flag, the GUI
+    will look for the DM name written inside the *calibration file*. Also the
+    `--dm-driver` and `--dm-name` flags should be consistent. So if you use
+    `--dm-driver sim`, only `simdm0` and `simdm` will be available.
 2.  Use the control panel to set the right amount of Zernike aberration.<br>
     ![](./Pictures/100000000000028F000002FF17AE3614F8CA25C3.png)
+3.  You can visually inspect the quality of the calibration by disabling *flat*
+    and examining the actuator patterns generated for each Zernike mode.
 
 # References
 <a id="1">[1]</a> J. Antonello, J. Wang, C. He, M. Phillips, and M. Booth, "Interferometric calibration of a deformable mirror," [10.5281/zenodo.3714951](https://doi.org/10.5281/zenodo.3714951).
