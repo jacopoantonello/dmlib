@@ -28,7 +28,7 @@ from PyQt5.QtWidgets import (
     QMainWindow, QTabWidget, QLabel, QPushButton, QGroupBox, QGridLayout,
     QCheckBox, QVBoxLayout, QFrame, QApplication, QShortcut, QDoubleSpinBox,
     QToolBox, QFileDialog, QSplitter, QInputDialog, QStyleFactory,
-    QSizePolicy,
+    QSizePolicy, QMessageBox,
     )
 
 from dmlib.version import __version__
@@ -550,6 +550,7 @@ class Control(QMainWindow):
         layout.addWidget(brun, 2, 0)
         layout.addWidget(bstop, 2, 1)
         layout.addWidget(bwavelength, 2, 2)
+
         status = QLabel('')
         status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(status, 3, 0, 1, 3)
@@ -595,6 +596,7 @@ class Control(QMainWindow):
 
             if clear_status:
                 status.setText('')
+                status.setToolTip('')
                 self.dataacq_axes[0, 0].clear()
                 self.dataacq_axes[0, 1].clear()
                 self.dataacq_axes[1, 0].clear()
@@ -686,6 +688,7 @@ class Control(QMainWindow):
                     return False
                 else:
                     dataset.append(fileName)
+                    status.setToolTip(path.abspath(fileName))
                     return True
             else:
                 return True
@@ -896,6 +899,10 @@ class Control(QMainWindow):
                     else:
                         dataset.append(msg[1])
                     status.setText('Saved calibration data file ' + msg[1])
+                    QMessageBox.information(
+                            self, 'Saved calibration data file',
+                            path.abspath(msg[1]))
+                    status.setToolTip(path.abspath(msg[1]))
                     enable()
                 else:
                     status.setText(msg[0])
