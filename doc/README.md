@@ -158,24 +158,24 @@ export the calibration into a text file, see `export_calibration.py` in the
 Note that `dmlib` uses the conventions outlined below. Your code must apply the
 correct transformations to obtain the desired shape of the DM.
 
-- *z*; Zernike coefficients in rad relative to the calibration wavelength;
-  Use lambda/(2pi) to convert to nm;
-- *u*; [-1, 1]; control variable used by dmlib
-- *v*; [-1, 1]; linearised voltage used by dmlib
-- *r*; [rmin, rmax]; real voltage accepted by your DM driver
-- *dmtx*; linearisation function
-- *C*; DM control matrix
+- `z` Zernike coefficients in rad relative to the calibration wavelength;
+  Use wavelength/(2pi) to convert to nm;
+- `u` [-1, 1]; control variable used by dmlib;
+- `v` [-1, 1]; linearised voltage used by dmlib;
+- `r` [rmin, rmax]; real voltage accepted by your DM driver;
+- `dmtx` linearisation function;
+- `C` DM control matrix;
 
-For linear DMs, *dmtx* is simply *v = u*. For electrostatically actuated DMs the
+For linear DMs, `dmtx` is simply `v = u`. For electrostatically actuated DMs the
 displacement of a single actuator varies quadratically with respect to the
 applied voltage. This non-linearity can be approximately removed by using the
-square root of the voltage as the control variable *u*. So in this case *dmtx* is
-*2*sqrt((u + 1)/2) - 1*.
+square root of the voltage as the control variable `u`. So in this case `dmtx` is
+`dmtx(u) = 2*sqrt((u + 1)/2) - 1`.
 
-To compute the real voltage *r* to apply to the DM driver, use the equations below:
-- u = uflat + C*z
-- v = dmtx(u)
-- r = rmin + (rmax - rmin)*(v + 1)/2
+To compute the real voltage `r` to apply to the DM driver, use the equations below:
+- `u = uflat + C*z`
+- `v = dmtx(u)`
+- `r = rmin + (rmax - rmin)*(v + 1)/2`
 
 # References
 <a id="1">[1]</a> J. Antonello, J. Wang, C. He, M. Phillips, and M. Booth, "Interferometric calibration of a deformable mirror," [10.5281/zenodo.3714951](https://doi.org/10.5281/zenodo.3714951).
