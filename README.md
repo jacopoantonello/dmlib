@@ -78,8 +78,7 @@ GUI again without the `--help` flag.
 For example
 
 ```bash
-python -m dmlib.gui --dm-driver bmc --dm-name DM_SERIAL_NUMBER --cam-driver
-thorcam --cam-name CAM_SERIAL_NUMBER
+python -m dmlib.gui --dm-driver bmc --dm-name DM_SERIAL_NUMBER --cam-driver thorcam --cam-name CAM_SERIAL_NUMBER
 ```
 
 would run `dmlib.gui` using the Boston Multi-DM with serial number
