@@ -1008,8 +1008,8 @@ class Control(QMainWindow):
             'Interval between setting the DM and acquiring an image')
         bzsize = QPushButton('# Zernike')
         bzsize.setToolTip(
-            ('Maximum number of Zernike polynomials set by the DM (blue) ' +
-             'and measured by the interferometer (orange)'))
+            ('Select Zernike coefficients to plot; Blue set by the DM; ' +
+             'Orange measured by the interferometer'))
         layout.addWidget(brun, 2, 0)
         layout.addWidget(bstop, 2, 1)
         layout.addWidget(bsleep, 2, 2)
@@ -1276,7 +1276,7 @@ class Control(QMainWindow):
 
             return f
 
-        def fs2():
+        def fbzernike():
             def f():
                 val, ok = QInputDialog.getInt(self, 'Maximum Zernike index',
                                               'Maximum Zernike index',
@@ -1306,7 +1306,7 @@ class Control(QMainWindow):
         bzernike.clicked.connect(f2())
         bclear.clicked.connect(f3())
         bsleep.clicked.connect(fs1())
-        bzsize.clicked.connect(fs2())
+        bzsize.clicked.connect(fbzernike())
         bnoflat.clicked.connect(f5())
 
 
