@@ -22,21 +22,108 @@ from matplotlib.figure import Figure
 from numpy.linalg import norm
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QKeySequence
-from PyQt5.QtWidgets import (QApplication, QCheckBox, QDoubleSpinBox,
+from PyQt5.QtWidgets import (QApplication, QCheckBox, QDialog, QDoubleSpinBox,
                              QFileDialog, QFrame, QGridLayout, QGroupBox,
-                             QInputDialog, QLabel, QMainWindow, QMessageBox,
-                             QPushButton, QShortcut, QSizePolicy, QSplitter,
-                             QStyleFactory, QTabWidget, QToolBox, QVBoxLayout)
+                             QInputDialog, QLabel, QLineEdit, QMainWindow,
+                             QMessageBox, QPushButton, QShortcut, QSizePolicy,
+                             QSplitter, QStyleFactory, QTabWidget, QToolBox,
+                             QVBoxLayout)
 
 from dmlib.calibration import RegLSCalib, make_normalised_input_matrix
-from dmlib.control import ZernikeControl
+from dmlib.control import ZernikeControl, get_noll_indices
 from dmlib.core import (add_cam_parameters, add_dm_parameters,
                         add_log_parameters, hash_file, open_cam, open_dm,
                         setup_logging, write_h5_header)
 from dmlib.dmplot import DMPlot
 from dmlib.interf import FringeAnalysis
 from dmlib.version import __version__
-from dmlib.zpanel import ZernikePanel
+from dmlib.zpanel import MyQIntValidator, ZernikePanel
+
+
+class GetNollIndices(QDialog):
+    def update_noll(self):
+        indices = get_noll_indices(self.pars)
+        indices.sort()
+        self.indices = indices
+        self.lenoll.setText(','.join([str(s) for s in indices]))
+
+    def __init__(self, pars, max_zernike, parent=None):
+        super().__init__(parent)
+
+        self.pars = pars
+        self.max_zernike = max_zernike
+
+        lay = QGridLayout()
+        self.setLayout(lay)
+
+        lenoll = QLineEdit()
+        lenoll.setFixedWidth(300)
+        lenoll.setReadOnly(True)
+        self.lenoll = lenoll
+
+        def make_val_int(le, val, name):
+            def f():
+                newval = int(le.text())
+                self.pars[name] = newval
+                val.setFixup(newval)
+                self.update_noll()
+
+            return f
+
+        def help_int(le, name):
+            vv = MyQIntValidator()
+            vv.setFixup(int(self.pars[name]))
+            vv.setBottom(1)
+            vv.setTop(max_zernike)
+            le.setValidator(vv)
+            le.editingFinished.connect(make_val_int(le, vv, name))
+
+        def make_val_list(le, name):
+            def f():
+                old = self.pars[name]
+                try:
+                    tmp = [int(s) for s in le.text().split(',') if s != '']
+                    tmp = [s for s in tmp if s >= 1 and s <= max_zernike]
+                except Exception:
+                    tmp = old
+                self.pars[name] = tmp
+                le.blockSignals(True)
+                le.setText(', '.join([str(c) for c in tmp]))
+                le.blockSignals(False)
+                self.update_noll()
+
+            return f
+
+        def help_list(le, name):
+            le.setText(', '.join([str(c) for c in pars[name]]))
+            le.editingFinished.connect(make_val_list(le, name))
+
+        leinc = QLineEdit()
+        help_list(leinc, 'include')
+
+        leexc = QLineEdit()
+        help_list(leexc, 'exclude')
+
+        lemin = QLineEdit()
+        lemin.setText(str(pars['min']))
+        help_int(lemin, 'min')
+
+        lemax = QLineEdit()
+        lemax.setText(str(pars['max']))
+        help_int(lemax, 'max')
+
+        lay.addWidget(QLabel('Noll #'), 0, 0)
+        lay.addWidget(lenoll, 0, 1)
+        lay.addWidget(QLabel('include'), 1, 0)
+        lay.addWidget(leinc, 1, 1)
+        lay.addWidget(QLabel('exclude'), 2, 0)
+        lay.addWidget(leexc, 2, 1)
+        lay.addWidget(QLabel('min'), 3, 0)
+        lay.addWidget(lemin, 3, 1)
+        lay.addWidget(QLabel('max'), 4, 0)
+        lay.addWidget(lemax, 4, 1)
+
+        self.update_noll()
 
 
 class Control(QMainWindow):
@@ -1042,7 +1129,12 @@ class Control(QMainWindow):
         ]
         llistener = LoopListener(self.shared)
         calib = []
-        zsize = [1024]
+        noll_sel_pars = {
+            'min': 1,
+            'max': 15,
+            'include': [],
+            'exclude': [],
+        }
         arts = []
         noflat_index = [0]
 
@@ -1051,7 +1143,6 @@ class Control(QMainWindow):
                 c[1].remove()
             arts.clear()
             calib.clear()
-            zsize[0] = 1024
             if self.zernikePanel:
                 self.zernikePanel.close()
                 self.zernikePanel = None
@@ -1191,8 +1282,11 @@ class Control(QMainWindow):
             def f():
                 llistener.busy = True
 
-                nz = min((self.shared.z_size.value, zsize[0]))
-                zx = range(1, nz + 1)
+                noll_inds = get_noll_indices(noll_sel_pars) - 1
+                noll_inds.sort()
+                keep_inds = noll_inds < self.shared.z_size.value
+                noll_inds = noll_inds[keep_inds]
+                zx = noll_inds + 1
 
                 ax1 = self.test_axes[0, 0]
                 ax1.imshow(self.dmplot.compute_gauss(self.shared.u))
@@ -1204,9 +1298,10 @@ class Control(QMainWindow):
 
                 ax2 = self.test_axes[0, 1]
                 ax2.clear()
-                ax2.plot(zx, self.shared.z_sp[:nz], zx, self.shared.z_ms[:nz])
-                ax2.set_title('z {:.2f}'.format(
-                    norm(self.shared.z_sp[:nz] - self.shared.z_ms[:nz])))
+                noll_sp = self.shared.z_sp[noll_inds]
+                noll_ms = self.shared.z_ms[noll_inds]
+                ax2.plot(zx, noll_sp, zx, noll_ms, marker='.')
+                ax2.set_title(f'res rms {norm(noll_sp - noll_ms):.2f} [rad]')
 
                 phi_ms = self.shared.get_phase()[-1]
                 phi_er = self.shared.get_cl_data()[0]
@@ -1278,13 +1373,8 @@ class Control(QMainWindow):
 
         def fbzernike():
             def f():
-                val, ok = QInputDialog.getInt(self, 'Maximum Zernike index',
-                                              'Maximum Zernike index',
-                                              zsize[0], 1,
-                                              self.shared.z_sp.size)
-                if ok:
-                    if val > 1:
-                        zsize[0] = val
+                w = GetNollIndices(noll_sel_pars, self.shared.z_size.value - 1)
+                w.exec_()
 
             return f
 
