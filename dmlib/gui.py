@@ -1,51 +1,52 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import os
-import platform
-import sys
 import argparse
-import numpy as np
-import time
-import h5py
 import logging
 import multiprocessing
+import os
+import platform
 import subprocess
-
-from matplotlib import ticker
-from os import path
-from multiprocessing import Process, Queue, Array, Value
+import sys
+import time
 from datetime import datetime, timezone
-from numpy.linalg import norm
+from multiprocessing import Array, Process, Queue, Value
+from os import path
 
-from matplotlib.backends.backend_qt5agg import FigureCanvas
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
+import h5py
+import numpy as np
+from matplotlib import ticker
+from matplotlib.backends.backend_qt5agg import (FigureCanvas,
+                                                NavigationToolbar2QT)
 from matplotlib.figure import Figure
-
+from numpy.linalg import norm
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QKeySequence
-from PyQt5.QtWidgets import (
-    QMainWindow, QTabWidget, QLabel, QPushButton, QGroupBox, QGridLayout,
-    QCheckBox, QVBoxLayout, QFrame, QApplication, QShortcut, QDoubleSpinBox,
-    QToolBox, QFileDialog, QSplitter, QInputDialog, QStyleFactory,
-    QSizePolicy, QMessageBox,
-    )
+from PyQt5.QtWidgets import (QApplication, QCheckBox, QDoubleSpinBox,
+                             QFileDialog, QFrame, QGridLayout, QGroupBox,
+                             QInputDialog, QLabel, QMainWindow, QMessageBox,
+                             QPushButton, QShortcut, QSizePolicy, QSplitter,
+                             QStyleFactory, QTabWidget, QToolBox, QVBoxLayout)
 
-from dmlib.version import __version__
-from dmlib.dmplot import DMPlot
-from dmlib.zpanel import ZernikePanel
-from dmlib.interf import FringeAnalysis
 from dmlib.calibration import RegLSCalib, make_normalised_input_matrix
 from dmlib.control import ZernikeControl
-from dmlib.core import (
-    hash_file, write_h5_header, add_log_parameters, setup_logging,
-    add_dm_parameters, add_cam_parameters, open_dm, open_cam)
+from dmlib.core import (add_cam_parameters, add_dm_parameters,
+                        add_log_parameters, hash_file, open_cam, open_dm,
+                        setup_logging, write_h5_header)
+from dmlib.dmplot import DMPlot
+from dmlib.interf import FringeAnalysis
+from dmlib.version import __version__
+from dmlib.zpanel import ZernikePanel
 
 
 class Control(QMainWindow):
-
-    def __init__(
-            self, worker, shared, cam_name, dm_name, settings={}, parent=None):
+    def __init__(self,
+                 worker,
+                 shared,
+                 cam_name,
+                 dm_name,
+                 settings={},
+                 parent=None):
         super().__init__()
         self.log = logging.getLogger(self.__class__.__name__)
 
@@ -95,19 +96,21 @@ class Control(QMainWindow):
 
         def cam_get(cmd):
             def f():
-                self.shared.iq.put((cmd,))
+                self.shared.iq.put((cmd, ))
                 return self.shared.oq.get()
+
             return f
 
         def cam_set(cmd):
             def f(x):
                 self.shared.iq.put((cmd, x))
                 return self.shared.oq.get()
+
             return f
 
-        def up(l, s, txt, r, v):
+        def up(l1, s, txt, r, v):
             rg = r()
-            l.setText('min: {}<br>max: {}<br>step: {}'.format(
+            l1.setText('min: {}<br>max: {}<br>step: {}'.format(
                 rg[0], rg[1], rg[2]))
             s.setRange(rg[0], rg[1])
             s.setSingleStep(rg[2])
@@ -120,10 +123,8 @@ class Control(QMainWindow):
         l1 = QLabel()
         s1 = QDoubleSpinBox()
         s1.setDecimals(6)
-        up(
-            l1, s1, 'Exposure [ms]',
-            cam_get('get_exposure_range'),
-            cam_get('get_exposure'))
+        up(l1, s1, 'Exposure [ms]', cam_get('get_exposure_range'),
+           cam_get('get_exposure'))
         gl1.addWidget(l1)
         gl1.addWidget(s1)
         g1.setLayout(gl1)
@@ -134,10 +135,8 @@ class Control(QMainWindow):
         l2 = QLabel()
         s2 = QDoubleSpinBox()
         s2.setDecimals(6)
-        up(
-            l2, s2, 'FPS',
-            cam_get('get_framerate_range'),
-            cam_get('get_framerate'))
+        up(l2, s2, 'FPS', cam_get('get_framerate_range'),
+           cam_get('get_framerate'))
         gl2.addWidget(l2)
         gl2.addWidget(s2)
         g2.setLayout(gl2)
@@ -156,14 +155,12 @@ class Control(QMainWindow):
 
             return f
 
-        s1.editingFinished.connect(f1(
-            cam_set('set_exposure'), s1, l2, s2, 'FPS',
-            cam_get('get_framerate_range'),
-            cam_get('get_framerate')))
-        s2.editingFinished.connect(f1(
-            cam_set('set_framerate'), s2, l1, s1, 'exposure',
-            cam_get('get_exposure_range'),
-            cam_get('get_exposure')))
+        s1.editingFinished.connect(
+            f1(cam_set('set_exposure'), s1, l2, s2, 'FPS',
+               cam_get('get_framerate_range'), cam_get('get_framerate')))
+        s2.editingFinished.connect(
+            f1(cam_set('set_framerate'), s2, l1, s1, 'exposure',
+               cam_get('get_exposure_range'), cam_get('get_exposure')))
 
         self.toolbox.addItem(tool_cam, 'cam: ' + self.cam_name)
 
@@ -175,7 +172,7 @@ class Control(QMainWindow):
         if u is not None:
             self.shared.u[:] = u[:]
         self.update_dm_gui()
-        self.shared.iq.put(('write',))
+        self.shared.iq.put(('write', ))
         self.shared.oq.get()
 
     def make_tool_dm(self):
@@ -187,12 +184,14 @@ class Control(QMainWindow):
         self.dm_ax = self.dm_fig.figure.add_subplot(1, 1, 1)
         central.addWidget(self.dm_fig)
         self.dmplot = DMPlot()
-        self.dmplot.install_select_callback(
-            self.dm_ax, self.shared.u, self, self.write_dm)
-        self.dm_fig.figure.subplots_adjust(
-            left=.125, right=.9,
-            bottom=.1, top=.9,
-            wspace=0.45, hspace=0.45)
+        self.dmplot.install_select_callback(self.dm_ax, self.shared.u, self,
+                                            self.write_dm)
+        self.dm_fig.figure.subplots_adjust(left=.125,
+                                           right=.9,
+                                           bottom=.1,
+                                           top=.9,
+                                           wspace=0.45,
+                                           hspace=0.45)
 
         g1 = QGroupBox('Plot transforms')
         gl1 = QGridLayout()
@@ -214,6 +213,7 @@ class Control(QMainWindow):
                 self.shared.iq.put(('preset', n, 0.8))
                 self.shared.oq.get()
                 self.write_dm(None)
+
             return f
 
         g2 = QGroupBox('Actuators')
@@ -242,32 +242,36 @@ class Control(QMainWindow):
             def f():
                 self.shared.u[:] = 0
                 self.write_dm()
+
             return f
 
         def f3():
             def f():
-                val, ok = QInputDialog.getDouble(
-                    self, 'Set all actuators', 'range [-1, 1]',
-                    0., -1., 1., 4)
+                val, ok = QInputDialog.getDouble(self, 'Set all actuators',
+                                                 'range [-1, 1]', 0., -1., 1.,
+                                                 4)
                 if ok:
                     self.shared.u[:] = val
                     self.write_dm()
+
             return f
 
         def f4():
             def f():
                 fileName, _ = QFileDialog.getOpenFileName(
-                    self, 'Select factory flat file',
+                    self,
+                    'Select factory flat file',
                     filter='TXT (*.txt);;All Files (*)')
                 if fileName:
                     try:
                         uflat = np.loadtxt(fileName, delimiter='\n')
-                        uflat = 2*(uflat**2) - 1
-                        assert(self.shared.u.size == uflat.size)
+                        uflat = 2 * (uflat**2) - 1
+                        assert (self.shared.u.size == uflat.size)
                         self.shared.u[:] = uflat
                         self.write_dm()
                     except Exception:
                         pass
+
             return f
 
         reset.clicked.connect(f2())
@@ -282,12 +286,14 @@ class Control(QMainWindow):
                 ind[0] %= 4
                 self.dmplot.rotate(ind[0])
                 self.update_dm_gui()
+
             return f
 
         def f4(cb, b):
             def f():
                 cb(b.isChecked())
                 self.update_dm_gui()
+
             return f
 
         flipx.setCheckable(True)
@@ -320,10 +326,12 @@ class Control(QMainWindow):
             'Align the DM, test actuators, and change the DM plot orientation')
 
         self.align_axes = self.align_fig.figure.subplots(2, 3)
-        self.align_fig.figure.subplots_adjust(
-            left=.125, right=.9,
-            bottom=.1, top=.9,
-            wspace=0.45, hspace=0.45)
+        self.align_fig.figure.subplots_adjust(left=.125,
+                                              right=.9,
+                                              bottom=.1,
+                                              top=.9,
+                                              wspace=0.45,
+                                              hspace=0.45)
         self.align_axes[0, 0].set_title('camera')
         self.align_axes[0, 1].set_title('FT')
         self.align_axes[0, 2].set_title('1st order')
@@ -364,7 +372,8 @@ class Control(QMainWindow):
 
         disables = [
             self.toolbox, brun, bauto, brepeat, bpoke, bsleep, bunwrap,
-            self.align_nav]
+            self.align_nav
+        ]
 
         def disable():
             self.can_close = False
@@ -384,21 +393,27 @@ class Control(QMainWindow):
 
         def f1():
             def f():
-                val, ok = QInputDialog.getDouble(
-                    self, 'Delay', 'write/read delay [s]',
-                    listener.sleep, .5, decimals=4)
+                val, ok = QInputDialog.getDouble(self,
+                                                 'Delay',
+                                                 'write/read delay [s]',
+                                                 listener.sleep,
+                                                 .5,
+                                                 decimals=4)
                 if ok:
                     listener.sleep = val
+
             return f
 
         def f2():
             def f(p):
                 listener.poke = p
+
             return f
 
         def f3():
             def f(p):
                 listener.unwrap = p
+
             return f
 
         bsleep.clicked.connect(f1())
@@ -411,16 +426,19 @@ class Control(QMainWindow):
                 status.setText('Working...')
                 listener.repeat = brepeat.isChecked()
                 listener.start()
+
             return f
 
         def f2():
             def f():
                 listener.auto = not listener.auto
+
             return f
 
         def f3():
             def f(p):
                 listener.repeat = p
+
             return f
 
         def f4():
@@ -428,6 +446,7 @@ class Control(QMainWindow):
                 listener.repeat = False
                 if not listener.isFinished():
                     status.setText('Stopping...')
+
             return f
 
         def f20():
@@ -447,9 +466,9 @@ class Control(QMainWindow):
                 a6.clear()
 
                 if result[0] != 'ERR1':
-                    a1.imshow(
-                        self.shared.cam, extent=self.shared.cam_ext,
-                        origin='lower')
+                    a1.imshow(self.shared.cam,
+                              extent=self.shared.cam_ext,
+                              origin='lower')
                     a1.set_xlabel('mm')
                     if self.shared.cam_sat.value:
                         a1.set_title('cam SAT')
@@ -458,41 +477,45 @@ class Control(QMainWindow):
                             self.shared.cam.min(), self.shared.cam.max()))
 
                 if listener.unwrap and result[0] not in ('ERR1', 'ERR2'):
-                    a2.imshow(
-                        self.shared.ft, extent=self.shared.ft_ext,
-                        origin='lower')
+                    a2.imshow(self.shared.ft,
+                              extent=self.shared.ft_ext,
+                              origin='lower')
                     a2.set_xlabel('1/mm')
                     a2.set_title('FT')
 
-                    a2.plot(
-                        self.shared.fxcfyc[0]*1e3, self.shared.fxcfyc[1]*1e3,
-                        'rx', markersize=6)
+                    a2.plot(self.shared.fxcfyc[0] * 1e3,
+                            self.shared.fxcfyc[1] * 1e3,
+                            'rx',
+                            markersize=6)
 
-                    a2.plot(
-                        -self.shared.fxcfyc[0]*1e3, -self.shared.fxcfyc[1]*1e3,
-                        'rx', markersize=6)
+                    a2.plot(-self.shared.fxcfyc[0] * 1e3,
+                            -self.shared.fxcfyc[1] * 1e3,
+                            'rx',
+                            markersize=6)
 
-                if listener.unwrap and result[0] not in (
-                        'ERR1', 'ERR2', 'ERR3'):
+                if listener.unwrap and result[0] not in ('ERR1', 'ERR2',
+                                                         'ERR3'):
                     fstord, mag, wrapped, unwrapped = self.shared.get_phase()
 
-                    a3.imshow(
-                        fstord, extent=self.shared.fstord_ext, origin='lower')
+                    a3.imshow(fstord,
+                              extent=self.shared.fstord_ext,
+                              origin='lower')
                     a3.set_xlabel('1/mm')
                     a3.set_title('1st order')
 
-                    a4.imshow(
-                        mag, extent=self.shared.mag_ext, origin='lower')
+                    a4.imshow(mag, extent=self.shared.mag_ext, origin='lower')
                     a4.set_xlabel('mm')
                     a4.set_title('magnitude')
 
-                    a5.imshow(
-                        wrapped, extent=self.shared.mag_ext, origin='lower')
+                    a5.imshow(wrapped,
+                              extent=self.shared.mag_ext,
+                              origin='lower')
                     a5.set_xlabel('mm')
                     a5.set_title('wrapped phi')
 
-                    a6.imshow(
-                        unwrapped, extent=self.shared.mag_ext, origin='lower')
+                    a6.imshow(unwrapped,
+                              extent=self.shared.mag_ext,
+                              origin='lower')
                     a6.set_xlabel('mm')
                     a6.set_title('unwrapped phi')
 
@@ -533,10 +556,12 @@ class Control(QMainWindow):
                 'and compute calibrations'))
 
         self.dataacq_axes = self.dataacq_fig.figure.subplots(2, 2)
-        self.dataacq_fig.figure.subplots_adjust(
-            left=.125, right=.9,
-            bottom=.1, top=.9,
-            wspace=0.45, hspace=0.45)
+        self.dataacq_fig.figure.subplots_adjust(left=.125,
+                                                right=.9,
+                                                bottom=.1,
+                                                top=.9,
+                                                wspace=0.45,
+                                                hspace=0.45)
         self.dataacq_axes[0, 0].set_title('camera')
         self.dataacq_axes[0, 1].set_title('dm')
         self.dataacq_axes[1, 0].set_title('wrapped phi')
@@ -577,8 +602,9 @@ class Control(QMainWindow):
         layout.addWidget(bclear, 5, 2)
 
         disables = [
-            self.toolbox, brun, bwavelength, bplot, self.dataacq_nav,
-            bprev, bnext, baperture, bcalibrate, bclear]
+            self.toolbox, brun, bwavelength, bplot, self.dataacq_nav, bprev,
+            bnext, baperture, bcalibrate, bclear
+        ]
 
         wavelength = []
         dataset = []
@@ -625,13 +651,17 @@ class Control(QMainWindow):
                     wl = wavelength[0]
                 else:
                     wl = 775.
-                val, ok = QInputDialog.getDouble(
-                    self, 'Wavelength', 'wavelength [nm]', wl, decimals=1)
+                val, ok = QInputDialog.getDouble(self,
+                                                 'Wavelength',
+                                                 'wavelength [nm]',
+                                                 wl,
+                                                 decimals=1)
                 if ok:
                     if wavelength:
                         wavelength[0] = val
                     else:
                         wavelength.append(val)
+
             return f
 
         def f1():
@@ -652,23 +682,33 @@ class Control(QMainWindow):
 
                 listener.run = True
                 listener.start()
+
             return f
 
         def check_err():
             reply = self.shared.oq.get()
             if reply[0].startswith('Camera must be'):
                 try:
-                    newinst = path.join(
-                        path.dirname(path.abspath(__file__)),
-                        'gui.py')
+                    newinst = path.join(path.dirname(path.abspath(__file__)),
+                                        'gui.py')
                     subprocess.Popen([
-                        sys.executable, newinst,
-                        '--cam-driver', 'sim', '--cam-name', 'simcam0',
-                        '--dm-driver', 'sim', '--dm-name', 'simdm0',
-                        '--sim-cam-shape', str(reply[1][0]), str(reply[1][1]),
-                        '--sim-cam-pix-size', str(reply[2][0]),
+                        sys.executable,
+                        newinst,
+                        '--cam-driver',
+                        'sim',
+                        '--cam-name',
+                        'simcam0',
+                        '--dm-driver',
+                        'sim',
+                        '--dm-name',
+                        'simdm0',
+                        '--sim-cam-shape',
+                        str(reply[1][0]),
+                        str(reply[1][1]),
+                        '--sim-cam-pix-size',
+                        str(reply[2][0]),
                         str(reply[2][1]),
-                        ])
+                    ])
                 except Exception as e:
                     self.log.error(str(e))
                 status.setText(reply[0])
@@ -682,8 +722,7 @@ class Control(QMainWindow):
         def bootstrap():
             if not dataset:
                 fileName, _ = QFileDialog.getOpenFileName(
-                    self, 'Select dataset',
-                    filter='H5 (*.h5);;All Files (*)')
+                    self, 'Select dataset', filter='H5 (*.h5);;All Files (*)')
                 if not fileName:
                     return False
                 else:
@@ -694,7 +733,7 @@ class Control(QMainWindow):
                 return True
 
         def f3(offset=None):
-            theta = np.linspace(0, 2*np.pi, 96)
+            theta = np.linspace(0, 2 * np.pi, 96)
 
             def f():
                 if not bootstrap():
@@ -716,8 +755,8 @@ class Control(QMainWindow):
                 if offset is None or not lastind:
                     val, ok = QInputDialog.getInt(
                         self, 'Select an index to plot',
-                        'time step [{}, {}]'.format(0, ndata[0] - 1),
-                        last, 0, ndata[0] - 1)
+                        'time step [{}, {}]'.format(0, ndata[0] - 1), last, 0,
+                        ndata[0] - 1)
                     if not ok:
                         return
                 else:
@@ -746,9 +785,9 @@ class Control(QMainWindow):
                 a3.clear()
                 a4.clear()
 
-                a1.imshow(
-                    self.shared.cam, extent=self.shared.cam_ext,
-                    origin='lower')
+                a1.imshow(self.shared.cam,
+                          extent=self.shared.cam_ext,
+                          origin='lower')
                 a1.set_xlabel('mm')
                 if self.shared.cam_sat.value:
                     a1.set_title('cam SAT')
@@ -763,29 +802,29 @@ class Control(QMainWindow):
                 a2.axis('off')
                 a2.set_title('dm')
 
-                a3.imshow(
-                    wrapped, extent=self.shared.mag_ext,
-                    origin='lower')
+                a3.imshow(wrapped, extent=self.shared.mag_ext, origin='lower')
                 a3.set_xlabel('mm')
                 a3.set_title('wrapped phi')
 
-                a4.imshow(
-                    unwrapped, extent=self.shared.mag_ext,
-                    origin='lower')
+                a4.imshow(unwrapped,
+                          extent=self.shared.mag_ext,
+                          origin='lower')
                 a4.set_xlabel('mm')
                 a4.set_title('unwrapped phi')
                 if centre[0] is not None:
-                    a4.plot(centre[0][0]/1000, centre[0][1]/1000, 'rx')
+                    a4.plot(centre[0][0] / 1000, centre[0][1] / 1000, 'rx')
                 if radius[0] > 0. and centre[0] is not None:
                     a4.plot(
-                        centre[0][0]/1000 + radius[0]/1000*np.cos(theta),
-                        centre[0][1]/1000 + radius[0]/1000*np.sin(theta), 'r')
+                        centre[0][0] / 1000 + radius[0] / 1000 * np.cos(theta),
+                        centre[0][1] / 1000 + radius[0] / 1000 * np.sin(theta),
+                        'r')
 
                 a4.figure.canvas.draw()
 
                 # self.update_dm_gui()
-                status.setText('{} {}/{}'.format(
-                    dataset[0], val, ndata[0] - 1))
+                status.setText('{} {}/{}'.format(dataset[0], val,
+                                                 ndata[0] - 1))
+
             return f
 
         def f4():
@@ -796,26 +835,26 @@ class Control(QMainWindow):
                     return False
 
                 if radius:
-                    rad = radius[0]/1000
+                    rad = radius[0] / 1000
                 else:
                     rad = 2.1
 
                 if self.shared.cam_ext[1] > 0:
-                    radmax = min((
-                        self.shared.cam_ext[1], self.shared.cam_ext[3]))
+                    radmax = min(
+                        (self.shared.cam_ext[1], self.shared.cam_ext[3]))
                 else:
                     radmax = 10.
 
                 val, ok = QInputDialog.getDouble(
-                        self, 'Aperture radius',
-                        f'Radius [mm] (max {radmax:.3f} mm)<br>' +
-                        'As seen by the camera (including magnification)',
-                        rad, 0., radmax, 6)
+                    self, 'Aperture radius',
+                    f'Radius [mm] (max {radmax:.3f} mm)<br>' +
+                    'As seen by the camera (including magnification)', rad, 0.,
+                    radmax, 6)
                 if ok and val >= 0.:
                     if radius:
-                        radius[0] = val*1000
+                        radius[0] = val * 1000
                     else:
-                        radius.append(val*1000)
+                        radius.append(val * 1000)
 
                     self.shared.iq.put(('aperture', dataset[0], radius[0]))
                     ndata = check_err()
@@ -840,6 +879,7 @@ class Control(QMainWindow):
                 if reply[0] == 'OK' or reply[0] == 'ERR':
                     enable()
                     bstop.setEnabled(True)
+
             return f
 
         clistener.sig_update.connect(f6())
@@ -870,6 +910,7 @@ class Control(QMainWindow):
                 listener.run = False
                 if not listener.isFinished():
                     status.setText('stopping...')
+
             return f
 
         def f20():
@@ -881,9 +922,9 @@ class Control(QMainWindow):
 
                 a1.clear()
 
-                a1.imshow(
-                    self.shared.cam, extent=self.shared.cam_ext,
-                    origin='lower')
+                a1.imshow(self.shared.cam,
+                          extent=self.shared.cam_ext,
+                          origin='lower')
                 a1.set_xlabel('mm')
                 if self.shared.cam_sat.value:
                     a1.set_title('cam SAT')
@@ -899,9 +940,9 @@ class Control(QMainWindow):
                     else:
                         dataset.append(msg[1])
                     status.setText('Saved calibration data file ' + msg[1])
-                    QMessageBox.information(
-                            self, 'Saved calibration data file',
-                            path.abspath(msg[1]))
+                    QMessageBox.information(self,
+                                            'Saved calibration data file',
+                                            path.abspath(msg[1]))
                     status.setToolTip(path.abspath(msg[1]))
                     enable()
                 else:
@@ -920,6 +961,7 @@ class Control(QMainWindow):
         def f7():
             def f():
                 clearup(True)
+
             return f
 
         brun.clicked.connect(f1())
@@ -948,10 +990,12 @@ class Control(QMainWindow):
             2, ('Test a calibration file interferometrically'))
 
         self.test_axes = self.test_fig.figure.subplots(2, 2)
-        self.test_fig.figure.subplots_adjust(
-            left=.125, right=.9,
-            bottom=.1, top=.9,
-            wspace=0.45, hspace=0.45)
+        self.test_fig.figure.subplots_adjust(left=.125,
+                                             right=.9,
+                                             bottom=.1,
+                                             top=.9,
+                                             wspace=0.45,
+                                             hspace=0.45)
         self.test_axes[0, 0].set_title('dm')
         self.test_axes[0, 1].set_title('Zernike')
         self.test_axes[1, 0].set_title('phi meas')
@@ -963,9 +1007,9 @@ class Control(QMainWindow):
         bsleep.setToolTip(
             'Interval between setting the DM and acquiring an image')
         bzsize = QPushButton('# Zernike')
-        bzsize.setToolTip((
-            'Maximum number of Zernike polynomials set by the DM (blue) ' +
-            'and measured by the interferometer (orange)'))
+        bzsize.setToolTip(
+            ('Maximum number of Zernike polynomials set by the DM (blue) ' +
+             'and measured by the interferometer (orange)'))
         layout.addWidget(brun, 2, 0)
         layout.addWidget(bstop, 2, 1)
         layout.addWidget(bsleep, 2, 2)
@@ -982,8 +1026,7 @@ class Control(QMainWindow):
         bnoflat = QPushButton('exclude flat')
         bnoflat.setToolTip('Exclude some Zernike modes from the flattening')
         bflat.setChecked(True)
-        bflat.setToolTip(
-            'Apply the flat value computed at calibration time')
+        bflat.setToolTip('Apply the flat value computed at calibration time')
         layout.addWidget(bflat, 4, 1)
         layout.addWidget(bnoflat, 5, 1)
         bloop = QCheckBox('closed-loop')
@@ -995,7 +1038,8 @@ class Control(QMainWindow):
 
         disables = [
             self.toolbox, brun, bflat, bnoflat, bzernike, bclear,
-            self.test_nav, bzernike, bsleep, bzsize]
+            self.test_nav, bzernike, bsleep, bzsize
+        ]
         llistener = LoopListener(self.shared)
         calib = []
         zsize = [1024]
@@ -1040,17 +1084,26 @@ class Control(QMainWindow):
             reply = self.shared.oq.get()
             if reply[0].startswith('Camera must be'):
                 try:
-                    newinst = path.join(
-                        path.dirname(path.abspath(__file__)),
-                        'gui.py')
+                    newinst = path.join(path.dirname(path.abspath(__file__)),
+                                        'gui.py')
                     subprocess.Popen([
-                        sys.executable, newinst,
-                        '--cam-driver', 'sim', '--cam-name', 'simcam0',
-                        '--dm-driver', 'sim', '--dm-name', 'simdm0',
-                        '--sim-cam-shape', str(reply[1][0]), str(reply[1][1]),
-                        '--sim-cam-pix-size', str(reply[2][0]),
+                        sys.executable,
+                        newinst,
+                        '--cam-driver',
+                        'sim',
+                        '--cam-name',
+                        'simcam0',
+                        '--dm-driver',
+                        'sim',
+                        '--dm-name',
+                        'simdm0',
+                        '--sim-cam-shape',
+                        str(reply[1][0]),
+                        str(reply[1][1]),
+                        '--sim-cam-pix-size',
+                        str(reply[2][0]),
                         str(reply[2][1]),
-                        ])
+                    ])
                 except Exception as e:
                     self.log.error(str(e))
                 status.setText(reply[0])
@@ -1064,7 +1117,8 @@ class Control(QMainWindow):
         def bootstrap():
             if not calib:
                 fileName, _ = QFileDialog.getOpenFileName(
-                    self, 'Select a calibration',
+                    self,
+                    'Select a calibration',
                     filter='H5 (*.h5);;All Files (*)')
                 if not fileName:
                     return False
@@ -1097,18 +1151,21 @@ class Control(QMainWindow):
                     self.dmplot.update_txs(ndata[3])
                     if self.zernikePanel:
                         self.zernikePanel.close()
-                    self.zernikePanel = ZernikePanel(
-                        ndata[0], ndata[1], callback=cb)
+                    self.zernikePanel = ZernikePanel(ndata[0],
+                                                     ndata[1],
+                                                     callback=cb)
                     self.zernikePanel.show()
                     status.setText('{} {:.3f} mm'.format(
-                        calib[0], ndata[2]/1000))
+                        calib[0], ndata[2] / 1000))
                     enable()
                     return True
+
             return f
 
         def f3():
             def f():
                 clearup(True)
+
             return f
 
         def f1():
@@ -1127,6 +1184,7 @@ class Control(QMainWindow):
                 llistener.noflat_index = noflat_index[0]
                 llistener.closed_loop = bloop.isChecked()
                 llistener.start()
+
             return f
 
         def make_cb():
@@ -1146,17 +1204,18 @@ class Control(QMainWindow):
 
                 ax2 = self.test_axes[0, 1]
                 ax2.clear()
-                ax2.plot(zx, self.shared.z_sp[:nz], zx,  self.shared.z_ms[:nz])
-                ax2.set_title('z {:.2f}'.format(norm(
-                    self.shared.z_sp[:nz] - self.shared.z_ms[:nz])))
+                ax2.plot(zx, self.shared.z_sp[:nz], zx, self.shared.z_ms[:nz])
+                ax2.set_title('z {:.2f}'.format(
+                    norm(self.shared.z_sp[:nz] - self.shared.z_ms[:nz])))
 
                 phi_ms = self.shared.get_phase()[-1]
                 phi_er = self.shared.get_cl_data()[0]
 
                 if len(arts) != 2:
                     ax3 = self.test_axes[1, 0]
-                    im = ax3.imshow(
-                        phi_ms, extent=self.shared.mag_ext, origin='lower')
+                    im = ax3.imshow(phi_ms,
+                                    extent=self.shared.mag_ext,
+                                    origin='lower')
                     ax3.set_xlabel('mm')
                     ax3.set_title('phi meas')
                     cb = ax3.figure.colorbar(im, ax=ax3)
@@ -1172,8 +1231,9 @@ class Control(QMainWindow):
 
                 if len(arts) != 2:
                     ax4 = self.test_axes[1, 1]
-                    im = ax4.imshow(
-                        phi_er, extent=self.shared.mag_ext, origin='lower')
+                    im = ax4.imshow(phi_er,
+                                    extent=self.shared.mag_ext,
+                                    origin='lower')
                     ax4.set_xlabel('mm')
                     ax4.set_title('phi err')
                     cb = ax4.figure.colorbar(im, ax=ax4)
@@ -1192,33 +1252,40 @@ class Control(QMainWindow):
                 ax1.figure.canvas.draw()
 
                 llistener.busy = False
+
             return f
 
         def f4():
             def f():
                 llistener.run = False
                 enable()
+
             return f
 
         llistener.sig_update.connect(make_cb())
 
         def fs1():
             def f():
-                val, ok = QInputDialog.getDouble(
-                    self, 'Delay', 'write/read delay [s]',
-                    llistener.sleep, decimals=4)
+                val, ok = QInputDialog.getDouble(self,
+                                                 'Delay',
+                                                 'write/read delay [s]',
+                                                 llistener.sleep,
+                                                 decimals=4)
                 if ok:
                     llistener.sleep = val
+
             return f
 
         def fs2():
             def f():
-                val, ok = QInputDialog.getInt(
-                    self, 'Maximum Zernike index', 'Maximum Zernike index',
-                    zsize[0], 1, self.shared.z_sp.size)
+                val, ok = QInputDialog.getInt(self, 'Maximum Zernike index',
+                                              'Maximum Zernike index',
+                                              zsize[0], 1,
+                                              self.shared.z_sp.size)
                 if ok:
                     if val > 1:
                         zsize[0] = val
+
             return f
 
         def f5():
@@ -1231,6 +1298,7 @@ class Control(QMainWindow):
                     return
                 else:
                     noflat_index[0] = val
+
             return f
 
         brun.clicked.connect(f1())
@@ -1244,6 +1312,7 @@ class Control(QMainWindow):
 
 # https://stackoverflow.com/questions/41794635/
 # https://stackoverflow.com/questions/38666078/
+
 
 class AlignListener(QThread):
 
@@ -1260,9 +1329,8 @@ class AlignListener(QThread):
         self.log = logging.getLogger('AlignListener')
 
     def run(self):
-        self.shared.iq.put((
-            'align', self.auto, self.repeat, self.poke, self.sleep,
-            self.unwrap))
+        self.shared.iq.put(('align', self.auto, self.repeat, self.poke,
+                            self.sleep, self.unwrap))
         while True:
             result = self.shared.oq.get()
             self.sig_update.emit(result)
@@ -1316,7 +1384,7 @@ class DataAcqListener(QThread):
                 self.shared.iq.put(('stopcmd', not self.run))
                 self.shared.oq.get()
                 if not self.run:
-                    self.sig_update.emit(('stopped',))
+                    self.sig_update.emit(('stopped', ))
                     self.log.info('dies')
                     return
                 elif not self.busy:
@@ -1344,16 +1412,15 @@ class LoopListener(QThread):
         self.log = logging.getLogger('LoopListener')
 
     def run(self):
-        self.shared.iq.put((
-            'loop', self.calib, self.flat, self.noflat_index,
-            self.closed_loop, self.sleep))
+        self.shared.iq.put(('loop', self.calib, self.flat, self.noflat_index,
+                            self.closed_loop, self.sleep))
         while True:
             result = self.shared.oq.get()
             if result[0] == 'OK':
                 self.shared.iq.put(('stopcmd', not self.run))
                 self.shared.oq.get()
                 if not self.run:
-                    self.sig_update.emit(('stopped',))
+                    self.sig_update.emit(('stopped', ))
                     self.log.info('dies')
                     return
                 elif not self.busy:
@@ -1367,14 +1434,13 @@ class LoopListener(QThread):
 
 
 class Shared:
-
     def __init__(self, cam, dm):
         dbl_dtsize = np.dtype('float').itemsize
         cam_dtsize = np.dtype(cam.get_image_dtype()).itemsize
         cam_shape = cam.shape()
-        totpixs = cam_shape[0]*cam_shape[1]
+        totpixs = cam_shape[0] * cam_shape[1]
 
-        self.cam_buf = Array('c', cam_dtsize*totpixs, lock=False)
+        self.cam_buf = Array('c', cam_dtsize * totpixs, lock=False)
         self.cam_ext = Array('d', 4, lock=False)
         self.cam_sat = Value('i', lock=False)
         self.dm_sat = Value('i', lock=False)
@@ -1385,14 +1451,14 @@ class Shared:
 
         self.fxcfyc = Array('d', 2, lock=False)
 
-        self.fstord_buf = Array('c', dbl_dtsize*totpixs, lock=False)
+        self.fstord_buf = Array('c', dbl_dtsize * totpixs, lock=False)
         self.fstord_ext = Array('d', 4, lock=False)
         self.fstord_shape = Array('i', 2, lock=False)
 
-        self.mag_buf = Array('c', dbl_dtsize*totpixs, lock=False)
-        self.wrapped_buf = Array('c', dbl_dtsize*totpixs, lock=False)
-        self.unwrapped_buf = Array('c', dbl_dtsize*totpixs, lock=False)
-        self.phi_err_buf = Array('c', dbl_dtsize*totpixs, lock=False)
+        self.mag_buf = Array('c', dbl_dtsize * totpixs, lock=False)
+        self.wrapped_buf = Array('c', dbl_dtsize * totpixs, lock=False)
+        self.unwrapped_buf = Array('c', dbl_dtsize * totpixs, lock=False)
+        self.phi_err_buf = Array('c', dbl_dtsize * totpixs, lock=False)
         self.mag_ext = Array('d', 4, lock=False)
         self.mag_shape = Array('i', 2, lock=False)
 
@@ -1413,28 +1479,27 @@ class Shared:
         self.z_sp = np.frombuffer(self.z_sp_buf, np.float)
         self.z_ms = np.frombuffer(self.z_ms_buf, np.float)
         self.z_er = np.frombuffer(self.z_er_buf, np.float)
-        self.cam = np.frombuffer(
-            self.cam_buf, self.cam_dtype).reshape(self.cam_shape)
-        self.ft = np.frombuffer(
-            self.ft_buf, np.float).reshape(self.cam_shape)
+        self.cam = np.frombuffer(self.cam_buf,
+                                 self.cam_dtype).reshape(self.cam_shape)
+        self.ft = np.frombuffer(self.ft_buf, np.float).reshape(self.cam_shape)
 
     def get_phase(self):
-        nsum1 = self.fstord_shape[0]*self.fstord_shape[1]
-        fstord = np.frombuffer(
-            self.fstord_buf, np.float, count=nsum1).reshape(self.fstord_shape)
-        nsum2 = self.mag_shape[0]*self.mag_shape[1]
-        mag = np.frombuffer(
-            self.mag_buf, np.float, count=nsum2).reshape(self.mag_shape)
-        wrapped = np.frombuffer(
-            self.wrapped_buf, np.float, count=nsum2).reshape(self.mag_shape)
-        unwrapped = np.frombuffer(
-            self.unwrapped_buf, np.float, count=nsum2).reshape(self.mag_shape)
+        nsum1 = self.fstord_shape[0] * self.fstord_shape[1]
+        fstord = np.frombuffer(self.fstord_buf, np.float,
+                               count=nsum1).reshape(self.fstord_shape)
+        nsum2 = self.mag_shape[0] * self.mag_shape[1]
+        mag = np.frombuffer(self.mag_buf, np.float,
+                            count=nsum2).reshape(self.mag_shape)
+        wrapped = np.frombuffer(self.wrapped_buf, np.float,
+                                count=nsum2).reshape(self.mag_shape)
+        unwrapped = np.frombuffer(self.unwrapped_buf, np.float,
+                                  count=nsum2).reshape(self.mag_shape)
         return fstord, mag, wrapped, unwrapped
 
     def get_cl_data(self):
-        nsum2 = self.mag_shape[0]*self.mag_shape[1]
-        phi_err = np.frombuffer(
-            self.phi_err_buf, np.float, count=nsum2).reshape(self.mag_shape)
+        nsum2 = self.mag_shape[0] * self.mag_shape[1]
+        phi_err = np.frombuffer(self.phi_err_buf, np.float,
+                                count=nsum2).reshape(self.mag_shape)
         return phi_err,
 
 
@@ -1444,7 +1509,6 @@ def run_worker(shared, args):
 
 
 class Worker:
-
     def __init__(self, shared, args):
         setup_logging(args)
 
@@ -1466,8 +1530,8 @@ class Worker:
 
         fringe = FringeAnalysis(cam.shape(), cam.get_pixel_size())
         for i in range(4):
-            shared.cam_ext[i] = fringe.cam_grid[2][i]/1000
-            shared.ft_ext[i] = fringe.ft_grid[2][i]*1000
+            shared.cam_ext[i] = fringe.cam_grid[2][i] / 1000
+            shared.ft_ext[i] = fringe.ft_grid[2][i] * 1000
 
         self.cam = cam
         self.dm = dm
@@ -1534,7 +1598,7 @@ class Worker:
         fringe = self.fringe
 
         while True:
-            state = ('OK',)
+            state = ('OK', )
 
             if poke:
                 shared.u[:] = 0.
@@ -1560,11 +1624,14 @@ class Worker:
                     time.sleep(sleep)
             elif state[0] == 'OK' and unwrap:
                 try:
-                    fringe.analyse(
-                        img, auto_find_orders=auto, store_logf2=True,
-                        store_logf3=True, store_mag=True,
-                        store_wrapped=True, do_unwrap=unwrap,
-                        use_mask=False)
+                    fringe.analyse(img,
+                                   auto_find_orders=auto,
+                                   store_logf2=True,
+                                   store_logf3=True,
+                                   store_mag=True,
+                                   store_wrapped=True,
+                                   do_unwrap=unwrap,
+                                   use_mask=False)
                 except Exception:
                     state = ('ERR2', 'RETRY', 'Failed to detect first orders')
 
@@ -1575,12 +1642,12 @@ class Worker:
 
                     self.fill(shared.fstord_buf, fringe.logf3)
                     for i in range(4):
-                        shared.fstord_ext[i] = fringe.ext3[i]*1000
+                        shared.fstord_ext[i] = fringe.ext3[i] * 1000
                     shared.fstord_shape[:] = fringe.logf3.shape[:]
                     self.fill(shared.mag_buf, fringe.mag)
                     self.fill(shared.wrapped_buf, fringe.wrapped)
                     for i in range(4):
-                        shared.mag_ext[i] = fringe.ext4[i]/1000
+                        shared.mag_ext[i] = fringe.ext4[i] / 1000
                     shared.mag_shape[:] = fringe.mag.shape[:]
                     self.fill(shared.unwrapped_buf, fringe.unwrapped)
                 except Exception:
@@ -1606,7 +1673,7 @@ class Worker:
             self.dfname = dname
 
             if 'data/images' not in self.dset:
-                self.shared.oq.put((dname + ' does not look like a dataset',))
+                self.shared.oq.put((dname + ' does not look like a dataset', ))
                 self.dset.close()
                 self.dfname = None
                 self.dset = None
@@ -1622,21 +1689,19 @@ class Worker:
                 self.log.info(f'open_dset shape2 {shape2}')
                 self.log.info(f'open_dset pxsize1 {pxsize1}')
                 self.log.info(f'open_dset pxsize2 {pxsize2}')
-                if (
-                        shape1[0] != shape2[0] or
-                        shape1[1] != shape2[1] or
-                        pxsize1[0] != pxsize2[0] or
-                        pxsize1[1] != pxsize2[1]):
-                    estr = (
-                        f'Camera must be {shape2} {pxsize2} um; ' +
-                        'Spawning new instance...')
-                self.fringe.analyse(
-                    img, auto_find_orders=True, do_unwrap=True,
-                    use_mask=False)
+                if (shape1[0] != shape2[0] or shape1[1] != shape2[1]
+                        or pxsize1[0] != pxsize2[0]
+                        or pxsize1[1] != pxsize2[1]):
+                    estr = (f'Camera must be {shape2} {pxsize2} um; ' +
+                            'Spawning new instance...')
+                self.fringe.analyse(img,
+                                    auto_find_orders=True,
+                                    do_unwrap=True,
+                                    use_mask=False)
             except Exception:
                 self.log.info('open_dset failed fringe.analyse', exc_info=True)
                 if estr is None:
-                    self.shared.oq.put(('Failed to detect first orders',))
+                    self.shared.oq.put(('Failed to detect first orders', ))
                 else:
                     self.shared.oq.put((estr, shape2, pxsize2))
                 self.dfname = None
@@ -1651,10 +1716,8 @@ class Worker:
 
         dmplot_txs = self.dset['dmplot/txs'][()].tolist()
 
-        self.shared.oq.put((
-            'OK',
-            self.dset['align/U'].shape[1] + self.dset['data/U'].shape[1],
-            dmplot_txs))
+        self.shared.oq.put(('OK', self.dset['align/U'].shape[1] +
+                            self.dset['data/U'].shape[1], dmplot_txs))
 
     def run_calibrate(self, dname, radius):
         if self.open_dset(dname):
@@ -1672,33 +1735,39 @@ class Worker:
             def make_notify():
                 def f(m, cmd='UP'):
                     self.shared.oq.put((cmd, m))
+
                 return f
 
             notify_fun = make_notify()
 
             calib = RegLSCalib()
-            calib.calibrate(
-                U=self.dset['data/U'][()], images=self.dset['data/images'],
-                fringe=self.fringe, wavelength=wavelength,
-                dm_serial=dm_serial, dm_transform=dm_transform,
-                cam_pixel_size=cam_pixel_size, cam_serial=cam_serial,
-                dmplot_txs=dmplot_txs, dname=dname,
-                hash1=hash1, status_cb=notify_fun)
+            calib.calibrate(U=self.dset['data/U'][()],
+                            images=self.dset['data/images'],
+                            fringe=self.fringe,
+                            wavelength=wavelength,
+                            dm_serial=dm_serial,
+                            dm_transform=dm_transform,
+                            cam_pixel_size=cam_pixel_size,
+                            cam_serial=cam_serial,
+                            dmplot_txs=dmplot_txs,
+                            dname=dname,
+                            hash1=hash1,
+                            status_cb=notify_fun)
 
             now = datetime.now(timezone.utc)
             libver = 'latest'
             h5fn = path.join(
-                path.dirname(dname), path.basename(dname).rstrip('.h5') +
-                '-{:.3f}mm'.format(radius/1000) + '.h5')
+                path.dirname(dname),
+                path.basename(dname).rstrip('.h5') +
+                '-{:.3f}mm'.format(radius / 1000) + '.h5')
 
             notify_fun(f'Saving {h5fn} ...')
             with h5py.File(h5fn, 'w', libver=libver) as h5f:
                 write_h5_header(h5f, libver, now)
                 calib.save_h5py(h5f)
 
-            notify_fun(
-                f'Saved {h5fn}; Quality {calib.mvaf.mean():.2f}%',
-                cmd='OK')
+            notify_fun(f'Saved {h5fn}; Quality {calib.mvaf.mean():.2f}%',
+                       cmd='OK')
         except Exception as e:
             self.log.error('run_calibrate', exc_info=True)
             self.shared.oq.put(('ERR', 'Error: ' + str(e)))
@@ -1707,13 +1776,12 @@ class Worker:
         if self.calib_name is None or self.calib_name != dname:
             with h5py.File(dname, 'r') as f:
                 if 'RegLSCalib' not in f:
-                    self.shared.oq.put((
-                        dname + ' does not look like a calibration',))
+                    self.shared.oq.put(
+                        (dname + ' does not look like a calibration', ))
                     return -1
                 else:
                     shape1 = self.cam.shape()
-                    shape2 = f[
-                        'RegLSCalib/fringe/FringeAnalysis/shape'][()]
+                    shape2 = f['RegLSCalib/fringe/FringeAnalysis/shape'][()]
                     pxsize1 = self.cam.get_pixel_size()
                     pxsize2 = f['RegLSCalib/cam_pixel_size'][()]
                     self.log.info(f'open_dset shape1 {shape1}')
@@ -1721,14 +1789,12 @@ class Worker:
                     self.log.info(f'open_dset pxsize1 {pxsize1}')
                     self.log.info(f'open_dset pxsize2 {pxsize2}')
 
-                    if (
-                            shape1[0] != shape2[0] or
-                            shape1[1] != shape2[1] or
-                            pxsize1[0] != pxsize2[0] or
-                            pxsize1[1] != pxsize2[1]):
-                        self.shared.oq.put((
-                            f'Camera must be {shape2} {pxsize2} um; ' +
-                            'Spawning new instance...', shape2, pxsize2))
+                    if (shape1[0] != shape2[0] or shape1[1] != shape2[1]
+                            or pxsize1[0] != pxsize2[0]
+                            or pxsize1[1] != pxsize2[1]):
+                        self.shared.oq.put(
+                            (f'Camera must be {shape2} {pxsize2} um; ' +
+                             'Spawning new instance...', shape2, pxsize2))
                         return -1
                     self.calib = RegLSCalib.load_h5py(f)
                     self.calib_name = dname
@@ -1740,9 +1806,9 @@ class Worker:
         if self.open_calib(dname):
             return
 
-        self.shared.oq.put((
-            'OK', self.calib.wavelength, self.calib.get_rzern().n,
-            self.calib.get_radius(), self.calib.dmplot_txs))
+        self.shared.oq.put(
+            ('OK', self.calib.wavelength, self.calib.get_rzern().n,
+             self.calib.get_radius(), self.calib.dmplot_txs))
 
     def run_aperture(self, dname, radius):
         if self.open_dset(dname):
@@ -1754,20 +1820,20 @@ class Worker:
         else:
             names = self.dset['align/names'][()]
             if 'centre' not in names.split(','):
-                self.shared.oq.put(('centre measurement is missing',))
+                self.shared.oq.put(('centre measurement is missing', ))
                 return
 
             try:
-                img_centre = self.dset['align/images'][
-                    names.index('centre'), ...]
+                img_centre = self.dset['align/images'][names.index('centre'),
+                                                       ...]
                 img_zero = self.dset['data/images'][0, ...]
                 self.fringe.estimate_aperture(img_zero, img_centre, radius)
                 self.shared.oq.put(('OK', self.fringe.centre))
             except Exception:
                 self.log.debug('run_aperture', exc_info=True)
-                self.shared.oq.put((
-                    'Failed to estimate the aperture. Try improving the ' +
-                    'fringe contrast or the illumination profile',))
+                self.shared.oq.put(
+                    ('Failed to estimate the aperture. Try improving the ' +
+                     'fringe contrast or the illumination profile', ))
 
     def run_plot(self, dname, ind, radius):
         if self.open_dset(dname):
@@ -1777,8 +1843,8 @@ class Worker:
         t1 = self.dset['align/U'].shape[1]
         t2 = self.dset['data/U'].shape[1]
         if ind < 0 or ind > t1 + t2:
-            self.shared.oq.put((
-                'index must be within {} and {}'.format(0, t1 + t2 - 1),))
+            self.shared.oq.put(
+                ('index must be within {} and {}'.format(0, t1 + t2 - 1), ))
         if ind < t1:
             addr = 'align'
         else:
@@ -1786,9 +1852,12 @@ class Worker:
             ind -= t1
         try:
             img = self.dset[addr + '/images'][ind, ...]
-            fringe.analyse(
-                img, auto_find_orders=False, store_mag=True,
-                store_wrapped=True, do_unwrap=True, use_mask=radius > 0.)
+            fringe.analyse(img,
+                           auto_find_orders=False,
+                           store_mag=True,
+                           store_wrapped=True,
+                           do_unwrap=True,
+                           use_mask=radius > 0.)
 
             if img.max() == self.cam.get_image_max():
                 self.shared.cam_sat.value = 1
@@ -1798,13 +1867,13 @@ class Worker:
             self.shared.u[:] = self.dset[addr + '/U'][:, ind]
             self.fill(self.shared.wrapped_buf, fringe.wrapped)
             for i in range(4):
-                self.shared.mag_ext[i] = fringe.ext4[i]/1000
+                self.shared.mag_ext[i] = fringe.ext4[i] / 1000
             self.shared.mag_shape[:] = fringe.mag.shape[:]
             self.fill(self.shared.unwrapped_buf, fringe.unwrapped)
-            self.shared.oq.put(('OK',))
+            self.shared.oq.put(('OK', ))
         except Exception as e:
             self.log.error('run_plot', exc_info=True)
-            self.shared.oq.put((str(e),))
+            self.shared.oq.put((str(e), ))
 
     def run_dataacq(self, wavelength, dmplot_txs, sleep=.1):
         cam = self.cam
@@ -1858,9 +1927,8 @@ class Worker:
             h5f['data/U'] = U
             h5f['data/U'].dims[0].label = 'actuators'
             h5f['data/U'].dims[1].label = 'step'
-            h5f.create_dataset(
-                'data/images', (U.shape[1],) + cam.shape(),
-                dtype=cam.get_image_dtype())
+            h5f.create_dataset('data/images', (U.shape[1], ) + cam.shape(),
+                               dtype=cam.get_image_dtype())
             h5f['data/images'].dims[0].label = 'step'
             h5f['data/images'].dims[1].label = 'height'
             h5f['data/images'].dims[1].label = 'width'
@@ -1868,9 +1936,9 @@ class Worker:
             h5f['align/U'] = Ualign
             h5f['align/U'].dims[0].label = 'actuators'
             h5f['align/U'].dims[1].label = 'step'
-            h5f.create_dataset(
-                'align/images', (Ualign.shape[1],) + cam.shape(),
-                dtype=cam.get_image_dtype())
+            h5f.create_dataset('align/images',
+                               (Ualign.shape[1], ) + cam.shape(),
+                               dtype=cam.get_image_dtype())
             h5f['align/images'].dims[0].label = 'step'
             h5f['align/images'].dims[1].label = 'height'
             h5f['align/images'].dims[1].label = 'width'
@@ -1888,7 +1956,7 @@ class Worker:
                         img = cam.grab_image()  # copy immediately
                     except Exception as e:
                         self.log.error('run_dataacq', exc_info=True)
-                        shared.oq.put((str(e),))
+                        shared.oq.put((str(e), ))
                         return
                     if img.max() == cam.get_image_max():
                         shared.cam_sat.value = 1
@@ -1901,7 +1969,7 @@ class Worker:
                     self.log.debug('run_dataacq iteration')
 
                     stopcmd = shared.iq.get()[1]
-                    shared.oq.put(('',))
+                    shared.oq.put(('', ))
 
                     if stopcmd:
                         self.log.debug('run_dataacq stop_cmd')
@@ -1934,7 +2002,7 @@ class Worker:
         dm.flat_on = flat
 
         for i in range(4):
-            self.shared.mag_ext[i] = fringe.ext4[i]/1000
+            self.shared.mag_ext[i] = fringe.ext4[i] / 1000
         shared.mag_shape[:] = fringe.unwrapped.shape[:]
         while True:
             try:
@@ -1979,10 +2047,10 @@ class Worker:
 
             except Exception as e:
                 self.log.info('run_loop', exc_info=True)
-                shared.oq.put((str(e),))
+                shared.oq.put((str(e), ))
                 return
 
-            shared.oq.put(('OK',))
+            shared.oq.put(('OK', ))
             self.log.debug('run_loop iteration')
 
             stopcmd = shared.iq.get()[1]
@@ -1995,7 +2063,7 @@ class Worker:
                 self.log.debug('run_loop continue')
 
         self.log.debug('run_loop finished')
-        shared.oq.put(('finished',))
+        shared.oq.put(('finished', ))
 
 
 def main():

@@ -1,46 +1,42 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import argparse
+import json
 import logging
 import sys
-import numpy as np
-import json
-import argparse
-
+from copy import deepcopy
+from datetime import datetime
 from os import path
+
+import numpy as np
 from h5py import File
-from numpy.linalg import norm
 from matplotlib import ticker
-from matplotlib.backends.backend_qt5agg import FigureCanvas
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
+from matplotlib.backends.backend_qt5agg import (FigureCanvas,
+                                                NavigationToolbar2QT)
 from matplotlib.figure import Figure
 from matplotlib.gridspec import GridSpec
-from datetime import datetime
-from copy import deepcopy
-
-from PyQt5.QtCore import Qt, QMutex, pyqtSignal
-from PyQt5.QtGui import QIntValidator, QDoubleValidator, QKeySequence
-from PyQt5.QtWidgets import (
-    QWidget, QFileDialog, QGroupBox, QGridLayout, QLabel, QPushButton,
-    QLineEdit, QCheckBox, QScrollArea, QSlider, QDoubleSpinBox, QFrame,
-    QErrorMessage, QApplication, QMainWindow, QSplitter, QShortcut,
-    QMessageBox, QSizePolicy, QInputDialog, QTabWidget, QComboBox, QDialog,
-    )
-
-
+from numpy.linalg import norm
+from PyQt5.QtCore import QMutex, Qt, pyqtSignal
+from PyQt5.QtGui import QDoubleValidator, QIntValidator, QKeySequence
+from PyQt5.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog,
+                             QDoubleSpinBox, QErrorMessage, QFileDialog,
+                             QFrame, QGridLayout, QGroupBox, QInputDialog,
+                             QLabel, QLineEdit, QMainWindow, QMessageBox,
+                             QPushButton, QScrollArea, QShortcut, QSizePolicy,
+                             QSlider, QSplitter, QTabWidget, QWidget)
 from zernike import RZern
 
-from dmlib.version import __version__
-from dmlib.dmplot import DMPlot
-from dmlib.core import (
-    add_dm_parameters, open_dm, add_log_parameters, setup_logging)
-from dmlib.calibration import RegLSCalib
 from dmlib import control
+from dmlib.calibration import RegLSCalib
 from dmlib.control import ZernikeControl, get_noll_indices
+from dmlib.core import (add_dm_parameters, add_log_parameters, open_dm,
+                        setup_logging)
+from dmlib.dmplot import DMPlot
+from dmlib.version import __version__
 
 
 class MyQDoubleValidator(QDoubleValidator):
-
     def setFixup(self, val):
         self.fixupval = val
 
@@ -49,7 +45,6 @@ class MyQDoubleValidator(QDoubleValidator):
 
 
 class MyQIntValidator(QIntValidator):
-
     def setFixup(self, val):
         self.fixupval = val
 
@@ -58,7 +53,6 @@ class MyQIntValidator(QIntValidator):
 
 
 class OptionsPanel(QFrame):
-
     def setup(self, pars, name, defaultd, infod):
         self.lines = []
         self.pars = pars
@@ -95,19 +89,16 @@ class OptionsPanel(QFrame):
         if addr_selection not in self.pars:
             self.pars[addr_selection] = self.selection
 
-        self.from_dict(
-            self.selection,
-            self.infod[self.selection],
-            self.pars[self.addr_options][self.selection])
+        self.from_dict(self.selection, self.infod[self.selection],
+                       self.pars[self.addr_options][self.selection])
 
         def f():
             def f(selection):
                 self.clear_all()
-                self.from_dict(
-                    selection,
-                    self.infod[selection],
-                    self.pars[self.addr_options][selection])
+                self.from_dict(selection, self.infod[selection],
+                               self.pars[self.addr_options][selection])
                 self.selection = selection
+
             return f
 
         combo.currentTextChanged.connect(f())
@@ -115,22 +106,22 @@ class OptionsPanel(QFrame):
     def update(self, selection, k, v):
         self.pars[self.addr_options][selection][k] = v
         if selection == self.combo.currentText():
-            for l in self.lines:
-                if l[0][1].text() == k:
+            for l1 in self.lines:
+                if l1[0][1].text() == k:
                     type1 = self.infod[selection][k][0]
-                    l[0][0].setText(str(type1(v)))
+                    l1[0][0].setText(str(type1(v)))
                     break
 
     def get_options(self):
-        return (
-            self.selection,
-            deepcopy(self.pars[self.addr_options][self.selection])
-            )
+        return (self.selection,
+                deepcopy(self.pars[self.addr_options][self.selection]))
 
     def from_dict(self, selection, infod, valuesd):
         def get_noll():
-            indices = [str(s) for s in get_noll_indices(
-                self.pars[self.addr_options][selection]).tolist()]
+            indices = [
+                str(s) for s in get_noll_indices(self.pars[self.addr_options]
+                                                 [selection]).tolist()
+            ]
             return ', '.join(indices)
 
         count = 0
@@ -163,16 +154,18 @@ class OptionsPanel(QFrame):
             def fle(k, le, val, type1):
                 def f():
                     newval = type1(le.text())
-                    self.pars[
-                        self.addr_options][selection][k] = type1(le.text())
+                    self.pars[self.addr_options][selection][k] = type1(
+                        le.text())
                     val.setFixup(newval)
                     if le_noll:
                         le_noll.setText(get_noll())
+
                 return f
 
             def ledisc(w, hand):
                 def f():
                     w.editingFinished.disconnect(hand)
+
                 return f
 
             curval = valuesd[k]
@@ -202,7 +195,8 @@ class OptionsPanel(QFrame):
                         try:
                             tmp = [
                                 bounds(s) for s in le.text().split(',')
-                                if s != '']
+                                if s != ''
+                            ]
                         except Exception:
                             tmp = old
                         self.pars[self.addr_options][selection][k] = tmp
@@ -211,6 +205,7 @@ class OptionsPanel(QFrame):
                         le.blockSignals(False)
                         if le_noll:
                             le_noll.setText(get_noll())
+
                     return f
 
                 hand = make_validator(k, le, type1, bounds)
@@ -224,17 +219,16 @@ class OptionsPanel(QFrame):
             count += 1
 
     def clear_all(self):
-        for l in self.lines:
-            for w in l[0]:
+        for l1 in self.lines:
+            for w in l1[0]:
                 self.lay.removeWidget(w)
                 w.setParent(None)
-            if l[1]:
-                l[1]()
+            if l1[1]:
+                l1[1]()
         self.lines.clear()
 
 
 class RelSlider:
-
     def __init__(self, val, cb):
         self.old_val = None
         self.fto100mul = 100
@@ -270,6 +264,7 @@ class RelSlider:
                 self.sba_color(val)
                 self.cb(val)
                 self.unblock()
+
             return f
 
         def qs1_cb():
@@ -281,12 +276,13 @@ class RelSlider:
                     self.unblock()
                     return
 
-                val = self.old_val + self.qsr.value()/100*self.sbm.value()
+                val = self.old_val + self.qsr.value() / 100 * self.sbm.value()
                 self.sba.setValue(val)
                 self.sba_color(val)
                 self.cb(val)
 
                 self.unblock()
+
             return f
 
         def qs1_end():
@@ -295,6 +291,7 @@ class RelSlider:
                 self.qsr.setValue(0)
                 self.old_val = None
                 self.unblock()
+
             return f
 
         def qs1_start():
@@ -302,6 +299,7 @@ class RelSlider:
                 self.block()
                 self.old_val = self.get_value()
                 self.unblock()
+
             return f
 
         self.sba_cb = sba_cb()
@@ -342,7 +340,7 @@ class RelSlider:
         self.sbm.setEnabled(False)
 
     def fto100(self, f):
-        return int((f + self.m2)/(2*self.m2)*self.fto100mul)
+        return int((f + self.m2) / (2 * self.m2) * self.fto100mul)
 
     def get_value(self):
         return self.sba.value()
@@ -383,9 +381,13 @@ class ZernikePanel(QWidget):
 
     def_pars = {'zernike_labels': {}, 'shown_modes': 21}
 
-    def __init__(
-            self, wavelength, n_radial, z0=None, callback=None, pars={},
-            parent=None):
+    def __init__(self,
+                 wavelength,
+                 n_radial,
+                 z0=None,
+                 callback=None,
+                 pars={},
+                 parent=None):
         super().__init__(parent=parent)
         self.log = logging.getLogger(self.__class__.__name__)
 
@@ -404,7 +406,7 @@ class ZernikePanel(QWidget):
         dd = np.linspace(-1, 1, self.shape[0])
         xv, yv = np.meshgrid(dd, dd)
         self.rzern.make_cart_grid(xv, yv)
-        self.rad_to_nm = wavelength/(2*np.pi)
+        self.rad_to_nm = wavelength / (2 * np.pi)
         self.callback = callback
         self.zernike_rows = []
 
@@ -412,7 +414,7 @@ class ZernikePanel(QWidget):
             self.z = np.zeros(self.rzern.nk)
         else:
             self.z = z0.copy()
-        assert(self.rzern.nk == self.z.size)
+        assert (self.rzern.nk == self.z.size)
 
         top1 = QGroupBox('phase')
         toplay1 = QGridLayout()
@@ -460,11 +462,13 @@ class ZernikePanel(QWidget):
             def f(r):
                 self.z[ind] = r
                 self.update_phi_plot()
+
             return f
 
         def make_hand_lab(le, i):
             def f():
                 self.pars['zernike_labels'][str(i)] = le.text()
+
             return f
 
         def default_zernike_name(i, n, m):
@@ -521,7 +525,7 @@ class ZernikePanel(QWidget):
 
                         self.zernike_rows.append((lab, slider, lbn, hand_lab))
 
-                    assert(len(self.zernike_rows) == mynk)
+                    assert (len(self.zernike_rows) == mynk)
 
                 elif len(self.zernike_rows) > mynk:
                     for i in range(len(self.zernike_rows) - 1, mynk - 1, -1):
@@ -535,7 +539,8 @@ class ZernikePanel(QWidget):
                         lab.setParent(None)
                         lbn.setParent(None)
 
-                    assert(len(self.zernike_rows) == mynk)
+                    assert (len(self.zernike_rows) == mynk)
+
             return f
 
         self.update_zernike_rows = make_update_zernike_rows()
@@ -548,8 +553,8 @@ class ZernikePanel(QWidget):
         def change_nmodes():
             try:
                 ival = int(lezm.text())
-                assert(ival > 0)
-                assert(ival <= self.rzern.nk)
+                assert (ival > 0)
+                assert (ival <= self.rzern.nk)
             except Exception:
                 lezm.setText(str(len(self.zernike_rows)))
                 return
@@ -568,6 +573,7 @@ class ZernikePanel(QWidget):
                     self.units = 'nm'
                     self.mul = self.rad_to_nm
                 self.update_phi_plot()
+
             return f
 
         self.update_zernike_rows(nmodes())
@@ -607,12 +613,12 @@ class ZernikePanel(QWidget):
             slider.unblock()
 
     def update_phi_plot(self, run_callback=True):
-        phi = self.mul*self.rzern.matrix(
+        phi = self.mul * self.rzern.matrix(
             self.rzern.eval_grid(np.dot(self.P, self.z)))
         inner = phi[np.isfinite(phi)]
         min1 = inner.min()
         max1 = inner.max()
-        rms = self.mul*norm(self.z)
+        rms = self.mul * norm(self.z)
         self.status.setText(
             '{} [{: 03.2f} {: 03.2f}] {: 03.2f} PV {: 03.2f} RMS'.format(
                 self.units, min1, max1, max1 - min1, rms))
@@ -625,7 +631,6 @@ class ZernikePanel(QWidget):
 
 
 class PlotCoeffs(QDialog):
-
     def set_data(self, u, z):
         self.setWindowTitle('Zernike coefficients')
         frame = QFrame()
@@ -635,10 +640,12 @@ class PlotCoeffs(QDialog):
         nav = NavigationToolbar2QT(fig, frame)
         layout.addWidget(nav, 0, 0)
         layout.addWidget(fig, 1, 0)
-        fig.figure.subplots_adjust(
-            left=.125, right=.9,
-            bottom=.1, top=.9,
-            wspace=0.45, hspace=0.45)
+        fig.figure.subplots_adjust(left=.125,
+                                   right=.9,
+                                   bottom=.1,
+                                   top=.9,
+                                   wspace=0.45,
+                                   hspace=0.45)
         self.fig = fig
 
         gs = GridSpec(2, 1)
@@ -679,8 +686,8 @@ class DMWindow(QMainWindow):
         self.dm = dm
         self.calib = calib
         try:
-            self.zcontrol = ZernikeControl(
-                self.dm, self.calib, self.pars['ZernikeControl'])
+            self.zcontrol = ZernikeControl(self.dm, self.calib,
+                                           self.pars['ZernikeControl'])
             self.log.info('loaded control parameters')
         except Exception as ex:
             self.log.info(f'failed to load control parameters {str(ex)}')
@@ -718,15 +725,15 @@ class DMWindow(QMainWindow):
                     satind = 'SAT'
                 else:
                     satind = 'OK'
-                dmstatus.setText(
-                    f'u [{self.zcontrol.u.min():+0.3f} ' +
-                    f'{self.zcontrol.u.max():+0.3f}] {satind}')
+                dmstatus.setText(f'u [{self.zcontrol.u.min():+0.3f} ' +
+                                 f'{self.zcontrol.u.max():+0.3f}] {satind}')
 
                 ima.set_data(self.dmplot.compute_pattern(self.zcontrol.u))
                 g = self.dmplot.compute_gauss(self.zcontrol.u)
                 img.set_data(g)
                 img.set_clim(g.min(), g.max())
                 ax[0].figure.canvas.draw()
+
             return f
 
         write_dm = make_write_dm()
@@ -734,9 +741,11 @@ class DMWindow(QMainWindow):
 
         if 'ZernikePanel' not in pars:
             pars['ZernikePanel'] = {}
-        self.zpanel = ZernikePanel(
-            self.zcontrol.calib.wavelength, self.zcontrol.calib.get_rzern().n,
-            self.zcontrol.z, callback=write_dm, pars=pars['ZernikePanel'])
+        self.zpanel = ZernikePanel(self.zcontrol.calib.wavelength,
+                                   self.zcontrol.calib.get_rzern().n,
+                                   self.zcontrol.z,
+                                   callback=write_dm,
+                                   pars=pars['ZernikePanel'])
         self.zpanel.z[:] = self.zcontrol.u2z()
         self.zpanel.update_gui_controls()
         self.zpanel.update_phi_plot()
@@ -750,18 +759,18 @@ class DMWindow(QMainWindow):
                     if ind != -1:
                         val, ok = QInputDialog.getDouble(
                             self, f'Actuator {ind} ' + str(ind),
-                            'range [-1, 1]', self.zcontrol.u[ind],
-                            -1., 1., 4)
+                            'range [-1, 1]', self.zcontrol.u[ind], -1., 1., 4)
                         if ok:
                             self.zcontrol.u[ind] = val
                             self.zpanel.z[:] = self.zcontrol.u2z()
                             self.zpanel.update_gui_controls()
                             self.zpanel.update_phi_plot()
                 self.mutex.unlock()
+
             return f
 
-        ax[0].figure.canvas.callbacks.connect(
-            'button_press_event', make_select_cb())
+        ax[0].figure.canvas.callbacks.connect('button_press_event',
+                                              make_select_cb())
 
         dmstatus.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
@@ -803,11 +812,13 @@ class DMWindow(QMainWindow):
                     self.zpanel.update_gui_controls()
                     self.zpanel.update_phi_plot()
                 unlock()
+
             return f
 
         def make_acquire_hand():
             def f(t):
                 lock()
+
             return f
 
         self.sig_release.connect(make_release_hand())
@@ -816,11 +827,13 @@ class DMWindow(QMainWindow):
         def make_lock_hand():
             def f():
                 lock()
+
             return f
 
         def make_unlock_hand():
             def f():
                 unlock()
+
             return f
 
         self.sig_lock.connect(make_lock_hand())
@@ -834,6 +847,7 @@ class DMWindow(QMainWindow):
                 self.zpanel.z[:] = z
                 self.zpanel.update_phi_plot(run_callback=False)
                 self.write_dm(z, do_write=False)
+
             return f
 
         self.sig_draw.connect(f())
@@ -843,17 +857,16 @@ class DMWindow(QMainWindow):
 
     def make_control_tab(self):
         control_options = OptionsPanel()
-        control_options.setup(
-            self.pars, 'control',
-            control.get_default_parameters(),
-            control.get_parameters_info())
+        control_options.setup(self.pars, 'control',
+                              control.get_default_parameters(),
+                              control.get_parameters_info())
         self.control_options = control_options
         self.tabs.addTab(control_options, 'control')
 
     def instance_control(self):
         try:
-            self.zcontrol = ZernikeControl(
-                self.dm, self.calib, self.pars['ZernikeControl'])
+            self.zcontrol = ZernikeControl(self.dm, self.calib,
+                                           self.pars['ZernikeControl'])
         except Exception as ex:
             self.log.error(f'failed instance_control {str(ex)}')
             self.zcontrol = ZernikeControl(self.dm, self.calib)
@@ -894,7 +907,8 @@ class DMWindow(QMainWindow):
             def f():
                 hold()
                 fileName, _ = QFileDialog.getOpenFileName(
-                    self, 'Select a parameters file',
+                    self,
+                    'Select a parameters file',
                     filter='JSON (*.json);;All Files (*)')
                 if fileName:
                     try:
@@ -908,16 +922,19 @@ class DMWindow(QMainWindow):
                                 self.pars['ZernikePanel'])
                     except Exception as ex:
                         self.log.error(f'error loading parameters {str(ex)}')
-                        QMessageBox.information(
-                            self, 'error loading parameters', str(ex))
+                        QMessageBox.information(self,
+                                                'error loading parameters',
+                                                str(ex))
                 release()
+
             return f
 
         def hand_calib():
             def f():
                 hold()
                 fileName, _ = QFileDialog.getOpenFileName(
-                    self, 'Select a calibration file',
+                    self,
+                    'Select a calibration file',
                     filter='H5 (*.h5);;All Files (*)')
                 if fileName:
                     try:
@@ -930,34 +947,41 @@ class DMWindow(QMainWindow):
                                 self.pars['ZernikePanel'])
                     except Exception as ex:
                         self.log.error(f'error loading calibration {str(ex)}')
-                        QMessageBox.information(
-                            self, 'error loading calibration', str(ex))
+                        QMessageBox.information(self,
+                                                'error loading calibration',
+                                                str(ex))
                 release()
+
             return f
 
         def hand_save(flat):
             def f():
                 fdiag, _ = QFileDialog.getSaveFileName(
-                    self, 'Save parameters', directory=(
-                        datetime.now().strftime('%Y%m%d_%H%M%S_') +
-                        self.zcontrol.calib.dm_serial + '.json'),
+                    self,
+                    'Save parameters',
+                    directory=(datetime.now().strftime('%Y%m%d_%H%M%S_') +
+                               self.zcontrol.calib.dm_serial + '.json'),
                     filter='JSON (*.json);;All Files (*)')
                 if fdiag:
                     try:
                         with open(fdiag, 'w') as f:
-                            json.dump(
-                                self.save_parameters(flat), f,
-                                sort_keys=True, indent=4)
+                            json.dump(self.save_parameters(flat),
+                                      f,
+                                      sort_keys=True,
+                                      indent=4)
                     except Exception as ex:
                         self.log.error(f'error saving parameters {str(ex)}')
-                        QMessageBox.information(
-                            self, 'error saving parameters', str(ex))
+                        QMessageBox.information(self,
+                                                'error saving parameters',
+                                                str(ex))
+
             return f
 
         def hand_flat():
             def f(b):
                 self.zcontrol.flat_on = b
                 self.write_dm(self.zpanel.z)
+
             return f
 
         calibname = QLabel(self.pars['calibration'])
@@ -1011,6 +1035,7 @@ class DMWindow(QMainWindow):
                 p.set_data(self.zcontrol.u, self.zcontrol.z)
                 p.exec_()
                 self.mutex.unlock()
+
             return f
 
         bplot.clicked.connect(plotf())
@@ -1026,6 +1051,7 @@ class DMWindow(QMainWindow):
                     self.zpanel.P = 1
                 self.zpanel.update_phi_plot()
                 self.write_dm(self.zpanel.z)
+
             return f
 
         def handle2():
@@ -1043,6 +1069,7 @@ class DMWindow(QMainWindow):
                     self.write_dm(self.zpanel.z)
                 except ValueError:
                     lerotate.setText(str(self.zcontrol.pars['rotate']))
+
             return f
 
         bflipx.clicked.connect(handle1('flipx', bflipx))
@@ -1052,7 +1079,7 @@ class DMWindow(QMainWindow):
         self.bflat = bflat
 
     def acquire_control(self, h5f):
-        self.sig_acquire.emit((h5f,))
+        self.sig_acquire.emit((h5f, ))
 
         try:
             cname, pars = self.control_options.get_options()
@@ -1061,14 +1088,13 @@ class DMWindow(QMainWindow):
             pars['uflat'] = self.zcontrol.u.tolist()
             pars['u'] = np.zeros_like(self.zcontrol.u).tolist()
             pars['all'] = 0
-            c = control.new_control(
-                self.zcontrol.dm,
-                self.zcontrol.calib,
-                cname, pars, h5f)
+            c = control.new_control(self.zcontrol.dm, self.zcontrol.calib,
+                                    cname, pars, h5f)
 
             def make_gui_callback():
                 def f():
-                    self.sig_draw.emit((c.u,))
+                    self.sig_draw.emit((c.u, ))
+
                 return f
 
             c.gui_callback = make_gui_callback()
@@ -1102,12 +1128,15 @@ class DMWindow(QMainWindow):
 
 def add_arguments(parser):
     add_dm_parameters(parser)
-    parser.add_argument(
-        '--dm-calibration', type=argparse.FileType('rb'), default=None,
-        metavar='HDF5')
-    parser.add_argument(
-        '--dm-parameters', type=argparse.FileType('r'), default=None,
-        metavar='JSON', help='Load a previous configuration file')
+    parser.add_argument('--dm-calibration',
+                        type=argparse.FileType('rb'),
+                        default=None,
+                        metavar='HDF5')
+    parser.add_argument('--dm-parameters',
+                        type=argparse.FileType('r'),
+                        default=None,
+                        metavar='JSON',
+                        help='Load a previous configuration file')
 
 
 def load_parameters(app, args):
@@ -1215,8 +1244,10 @@ def main():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     add_log_parameters(parser)
     add_arguments(parser)
-    parser.add_argument(
-        '--params', type=argparse.FileType('rb'), default=None, metavar='JSON')
+    parser.add_argument('--params',
+                        type=argparse.FileType('rb'),
+                        default=None,
+                        metavar='JSON')
     parser.add_argument('--no-params', action='store_true')
     args = parser.parse_args(args[1:])
     setup_logging(args)
@@ -1233,8 +1264,7 @@ def main():
         with File(pars['calibration'], 'r') as f:
             calib = RegLSCalib.load_h5py(f, lazy_cart_grid=True)
     except Exception as e:
-        quit(
-            f'error loading calibration {pars["calibration"]}: {str(e)}')
+        quit(f'error loading calibration {pars["calibration"]}: {str(e)}')
 
     zwindow = DMWindow(app, dm, calib, pars)
     zwindow.show()

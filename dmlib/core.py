@@ -1,26 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import hashlib
+import logging
 import os
 import sys
-import logging
-import numpy as np
-import h5py
-import hashlib
-
 from datetime import datetime
+
+import h5py
+import numpy as np
 from numpy.linalg import norm
 from PyQt5.QtWidgets import QErrorMessage, QInputDialog
 
 import dmlib.test
-
-from dmlib.version import __date__, __version__, __commit__
-
+from dmlib.version import __commit__, __date__, __version__
 
 LOG = logging.getLogger('core')
 
-
 # https://stackoverflow.com/questions/22058048
+
 
 def hash_file(fname):
     BLOCKSIZE = 65536
@@ -58,17 +56,17 @@ class SquareRoot:
         self.log = logging.getLogger('SquareRoot')
 
     def __call__(self, u):
-        assert(np.all(np.isfinite(u)))
+        assert (np.all(np.isfinite(u)))
 
         if norm(u, np.inf) > 1.:
             self.log.info('saturation')
             u[u > 1.] = 1.
             u[u < -1.] = -1.
-        assert(norm(u, np.inf) <= 1.)
+        assert (norm(u, np.inf) <= 1.)
 
-        v = 2*np.sqrt((u + 1.0)/2.0) - 1.0
-        assert(np.all(np.isfinite(v)))
-        assert(norm(v, np.inf) <= 1.)
+        v = 2 * np.sqrt((u + 1.0) / 2.0) - 1.0
+        assert (np.all(np.isfinite(v)))
+        assert (norm(v, np.inf) <= 1.)
         del u
 
         return v
@@ -78,10 +76,9 @@ class SquareRoot:
 
 
 class FakeCam():
-
     def __init__(self, shape=(1024, 1280), pxsize=7.4):
         self.log = logging.getLogger(self.__class__.__name__)
-        self.exp = 0.06675 + 5*0.06675
+        self.exp = 0.06675 + 5 * 0.06675
         self.fps = 4
         self.name = None
         self._shape = shape
@@ -97,8 +94,8 @@ class FakeCam():
     def grab_image(self):
         img = dmlib.test.load_int3(self._shape)
         img = img.astype(self.get_image_dtype())
-        assert(img.dtype == self.get_image_dtype())
-        assert(img.shape == self.shape())
+        assert (img.dtype == self.get_image_dtype())
+        assert (img.shape == self.shape())
         return img
 
     def shape(self):
@@ -144,7 +141,6 @@ class FakeCam():
 
 
 class FakeDM():
-
     def __init__(self):
         self.log = logging.getLogger(self.__class__.__name__)
         self.name = None
@@ -177,7 +173,7 @@ class FakeDM():
         return self.name
 
     def preset(self, name, mag=0.7):
-        u = np.zeros((140,))
+        u = np.zeros((140, ))
         if name == 'centre':
             u[63:65] = mag
             u[75:77] = mag
@@ -186,19 +182,20 @@ class FakeDM():
             u[4:6] = mag
             u[134:136] = mag
             for i in range(10):
-                off = 15 + 12*i
+                off = 15 + 12 * i
                 u[off:(off + 2)] = mag
         elif name == 'x':
             inds = np.array([
-                11, 24, 37, 50, 63, 76, 89, 102, 115, 128,
-                20, 31, 42, 53, 64, 75, 86, 97, 108, 119])
+                11, 24, 37, 50, 63, 76, 89, 102, 115, 128, 20, 31, 42, 53, 64,
+                75, 86, 97, 108, 119
+            ])
             u[inds] = mag
         elif name == 'rim':
             u[0:10] = mag
             u[130:140] = mag
             for i in range(10):
-                u[10 + 12*i] = mag
-                u[21 + 12*i] = mag
+                u[10 + 12 * i] = mag
+                u[21 + 12 * i] = mag
         elif name == 'checker':
             c = 0
             s = mag
@@ -219,14 +216,46 @@ class FakeDM():
                 s *= -1
         elif name == 'arrows':
             inds = np.array([
-                20, 31, 42, 53, 64, 75, 86, 97, 108, 119,
-                16, 17, 18, 19,
-                29, 30,
-                32, 44, 56, 68,
-                43, 55,
-                34, 23, 12, 25, 38, 24, 36, 48, 60,
-                89, 102, 115, 128, 101, 113, 90, 91,
-                ])
+                20,
+                31,
+                42,
+                53,
+                64,
+                75,
+                86,
+                97,
+                108,
+                119,
+                16,
+                17,
+                18,
+                19,
+                29,
+                30,
+                32,
+                44,
+                56,
+                68,
+                43,
+                55,
+                34,
+                23,
+                12,
+                25,
+                38,
+                24,
+                36,
+                48,
+                60,
+                89,
+                102,
+                115,
+                128,
+                101,
+                113,
+                90,
+                91,
+            ])
             u[inds] = mag
         else:
             raise NotImplementedError(name)
@@ -246,8 +275,9 @@ def choose_device(app, args, dev, name, def1, set1):
             set1(devs[0])
         else:
             if app:
-                item, ok = QInputDialog.getItem(
-                    None, '', 'select ' + name + ':', devs, 0, False)
+                item, ok = QInputDialog.getItem(None, '',
+                                                'select ' + name + ':', devs,
+                                                0, False)
                 if ok and item:
                     set1(item)
                 else:
@@ -260,9 +290,7 @@ def attempt_open(app, what, devname, devtype):
     try:
         what.open(devname)
     except Exception:
-        exit_error(
-            app, f'unable to open {devtype} {devname}',
-            ValueError)
+        exit_error(app, f'unable to open {devtype} {devname}', ValueError)
 
 
 def exit_exception(app, txt, exc):
@@ -302,8 +330,8 @@ def open_cam(app, args):
         else:
             raise NotImplementedError(args.cam_driver)
     except Exception as e:
-        exit_exception(
-            app, f'error loading camera {args.cam_driver} drivers', e)
+        exit_exception(app, f'error loading camera {args.cam_driver} drivers',
+                       e)
 
     if args.cam_list:
         devs = cam.get_devices()
@@ -342,8 +370,7 @@ def open_dm(app, args, dm_transform=None):
         else:
             raise NotImplementedError(args.dm_driver)
     except Exception as e:
-        exit_exception(
-            app, f'error loading dm {args.cam_driver} drivers', e)
+        exit_exception(app, f'error loading dm {args.cam_driver} drivers', e)
 
     if args.dm_list:
         devs = dm.get_devices()
@@ -377,9 +404,9 @@ def open_dm(app, args, dm_transform=None):
 
 
 def add_log_parameters(parser):
-    parser.add_argument(
-        '--no-file-log', action='store_true',
-        help='Disable logging to a file')
+    parser.add_argument('--no-file-log',
+                        action='store_true',
+                        help='Disable logging to a file')
     parser.add_argument(
         '--log-level',
         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
@@ -401,31 +428,38 @@ def setup_logging(args):
         raise NotImplementedError(f'Unknown logging level {args.log_level}')
 
     if not args.no_file_log:
-        fn = datetime.now().strftime(
-            '%Y%m%d-%H%M%S-' + str(os.getpid()) + '.log')
+        fn = datetime.now().strftime('%Y%m%d-%H%M%S-' + str(os.getpid()) +
+                                     '.log')
         logging.basicConfig(filename=fn, level=level)
     else:
         logging.basicConfig(level=level)
 
 
 def add_dm_parameters(parser):
-    parser.add_argument(
-        '--dm-driver', choices=['sim', 'bmc', 'ciusb'], default='sim')
+    parser.add_argument('--dm-driver',
+                        choices=['sim', 'bmc', 'ciusb'],
+                        default='sim')
     parser.add_argument('--dm-name', type=str, default=None, metavar='SERIAL')
-    parser.add_argument(
-        '--dm-list', action='store_true', help='List detected devices')
+    parser.add_argument('--dm-list',
+                        action='store_true',
+                        help='List detected devices')
 
 
 def add_cam_parameters(parser):
-    parser.add_argument(
-        '--cam-driver', choices=['sim', 'thorcam', 'ximea', 'ueye'],
-        default='sim')
+    parser.add_argument('--cam-driver',
+                        choices=['sim', 'thorcam', 'ximea', 'ueye'],
+                        default='sim')
     parser.add_argument('--cam-name', type=str, default=None, metavar='SERIAL')
-    parser.add_argument(
-        '--cam-list', action='store_true', help='List detected devices')
-    parser.add_argument(
-        '--sim-cam-shape', metavar=('H', 'W'), type=int, nargs=2,
-        default=(1024, 1280))
-    parser.add_argument(
-        '--sim-cam-pix-size', metavar=('H', 'W'), type=float, nargs=2,
-        default=(5.20, 5.20))
+    parser.add_argument('--cam-list',
+                        action='store_true',
+                        help='List detected devices')
+    parser.add_argument('--sim-cam-shape',
+                        metavar=('H', 'W'),
+                        type=int,
+                        nargs=2,
+                        default=(1024, 1280))
+    parser.add_argument('--sim-cam-pix-size',
+                        metavar=('H', 'W'),
+                        type=float,
+                        nargs=2,
+                        default=(5.20, 5.20))
