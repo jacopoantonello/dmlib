@@ -4,13 +4,14 @@
 from dmlib import version
 
 __author__ = 'J Antonello'
-__copyright__ = 'Copyright 2019, J. Antonello'
-__license__ = 'to be defined'
+__copyright__ = 'Copyright 2019-2020, J. Antonello'
+__license__ = 'GPLv3+'
 __email__ = 'jacopo@antonello.org'
-__status__ = 'Prototype'
+__status__ = 'Production'
 __all__ = [
-    'calibration', 'control', 'core', 'dmplot', 'gui', 'interf',
-    'version', 'zpanel']
+    'calibration', 'control', 'core', 'dmplot', 'gui', 'interf', 'version',
+    'zpanel'
+]
 __version__ = version.__version__
 __date__ = version.__date__
 __commit__ = version.__commit__
@@ -21,8 +22,4 @@ author:  {}
 date:    {}
 version: {}
 commit:  {}
-""".format(
-    __author__,
-    __date__,
-    __version__,
-    __commit__)
+""".format(__author__, __date__, __version__, __commit__)
