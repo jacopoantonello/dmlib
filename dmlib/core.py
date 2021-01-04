@@ -19,12 +19,13 @@ LOG = logging.getLogger('core')
 
 
 def h5_store_str(f, a, s):
-    f[a] = np.array(s.encode('utf-8'),
-                    dtype=h5py.string_dtype('utf-8', len(s)))
+    f.create_dataset(a,
+                     data=np.array(s.encode('utf-8'),
+                                   dtype=h5py.string_dtype('utf-8', len(s))))
 
 
 def h5_read_str(f, a):
-    return f[a].asstr()[()]
+    return f[a][()].decode('utf-8')
 
 
 # https://stackoverflow.com/questions/22058048

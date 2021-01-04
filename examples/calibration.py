@@ -27,7 +27,7 @@ fname = 'calib-data.h5'
 # load the interferograms from the HDF5 file
 with File(fname, 'r') as f:
     align = f['align/images'][()]
-    names = f['align/names'][()].split(',')
+    names = f['align/names'][()].decode('utf-8').split(',')
     images = f['data/images'][()]
     cam_pixel_size_um = f['cam/pixel_size'][()]
     U = f['data/U'][()]
