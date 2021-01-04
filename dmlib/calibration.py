@@ -13,7 +13,7 @@ from scipy.linalg import cholesky, solve_triangular
 from skimage.restoration import unwrap_phase
 from zernike import RZern
 
-from dmlib.core import SquareRoot
+from dmlib.core import SquareRoot, h5_read_str, h5_store_str
 from dmlib.interf import FringeAnalysis
 
 LOG = logging.getLogger('calibration')
@@ -306,11 +306,6 @@ class RegLSCalib:
                              lower=False)
         s2 = solve_triangular(self.chzfA1TzfA1, Y, trans='N', lower=False)
 
-        # s1 = lstsq(
-        #     self.zfA1TzfA1,
-        #     np.dot(self.zfA1.T, phi[self.zfm]), rcond=None)[0]
-        # assert(np.allclose(s1, s2))
-
         return s2
 
     def apply_aperture_mask(self, phi):
@@ -330,8 +325,8 @@ class RegLSCalib:
                 raise ValueError(f.filename + ' is not a calibration file')
             else:
                 return (
-                    f['RegLSCalib/dm_serial'][()],
-                    f['RegLSCalib/dm_transform'][()],
+                    h5_read_str(f, 'RegLSCalib/dm_serial'),
+                    h5_read_str(f, 'RegLSCalib/dm_transform'),
                     f['RegLSCalib/dmplot_txs'][()],
                     f['RegLSCalib/H'].shape,
                 )
@@ -363,13 +358,13 @@ class RegLSCalib:
         z.lambda1 = f[prefix + 'lambda1'][()][0]
 
         z.wavelength = f[prefix + 'wavelength'][()]
-        z.dm_serial = f[prefix + 'dm_serial'][()]
-        z.dm_transform = f[prefix + 'dm_transform'][()]
+        z.dm_serial = h5_read_str(f, prefix + 'dm_serial')
+        z.dm_transform = h5_read_str(f, prefix + 'dm_transform')
         z.cam_pixel_size = f[prefix + 'cam_pixel_size'][()]
-        z.cam_serial = f[prefix + 'cam_serial'][()]
+        z.cam_serial = h5_read_str(f, prefix + 'cam_serial')
         z.dmplot_txs = f[prefix + 'dmplot_txs'][()]
-        z.dname = f[prefix + 'dname'][()]
-        z.hash1 = f[prefix + 'hash1'][()]
+        z.dname = h5_read_str(f, prefix + 'dname')
+        z.hash1 = h5_read_str(f, prefix + 'hash1')
 
         if not lazy_cart_grid:
             xx, yy, _ = z.fringe.get_unit_aperture()
@@ -418,10 +413,10 @@ class RegLSCalib:
         f.create_dataset(prefix + 'lambda1', data=np.array([self.lambda1]))
 
         f[prefix + 'wavelength'] = self.wavelength
-        f[prefix + 'dm_serial'] = self.dm_serial
-        f[prefix + 'dm_transform'] = self.dm_transform
+        h5_store_str(f, prefix + 'dm_serial', self.dm_serial)
+        h5_store_str(f, prefix + 'dm_transform', self.dm_transform)
         f[prefix + 'cam_pixel_size'] = self.cam_pixel_size
-        f[prefix + 'cam_serial'] = self.cam_serial
+        h5_store_str(f, prefix + 'cam_serial', self.cam_serial)
         f[prefix + 'dmplot_txs'] = self.dmplot_txs
-        f[prefix + 'dname'] = self.dname
-        f[prefix + 'hash1'] = self.hash1
+        h5_store_str(f, prefix + 'dname', self.dname)
+        h5_store_str(f, prefix + 'hash1', self.hash1)

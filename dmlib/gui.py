@@ -32,8 +32,9 @@ from PyQt5.QtWidgets import (QApplication, QCheckBox, QDialog, QDoubleSpinBox,
 from dmlib.calibration import RegLSCalib, make_normalised_input_matrix
 from dmlib.control import ZernikeControl, get_noll_indices
 from dmlib.core import (add_cam_parameters, add_dm_parameters,
-                        add_log_parameters, hash_file, open_cam, open_dm,
-                        setup_logging, write_h5_header)
+                        add_log_parameters, h5_read_str, h5_store_str,
+                        hash_file, open_cam, open_dm, setup_logging,
+                        write_h5_header)
 from dmlib.dmplot import DMPlot
 from dmlib.interf import FringeAnalysis
 from dmlib.version import __version__
@@ -1815,10 +1816,10 @@ class Worker:
 
         try:
             wavelength = self.dset['wavelength'][()]
-            dm_serial = self.dset['dm/serial'][()]
-            dm_transform = self.dset['dm/transform'][()]
+            dm_serial = h5_read_str(self.dset, 'dm/serial')
+            dm_transform = h5_read_str(self.dset, 'dm/transform')
             cam_pixel_size = self.dset['cam/pixel_size'][()]
-            cam_serial = self.dset['cam/serial'][()]
+            cam_serial = h5_read_str(self.dset, 'cam/serial')
             dmplot_txs = self.dset['dmplot/txs'][()]
             hash1 = hash_file(dname)
 
@@ -1908,7 +1909,7 @@ class Worker:
             self.fringe.clear_aperture()
             self.shared.oq.put(('OK', None))
         else:
-            names = self.dset['align/names'][()]
+            names = h5_read_str(self.dset, 'align/names')
             if 'centre' not in names.split(','):
                 self.shared.oq.put(('centre measurement is missing', ))
                 return
@@ -1997,13 +1998,13 @@ class Worker:
 
             h5f['dmplot/txs'] = dmplot_txs
 
-            h5f['cam/serial'] = cam.get_serial_number()
-            h5f['cam/settings'] = cam.get_settings()
+            h5_store_str(h5f, 'cam/serial', cam.get_serial_number())
+            h5_store_str(h5f, 'cam/settings', cam.get_settings())
             h5f['cam/pixel_size'] = cam.get_pixel_size()
             h5f['cam/pixel_size'].attrs['units'] = 'um'
             h5f['cam/exposure'] = cam.get_exposure()
             h5f['cam/exposure'].attrs['units'] = 'ms'
-            h5f['cam/dtype'] = cam.get_image_dtype()
+            h5_store_str(h5f, 'cam/dtype', cam.get_image_dtype())
             h5f['cam/max'] = cam.get_image_max()
 
             h5f['wavelength'] = wavelength
@@ -2011,8 +2012,8 @@ class Worker:
             h5f['sleep'] = sleep
             h5f['sleep'].attrs['units'] = 's'
 
-            h5f['dm/serial'] = dm.get_serial_number()
-            h5f['dm/transform'] = str(dm.get_transform())
+            h5_store_str(h5f, 'dm/serial', dm.get_serial_number())
+            h5_store_str(h5f, 'dm/transform', str(dm.get_transform()))
 
             h5f['data/U'] = U
             h5f['data/U'].dims[0].label = 'actuators'
@@ -2032,7 +2033,7 @@ class Worker:
             h5f['align/images'].dims[0].label = 'step'
             h5f['align/images'].dims[1].label = 'height'
             h5f['align/images'].dims[1].label = 'width'
-            h5f['align/names'] = ','.join(align_names)
+            h5_store_str(h5f, 'align/names', ','.join(align_names))
 
             tot = U.shape[1] + Ualign.shape[1]
             count = [0]

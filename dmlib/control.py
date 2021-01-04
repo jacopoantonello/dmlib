@@ -9,6 +9,8 @@ import numpy as np
 from numpy.linalg import norm, pinv, svd
 from numpy.random import normal
 
+from dmlib.core import h5_store_str
+
 h5_prefix = 'dmlib/control/'
 
 
@@ -184,7 +186,10 @@ class ZernikeControl:
             name = h5_prefix + self.__class__.__name__ + '/' + where
             if name in self.h5f:
                 del self.h5f[name]
-            self.h5f[name] = what
+            if isinstance(what, str):
+                h5_store_str(self.h5f, name, what)
+            else:
+                self.h5f[name] = what
 
     def u2z(self):
         "Get current Zernike coefficients (without uflat) for GUIs"
@@ -395,7 +400,10 @@ class SVDControl(ZernikeControl):
 
         def f(n, w):
             a = h5_prefix + self.__class__.__name__ + '/svd/' + n
-            self.h5f[a] = w
+            if isinstance(w, str):
+                h5_store_str(self.h5f, a, w)
+            else:
+                self.h5f[a] = w
 
         if self.h5f:
             f('nignore', nignore)
