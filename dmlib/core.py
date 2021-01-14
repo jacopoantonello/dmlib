@@ -25,7 +25,10 @@ def h5_store_str(f, a, s):
 
 
 def h5_read_str(f, a):
-    return f[a][()].decode('utf-8')
+    tmp = f[a][()]
+    if isinstance(tmp, bytes):
+        tmp = tmp.decode('utf-8')
+    return tmp
 
 
 # https://stackoverflow.com/questions/22058048
