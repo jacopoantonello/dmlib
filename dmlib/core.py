@@ -306,8 +306,12 @@ def attempt_open(app, what, devname, devtype):
         exit_error(app, f'unable to open {devtype} {devname}', ValueError)
 
 
-def exit_exception(app, txt, exc):
-    msg = txt + ' ' + str(exc)
+def exit_exception(app, txt, exc=None):
+    if exc is None:
+        exc = ValueError(txt)
+        msg = txt
+    else:
+        msg = txt + '; ' + str(exc)
     if app:
         e = QErrorMessage()
         e.showMessage(msg)
@@ -377,6 +381,8 @@ def open_dm(app, args, dm_transform=None):
     try:
         if args.dm_driver == 'sim':
             dm = FakeDM()
+            if args.dm_layout is None:
+                args.dm_layout = 'multidm140'
         elif args.dm_driver == 'bmc':
             from devwraps.bmc import BMC
             dm = BMC()
@@ -426,7 +432,7 @@ def open_dm(app, args, dm_transform=None):
             app, f'Could not load DM layout {args.dm_layout}; ' +
             f'Available layouts are {",".join(get_layouts())}', e)
     except Exception as e:
-        exit_exception(app, f'Error creating DMPlot layout {args.dm_layout}',
+        exit_exception(app, f'Error creating DMPlot layout: {args.dm_layout}',
                        e)
 
     # choose device
@@ -438,13 +444,10 @@ def open_dm(app, args, dm_transform=None):
     # open device
     attempt_open(app, dm, args.dm_name, 'dm')
 
-    if dmplot.size() != dm.size():
-        if app:
-            e = QErrorMessage()
-            e.showMessage('Detected dms are: ' + str(devs))
-            sys.exit(e.exec_())
-        else:
-            sys.exit()
+    nact1 = dm.size()
+    nact2 = dmplot.size()
+    if nact1 != nact2:
+        exit_exception(app, 'DM has {nact1} actuators but DMPlot has {nact2}')
 
     if dm_transform == 'v = u':
         pass
@@ -453,7 +456,7 @@ def open_dm(app, args, dm_transform=None):
     else:
         raise NotImplementedError('Unknown DM transform ' + dm_transform)
 
-    return dm
+    return dm, dmplot
 
 
 def add_log_parameters(parser):

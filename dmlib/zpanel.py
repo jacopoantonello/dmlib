@@ -32,7 +32,6 @@ from dmlib.calibration import RegLSCalib
 from dmlib.control import ZernikeControl, get_noll_indices
 from dmlib.core import (add_dm_parameters, add_log_parameters, open_dm,
                         setup_logging)
-from dmlib.dmplot import DMPlot
 from dmlib.version import __version__
 
 
@@ -676,7 +675,7 @@ class DMWindow(QMainWindow):
     sig_unlock = pyqtSignal()
     sig_draw = pyqtSignal(tuple)
 
-    def __init__(self, app, dm, calib, pars={}, parent=None):
+    def __init__(self, app, dm, dmplot, calib, pars={}, parent=None):
         super().__init__(parent)
         self.log = logging.getLogger(self.__class__.__name__)
         self.can_close = True
@@ -699,21 +698,19 @@ class DMWindow(QMainWindow):
         self.setWindowTitle(f'{self.__class__.__name__} ' + __version__)
         QShortcut(QKeySequence("Ctrl+Q"), self, self.close)
 
-        self.dmplot = DMPlot()
+        self.dmplot = dmplot
         self.dmplot.update_txs(self.zcontrol.calib.dmplot_txs)
         dmstatus = QLabel()
 
         def make_figs():
             fig = FigureCanvas(Figure(figsize=(2, 2)))
-            ax = fig.figure.subplots(2, 1)
-            ima = self.dmplot.draw(ax[0], self.zcontrol.u)
-            img = ax[1].imshow(self.dmplot.compute_gauss(self.zcontrol.u))
-            ax[0].axis('off')
-            ax[1].axis('off')
+            ax = fig.figure.subplots(1, 1)
+            self.dmplot.setup_pattern(ax)
+            ax.axis('off')
 
-            return ax, ima, img, fig
+            return ax, fig
 
-        ax, ima, img, fig = make_figs()
+        ax, fig = make_figs()
 
         def make_write_dm():
             def f(z, do_write=True):
@@ -728,11 +725,7 @@ class DMWindow(QMainWindow):
                 dmstatus.setText(f'u [{self.zcontrol.u.min():+0.3f} ' +
                                  f'{self.zcontrol.u.max():+0.3f}] {satind}')
 
-                ima.set_data(self.dmplot.compute_pattern(self.zcontrol.u))
-                g = self.dmplot.compute_gauss(self.zcontrol.u)
-                img.set_data(g)
-                img.set_clim(g.min(), g.max())
-                ax[0].figure.canvas.draw()
+                self.dmplot.update(self.zcontrol.u)
 
             return f
 
@@ -769,8 +762,8 @@ class DMWindow(QMainWindow):
 
             return f
 
-        ax[0].figure.canvas.callbacks.connect('button_press_event',
-                                              make_select_cb())
+        ax.figure.canvas.callbacks.connect('button_press_event',
+                                           make_select_cb())
 
         dmstatus.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
@@ -1222,7 +1215,7 @@ def new_zernike_window(app, args, pars={}):
 
     if args.dm_name is None:
         args.dm_name = calib_dm_name
-    dm = open_dm(app, args, calib_dm_transform)
+    dm, dmplot = open_dm(app, args, calib_dm_transform)
 
     try:
         with File(calib_file, 'r') as f:
@@ -1230,7 +1223,7 @@ def new_zernike_window(app, args, pars={}):
     except Exception as e:
         quit(f'error loading calibration {pars["calibration"]}: {str(e)}')
 
-    zwindow = DMWindow(None, dm, calib, pars)
+    zwindow = DMWindow(None, dm, dmplot, calib, pars)
     zwindow.show()
 
     return zwindow
@@ -1258,7 +1251,7 @@ def main():
 
     if args.dm_name is None:
         args.dm_name = calib_dm_name
-    dm = open_dm(app, args, calib_dm_transform)
+    dm, dmplot = open_dm(app, args, calib_dm_transform)
 
     try:
         with File(pars['calibration'], 'r') as f:
@@ -1266,7 +1259,7 @@ def main():
     except Exception as e:
         quit(f'error loading calibration {pars["calibration"]}: {str(e)}')
 
-    zwindow = DMWindow(app, dm, calib, pars)
+    zwindow = DMWindow(app, dm, dmplot, calib, pars)
     zwindow.show()
 
     sys.exit(app.exec_())

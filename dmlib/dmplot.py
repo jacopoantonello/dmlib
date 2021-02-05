@@ -14,7 +14,7 @@ def load_layout(name):
     if path.isfile(name):
         fname = name
     else:
-        fname = path.join(path.dirname(__file__), 'dmlayouts', name)
+        fname = path.join(path.dirname(__file__), 'dmlayouts', name + '.json')
     with open(fname, 'r') as f:
         d = json.load(f)
     return d
@@ -87,18 +87,19 @@ class DMPlot():
         self.update_txs()
 
     def size(self):
-        return self.locations[0]
+        return self.locations.shape[0]
 
     def update_pattern(self, u):
-        cols = np.floor(len(self.cmap) * (u + 1) / 2)
+        inds = np.floor(len(self.cmap.colors) * (u + 1) / 2).astype(int)
         for i in range(len(self.arts)):
-            self.arts[i].set_facecolor(cols[i])
+            col = self.cmap.colors[inds[i]]
+            self.arts[i].set_facecolor(col)
 
     def setup_pattern(self, ax):
         for a in self.arts:
             a.remove()
         self.arts.clear()
-        for xy in self.xys():
+        for xy in self.xys:
             self.arts.append(
                 ax.fill(xy[:, 0], xy[:, 1], color=self.cmap.colors[-1])[0])
 
