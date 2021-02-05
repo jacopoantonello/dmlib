@@ -10,13 +10,23 @@ from matplotlib.cm import get_cmap
 from PyQt5.QtWidgets import QInputDialog
 
 
-def get_layouts():
-    d = {}
-    base = path.join(path.dirname(__file__), 'dmlayouts', '*.json')
-    for g in glob(base):
-        with open(g, 'r') as f:
-            d[path.basename(g).replace('.json', '')] = json.load(f)
+def load_layout(name):
+    if path.isfile(name):
+        fname = name
+    else:
+        fname = path.join(path.dirname(__file__), 'dmlayouts', name)
+    with open(fname, 'r') as f:
+        d = json.load(f)
     return d
+
+
+def get_layouts():
+    base = path.join(path.dirname(__file__), 'dmlayouts', '*.json')
+    return [path.basename(g).replace('.json', '') for g in glob(base)]
+
+
+def make_DMPlot(name):
+    return DMPlot(**load_layout(name))
 
 
 class DMPlot():

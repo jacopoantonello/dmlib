@@ -13,6 +13,7 @@ from numpy.linalg import norm
 from PyQt5.QtWidgets import QErrorMessage, QInputDialog
 
 import dmlib.test
+from dmlib.dmplot import get_layouts, make_DMPlot
 from dmlib.version import __commit__, __date__, __version__
 
 LOG = logging.getLogger('core')
@@ -339,6 +340,9 @@ def open_cam(app, args):
         elif args.cam_driver == 'ximea':
             from devwraps.ximea import Ximea
             cam = Ximea()
+        elif args.cam_driver == 'custom':
+            from customcam import CustomCam
+            cam = CustomCam()
         else:
             raise NotImplementedError(args.cam_driver)
     except Exception as e:
@@ -369,30 +373,61 @@ def open_cam(app, args):
 
 def open_dm(app, args, dm_transform=None):
 
-    # choose driver
+    # choose a driver
     try:
         if args.dm_driver == 'sim':
             dm = FakeDM()
         elif args.dm_driver == 'bmc':
             from devwraps.bmc import BMC
             dm = BMC()
-        elif args.dm_driver == 'ciusb':
-            from devwraps.ciusb import CIUsb
-            dm = CIUsb()
+            if args.dm_layout is None:
+                args.dm_layout = 'multidm140'
+            if dm_transform is None:
+                dm_transform = SquareRoot.name
+        elif args.dm_driver == 'asdk':
+            from devwraps.asdk import ASDK
+            dm = ASDK()
+            if args.dm_layout is None:
+                args.dm_layout = 'alpao69'
+            if dm_transform is None:
+                dm_transform == 'v = u'
+        elif args.dm_driver == 'mirao52e':
+            from devwraps.mirao52e import Mirao52e
+            dm = Mirao52e()
+            if args.dm_layout is None:
+                args.dm_layout = 'mirao52e'
+            if dm_transform is None:
+                dm_transform == 'v = u'
+        elif args.dm_driver == 'custom':
+            from customdm import CustomDM
+            dm = CustomDM()
+            if dm_transform is None:
+                dm_transform == 'v = u'
         else:
             raise NotImplementedError(args.dm_driver)
     except Exception as e:
-        exit_exception(app, f'error loading dm {args.cam_driver} drivers', e)
+        exit_exception(app, f'Error loading dm {args.cam_driver} drivers', e)
 
     if args.dm_list:
         devs = dm.get_devices()
         LOG.info('dm devices: ' + str(dm.get_devices()))
         if app:
             e = QErrorMessage()
-            e.showMessage('detected dms are: ' + str(devs))
+            e.showMessage('Detected dms are: ' + str(devs))
             sys.exit(e.exec_())
         else:
             sys.exit()
+
+    # lookup a DM layout for the GUI
+    try:
+        dmplot = make_DMPlot(args.dm_layout)
+    except FileNotFoundError as e:
+        exit_exception(
+            app, f'Could not load DM layout {args.dm_layout}; ' +
+            f'Available layouts are {",".join(get_layouts())}', e)
+    except Exception as e:
+        exit_exception(app, f'Error creating DMPlot layout {args.dm_layout}',
+                       e)
 
     # choose device
     def set_dm(t):
@@ -403,14 +438,20 @@ def open_dm(app, args, dm_transform=None):
     # open device
     attempt_open(app, dm, args.dm_name, 'dm')
 
-    if dm_transform is None:
-        dm.set_transform(SquareRoot())
-    elif dm_transform == SquareRoot.name:
-        dm.set_transform(SquareRoot())
-    elif dm_transform == 'v = u':
+    if dmplot.size() != dm.size():
+        if app:
+            e = QErrorMessage()
+            e.showMessage('Detected dms are: ' + str(devs))
+            sys.exit(e.exec_())
+        else:
+            sys.exit()
+
+    if dm_transform == 'v = u':
         pass
+    if dm_transform == SquareRoot.name:
+        dm.set_transform(SquareRoot())
     else:
-        raise NotImplementedError('unknown transform ' + dm_transform)
+        raise NotImplementedError('Unknown DM transform ' + dm_transform)
 
     return dm
 
@@ -449,9 +490,19 @@ def setup_logging(args):
 
 def add_dm_parameters(parser):
     parser.add_argument('--dm-driver',
-                        choices=['sim', 'bmc', 'ciusb'],
+                        choices=[
+                            'sim',
+                            'bmc',
+                            'asdk',
+                            'mirao52e',
+                            'custom',
+                        ],
                         default='sim')
     parser.add_argument('--dm-name', type=str, default=None, metavar='SERIAL')
+    parser.add_argument('--dm-layout',
+                        type=str,
+                        default=None,
+                        metavar='Layout name or JSON file')
     parser.add_argument('--dm-list',
                         action='store_true',
                         help='List detected devices')
@@ -459,7 +510,7 @@ def add_dm_parameters(parser):
 
 def add_cam_parameters(parser):
     parser.add_argument('--cam-driver',
-                        choices=['sim', 'thorcam', 'ximea', 'ueye'],
+                        choices=['sim', 'thorcam', 'ximea', 'ueye', 'custom'],
                         default='sim')
     parser.add_argument('--cam-name', type=str, default=None, metavar='SERIAL')
     parser.add_argument('--cam-list',
