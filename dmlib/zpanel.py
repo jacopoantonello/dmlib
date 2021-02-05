@@ -715,6 +715,7 @@ class DMWindow(QMainWindow):
             return ax, figact
 
         ax, figact = make_figs()
+        self.figact = figact
 
         def make_write_dm():
             def f(z, do_write=True):

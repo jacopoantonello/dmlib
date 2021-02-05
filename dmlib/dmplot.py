@@ -90,18 +90,25 @@ class DMPlot():
         return self.locations.shape[0]
 
     def update_pattern(self, u):
-        inds = np.floor(len(self.cmap.colors) * (u + 1) / 2).astype(int)
+        inds = np.round((len(self.cmap.colors) - 1) * (u + 1) / 2).astype(int)
+        np.clip(inds, 0, len(self.cmap.colors) - 1, inds)
         for i in range(len(self.arts)):
             col = self.cmap.colors[inds[i]]
             self.arts[i].set_facecolor(col)
+        self.ax.figure.canvas.draw()
 
     def setup_pattern(self, ax):
+        ax.axis('equal')
         for a in self.arts:
             a.remove()
         self.arts.clear()
         for xy in self.xys:
             self.arts.append(
-                ax.fill(xy[:, 0], xy[:, 1], color=self.cmap.colors[-1])[0])
+                ax.fill(xy[:, 0],
+                        xy[:, 1],
+                        color=self.cmap.colors[-1],
+                        edgecolor=None)[0])
+        self.ax = ax
 
     def index_actuator(self, x, y):
         rhos = np.sqrt(
