@@ -394,7 +394,7 @@ class ZernikePanel(QWidget):
         self.units = 'rad'
         self.status = None
         self.mul = 1.0
-        self.fig = None
+        self.figphi = None
         self.ax = None
         self.im = None
         self.cb = None
@@ -415,27 +415,27 @@ class ZernikePanel(QWidget):
             self.z = z0.copy()
         assert (self.rzern.nk == self.z.size)
 
-        top1 = QGroupBox('phase')
-        toplay1 = QGridLayout()
-        top1.setLayout(toplay1)
-        self.fig = FigureCanvas(Figure(figsize=(2, 2)))
-        self.ax = self.fig.figure.add_subplot(1, 1, 1)
+        group_phase = QGroupBox('phase')
+        lay_phase = QGridLayout()
+        group_phase.setLayout(lay_phase)
+        self.figphi = FigureCanvas(Figure(figsize=(2, 2)))
+        self.ax = self.figphi.figure.add_subplot(1, 1, 1)
         phi = self.rzern.matrix(self.rzern.eval_grid(np.dot(self.P, self.z)))
         self.im = self.ax.imshow(phi, origin='lower')
-        self.cb = self.fig.figure.colorbar(self.im)
+        self.cb = self.figphi.figure.colorbar(self.im)
         self.cb.locator = ticker.MaxNLocator(nbins=5)
         self.cb.update_ticks()
         self.ax.axis('off')
         self.status = QLabel('')
-        toplay1.addWidget(self.fig, 0, 0)
-        toplay1.addWidget(self.status, 1, 0)
+        lay_phase.addWidget(self.figphi, 0, 0)
+        lay_phase.addWidget(self.status, 1, 0)
 
         def nmodes():
             return min(self.pars['shown_modes'], self.rzern.nk)
 
-        top = QGroupBox('Zernike')
-        toplay = QGridLayout()
-        top.setLayout(toplay)
+        bot = QGroupBox('Zernike')
+        lay_zern = QGridLayout()
+        bot.setLayout(lay_zern)
         labzm = QLabel('shown modes')
         lezm = QLineEdit(str(nmodes()))
         lezm.setMaximumWidth(50)
@@ -446,13 +446,13 @@ class ZernikePanel(QWidget):
         brad = QCheckBox('rad')
         brad.setChecked(True)
         breset = QPushButton('reset')
-        toplay.addWidget(labzm, 0, 0)
-        toplay.addWidget(lezm, 0, 1)
-        toplay.addWidget(brad, 0, 2)
-        toplay.addWidget(breset, 0, 3)
+        lay_zern.addWidget(labzm, 0, 0)
+        lay_zern.addWidget(lezm, 0, 1)
+        lay_zern.addWidget(brad, 0, 2)
+        lay_zern.addWidget(breset, 0, 3)
 
         scroll = QScrollArea()
-        toplay.addWidget(scroll, 1, 0, 1, 5)
+        lay_zern.addWidget(scroll, 1, 0, 1, 5)
         scroll.setWidget(QWidget())
         scrollLayout = QGridLayout(scroll.widget())
         scroll.setWidgetResizable(True)
@@ -581,11 +581,15 @@ class ZernikePanel(QWidget):
         breset.clicked.connect(reset_fun)
         lezm.editingFinished.connect(change_nmodes)
 
-        split = QSplitter(Qt.Vertical)
-        split.addWidget(top1)
-        split.addWidget(top)
+        splitv = QSplitter(Qt.Vertical)
+        top = QSplitter(Qt.Horizontal)
+        top.addWidget(group_phase)
+        splitv.addWidget(top)
+        splitv.addWidget(bot)
+        self.top = top
+        self.bot = bot
         l1 = QGridLayout()
-        l1.addWidget(split)
+        l1.addWidget(splitv)
         self.setLayout(l1)
         self.lezm = lezm
 
@@ -623,7 +627,7 @@ class ZernikePanel(QWidget):
                 self.units, min1, max1, max1 - min1, rms))
         self.im.set_data(phi)
         self.im.set_clim(inner.min(), inner.max())
-        self.fig.figure.canvas.draw()
+        self.figphi.figure.canvas.draw()
 
         if self.callback and run_callback:
             self.callback(self.z)
@@ -633,27 +637,27 @@ class PlotCoeffs(QDialog):
     def set_data(self, u, z):
         self.setWindowTitle('Zernike coefficients')
         frame = QFrame()
-        fig = FigureCanvas(Figure(figsize=(7, 5)))
+        figplot = FigureCanvas(Figure(figsize=(7, 5)))
         layout = QGridLayout()
         frame.setLayout(layout)
-        nav = NavigationToolbar2QT(fig, frame)
+        nav = NavigationToolbar2QT(figplot, frame)
         layout.addWidget(nav, 0, 0)
-        layout.addWidget(fig, 1, 0)
-        fig.figure.subplots_adjust(left=.125,
-                                   right=.9,
-                                   bottom=.1,
-                                   top=.9,
-                                   wspace=0.45,
-                                   hspace=0.45)
-        self.fig = fig
+        layout.addWidget(figplot, 1, 0)
+        figplot.figure.subplots_adjust(left=.125,
+                                       right=.9,
+                                       bottom=.1,
+                                       top=.9,
+                                       wspace=0.45,
+                                       hspace=0.45)
+        self.figplot = figplot
 
         gs = GridSpec(2, 1)
-        ax0 = fig.figure.add_subplot(gs[0, 0])
+        ax0 = figplot.figure.add_subplot(gs[0, 0])
         ax0.plot(u, marker='.')
         ax0.grid()
         ax0.set_xlabel('actuators')
         ax0.set_ylim((-1, 1))
-        ax1 = fig.figure.add_subplot(gs[1, 0])
+        ax1 = figplot.figure.add_subplot(gs[1, 0])
         ax1.plot(range(1, z.size + 1), z, marker='.')
         ax1.grid()
         ax1.set_xlabel('Noll')
@@ -703,14 +707,14 @@ class DMWindow(QMainWindow):
         dmstatus = QLabel()
 
         def make_figs():
-            fig = FigureCanvas(Figure(figsize=(2, 2)))
-            ax = fig.figure.subplots(1, 1)
+            figact = FigureCanvas(Figure(figsize=(2, 2)))
+            ax = figact.figure.subplots(1, 1)
             self.dmplot.setup_pattern(ax)
             ax.axis('off')
 
-            return ax, fig
+            return ax, figact
 
-        ax, fig = make_figs()
+        ax, figact = make_figs()
 
         def make_write_dm():
             def f(z, do_write=True):
@@ -739,6 +743,12 @@ class DMWindow(QMainWindow):
                                    self.zcontrol.z,
                                    callback=write_dm,
                                    pars=pars['ZernikePanel'])
+        group_act = QGroupBox('actuators')
+        lay_act = QGridLayout()
+        lay_act.addWidget(figact)
+        group_act.setLayout(lay_act)
+        self.zpanel.top.addWidget(group_act)
+
         self.zpanel.z[:] = self.zcontrol.u2z()
         self.zpanel.update_gui_controls()
         self.zpanel.update_phi_plot()
@@ -767,15 +777,11 @@ class DMWindow(QMainWindow):
 
         dmstatus.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        split = QSplitter(Qt.Horizontal)
-        split.addWidget(self.zpanel)
-        split.addWidget(fig)
-
         self.tabs = QTabWidget()
         front = QFrame()
         layout = QGridLayout()
         front.setLayout(layout)
-        layout.addWidget(split, 0, 0, 1, 4)
+        layout.addWidget(self.zpanel, 0, 0, 1, 4)
         layout.addWidget(dmstatus, 1, 0, 1, 4)
 
         self.add_lower(layout)
