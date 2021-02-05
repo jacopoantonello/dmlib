@@ -35,7 +35,6 @@ from dmlib.core import (add_cam_parameters, add_dm_parameters,
                         add_log_parameters, h5_read_str, h5_store_str,
                         hash_file, open_cam, open_dm, setup_logging,
                         write_h5_header)
-from dmlib.dmplot import DMPlot
 from dmlib.interf import FringeAnalysis
 from dmlib.version import __version__
 from dmlib.zpanel import MyQIntValidator, ZernikePanel
@@ -128,13 +127,7 @@ class GetNollIndices(QDialog):
 
 
 class Control(QMainWindow):
-    def __init__(self,
-                 worker,
-                 shared,
-                 cam_name,
-                 dm_name,
-                 settings={},
-                 parent=None):
+    def __init__(self, worker, shared, cam_name, dm_name, dmplot, parent=None):
         super().__init__()
         self.log = logging.getLogger(self.__class__.__name__)
 
@@ -147,6 +140,7 @@ class Control(QMainWindow):
         self.shared.make_static()
         self.cam_name = cam_name
         self.dm_name = dm_name
+        self.dmplot = dmplot
 
         self.setWindowTitle('DM calibration ' + __version__)
         QShortcut(QKeySequence("Ctrl+Q"), self, self.close)
@@ -253,8 +247,7 @@ class Control(QMainWindow):
         self.toolbox.addItem(tool_cam, 'cam: ' + self.cam_name)
 
     def update_dm_gui(self):
-        self.dmplot.draw(self.dm_ax, self.shared.u)
-        self.dm_ax.figure.canvas.draw()
+        self.dmplot.update(self.shared.u)
 
     def write_dm(self, u=None):
         if u is not None:
@@ -270,8 +263,8 @@ class Control(QMainWindow):
 
         self.dm_fig = FigureCanvas(Figure(figsize=(3, 2)))
         self.dm_ax = self.dm_fig.figure.add_subplot(1, 1, 1)
+        self.dmplot.setup_pattern(self.dm_ax)
         central.addWidget(self.dm_fig)
-        self.dmplot = DMPlot()
         self.dmplot.install_select_callback(self.dm_ax, self.shared.u, self,
                                             self.write_dm)
         self.dm_fig.figure.subplots_adjust(left=.125,
@@ -370,8 +363,7 @@ class Control(QMainWindow):
             ind = [0]
 
             def f():
-                ind[0] += sign
-                ind[0] %= 4
+                ind[0] += sign * np.pi / 2
                 self.dmplot.rotate(ind[0])
                 self.update_dm_gui()
 
@@ -394,7 +386,6 @@ class Control(QMainWindow):
         tool_dm.setLayout(layout)
         layout.addWidget(central)
 
-        self.dm_ax.axis('off')
         self.write_dm(None)
 
         self.toolbox.addItem(tool_dm, 'dm: ' + self.dm_name)
@@ -843,8 +834,7 @@ class Control(QMainWindow):
                 if offset is None or not lastind:
                     val, ok = QInputDialog.getInt(
                         self, 'Select an index to plot',
-                        'time step [{}, {}]'.format(0, ndata[0] - 1), last, 0,
-                        ndata[0] - 1)
+                        'time step [0, {ndata[0] - 1}]', last, 0, ndata[0] - 1)
                     if not ok:
                         return
                 else:
@@ -886,8 +876,7 @@ class Control(QMainWindow):
                 data = self.shared.get_phase()
                 wrapped, unwrapped = data[2:]
 
-                self.dmplot.draw(a2, self.shared.u)
-                a2.axis('off')
+                self.dmplot.setup_pattern(a2)
                 a2.set_title('dm')
 
                 a3.imshow(wrapped, extent=self.shared.mag_ext, origin='lower')
@@ -1037,7 +1026,7 @@ class Control(QMainWindow):
                     status.setText(msg[0])
                     enable()
 
-                self.dmplot.draw(a2, self.shared.u)
+                self.dmplot.update(a2, self.shared.u)
                 a2.axis('off')
                 a2.set_title('dm')
                 a2.figure.canvas.draw()
@@ -1566,13 +1555,14 @@ class Shared:
         self.oq = Queue()
 
     def make_static(self):
-        self.u = np.frombuffer(self.dm, np.float)
-        self.z_sp = np.frombuffer(self.z_sp_buf, np.float)
-        self.z_ms = np.frombuffer(self.z_ms_buf, np.float)
-        self.z_er = np.frombuffer(self.z_er_buf, np.float)
+        self.u = np.frombuffer(self.dm, np.float64)
+        self.z_sp = np.frombuffer(self.z_sp_buf, np.float64)
+        self.z_ms = np.frombuffer(self.z_ms_buf, np.float64)
+        self.z_er = np.frombuffer(self.z_er_buf, np.float64)
         self.cam = np.frombuffer(self.cam_buf,
                                  self.cam_dtype).reshape(self.cam_shape)
-        self.ft = np.frombuffer(self.ft_buf, np.float).reshape(self.cam_shape)
+        self.ft = np.frombuffer(self.ft_buf,
+                                np.float64).reshape(self.cam_shape)
 
     def get_phase(self):
         nsum1 = self.fstord_shape[0] * self.fstord_shape[1]
@@ -1611,7 +1601,7 @@ class Worker:
         self.run_align_state = [0]
 
         self.log = logging.getLogger('Worker')
-        dm = open_dm(None, args)
+        dm, _ = open_dm(None, args)
         cam = open_cam(None, args)
         cam.set_exposure(cam.get_exposure_range()[0])
 
@@ -2178,7 +2168,7 @@ def main():
     args = parser.parse_args(args[1:])
     setup_logging(args)
 
-    dm = open_dm(app, args)
+    dm, dmplot = open_dm(app, args)
     cam = open_cam(app, args)
     cam_name = cam.get_serial_number()
     dm_name = dm.get_serial_number()
@@ -2190,7 +2180,7 @@ def main():
     p = Process(name='worker', target=run_worker, args=(shared, args))
     p.start()
 
-    control = Control(p, shared, cam_name, dm_name)
+    control = Control(p, shared, cam_name, dm_name, dmplot)
     control.show()
 
     exit = app.exec_()

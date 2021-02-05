@@ -99,6 +99,7 @@ class DMPlot():
 
     def setup_pattern(self, ax):
         ax.axis('equal')
+        ax.axis('off')
         for a in self.arts:
             a.remove()
         self.arts.clear()

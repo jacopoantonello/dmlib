@@ -317,7 +317,7 @@ def exit_exception(app, txt, exc=None):
         e.showMessage(msg)
         sys.exit(e.exec_())
     else:
-        raise exc(msg)
+        raise exc
 
 
 def exit_error(app, text, exc):
@@ -383,6 +383,8 @@ def open_dm(app, args, dm_transform=None):
             dm = FakeDM()
             if args.dm_layout is None:
                 args.dm_layout = 'multidm140'
+            if dm_transform is None:
+                dm_transform = SquareRoot.name
         elif args.dm_driver == 'bmc':
             from devwraps.bmc import BMC
             dm = BMC()
@@ -410,9 +412,9 @@ def open_dm(app, args, dm_transform=None):
             if dm_transform is None:
                 dm_transform == 'v = u'
         else:
-            raise NotImplementedError(args.dm_driver)
+            exit_exception(app, NotImplementedError(args.dm_driver))
     except Exception as e:
-        exit_exception(app, f'Error loading dm {args.cam_driver} drivers', e)
+        exit_exception(app, f'Error loading DM driver: {args.cam_driver}', e)
 
     if args.dm_list:
         devs = dm.get_devices()
@@ -447,14 +449,15 @@ def open_dm(app, args, dm_transform=None):
     nact1 = dm.size()
     nact2 = dmplot.size()
     if nact1 != nact2:
-        exit_exception(app, 'DM has {nact1} actuators but DMPlot has {nact2}')
+        exit_exception(app, f'DM has {nact1} actuators but DMPlot has {nact2}')
 
+    # choose a driver
     if dm_transform == 'v = u':
         pass
-    if dm_transform == SquareRoot.name:
+    elif dm_transform == SquareRoot.name:
         dm.set_transform(SquareRoot())
     else:
-        raise NotImplementedError('Unknown DM transform ' + dm_transform)
+        exit_exception(app, 'DM transform not set')
 
     return dm, dmplot
 

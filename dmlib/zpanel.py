@@ -710,7 +710,6 @@ class DMWindow(QMainWindow):
             figact = FigureCanvas(Figure(figsize=(2, 2)))
             ax = figact.figure.subplots(1, 1)
             self.dmplot.setup_pattern(ax)
-            ax.axis('off')
 
             return ax, figact
 
