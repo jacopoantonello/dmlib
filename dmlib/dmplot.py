@@ -1,117 +1,107 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import json
+from glob import glob
+from os import path
+
 import numpy as np
+from matplotlib.cm import get_cmap
 from PyQt5.QtWidgets import QInputDialog
 
 
+def get_layouts():
+    d = {}
+    base = path.join(path.dirname(__file__), 'dmlayouts', '*.json')
+    for g in glob(base):
+        with open(g, 'r') as f:
+            d[path.basename(g).replace('.json', '')] = json.load(f)
+    return d
+
+
 class DMPlot():
-    def __init__(self, sampling=128, nact=12, pitch=.3, roll=2, mapmul=.3):
-        self.txs = [0, 0, 0]
-        self.floor = -1.5
-        self.make_grids(sampling, nact, pitch, roll, mapmul)
+    def __init__(self, locations, loc2ind, scale_shapes, shapes):
+        self.locations = np.array(locations, dtype=float)
+        self.loc2ind = np.array(loc2ind).ravel()
+        self.scale_shapes = scale_shapes
+        self.shapes = [np.array(s) for s in shapes]
+        self.T = np.eye(2)
+        self.arts = []
+        self.make_xys()
+        self.cmap = get_cmap()
+
+        if self.locations.shape[0] != self.loc2ind.size:
+            raise ValueError('locations.shape[0] != loc2ind.size')
+        for i, t in enumerate(self.loc2ind):
+            if t < 0 or t >= len(self.shapes):
+                raise ValueError(f'loc2ind[{i}] = {t} not in bounds ' +
+                                 f'(0, {self.locations.shape[0]})')
+        for i, s in enumerate(self.shapes):
+            if s.ndim != 2:
+                raise ValueError(f'shapes[{i}].ndim != 2')
+
+    def make_xys(self):
+        self.xys = []
+        for i in range(self.locations.shape[0]):
+            off = self.locations[i, :].reshape(1, -1)
+            self.xys.append(self.scale_shapes * self.shapes[self.loc2ind[i]] +
+                            off)
 
     def update_txs(self, txs):
-        self.txs[:] = txs[:]
-        self.make_grids(self.sampling, self.nact, self.pitch, self.roll,
-                        self.mapmul)
+        self.make_xys()
+
+        alpha = txs[2]
+        if abs(alpha) > 0:
+            T = np.array([[np.cos(alpha), -np.sin(alpha)],
+                          [np.sin(alpha), np.cos(alpha)]])
+        else:
+            T = np.eye(2)
+
+        if txs[0]:
+            T = np.array(([[-1, 0], [0, 1]])).dot(T)
+        if txs[1]:
+            T = np.array([[1, 0], [0, -1]]).dot(T)
+
+        self.xys = [(T.dot(xy.T)).T for xy in self.xys]
 
     def flipx(self, b):
         self.txs[0] = b
-        self.make_grids(self.sampling, self.nact, self.pitch, self.roll,
-                        self.mapmul)
+        self.update_txs()
 
     def flipy(self, b):
         self.txs[1] = b
-        self.make_grids(self.sampling, self.nact, self.pitch, self.roll,
-                        self.mapmul)
+        self.update_txs()
 
-    def rotate(self, p):
-        self.txs[2] = p
-        self.make_grids(self.sampling, self.nact, self.pitch, self.roll,
-                        self.mapmul)
-
-    def make_grids(self,
-                   sampling=128,
-                   nact=12,
-                   pitch=.3,
-                   roll=2,
-                   mapmul=.3,
-                   txs=[0, 0, 0]):
-        self.sampling = sampling
-        self.nact = nact
-        self.pitch = pitch
-        self.roll = roll
-        self.mapmul = mapmul
-        self.txs = txs
-
-        d = np.linspace(-1, 1, nact)
-        d *= pitch / np.diff(d)[0]
-        x, y = np.meshgrid(d, d)
-        if txs[2]:
-            x = np.rot90(x, txs[2])
-            y = np.rot90(y, txs[2])
-        if txs[0]:
-            if txs[2] % 2:
-                x = np.flipud(x)
-            else:
-                x = np.fliplr(x)
-        if txs[1]:
-            if txs[2] % 2:
-                y = np.fliplr(y)
-            else:
-                y = np.flipud(y)
-
-        dd = np.linspace(d.min() - pitch, d.max() + pitch, sampling)
-        xx, yy = np.meshgrid(dd, dd)
-
-        maps = []
-        acts = []
-        index = []
-        exclude = [(0, 0), (0, 11), (11, 0), (11, 11)]
-        count = 1
-        patvis = []
-        for i in range(x.shape[1]):
-            for j in range(y.shape[0]):
-                if (i, j) in exclude:
-                    continue
-
-                r = np.sqrt((xx - x[i, j])**2 + (yy - y[i, j])**2)
-                z = np.exp(-roll * r / pitch)
-                acts.append(z.reshape(-1, 1))
-
-                mp = np.logical_and(
-                    np.abs(xx - x[i, j]) < mapmul * pitch,
-                    np.abs(yy - y[i, j]) < mapmul * pitch)
-                maps.append(mp)
-                index.append(count * mp.reshape(-1, 1))
-                patvis.append(mp.reshape(-1, 1).astype(np.float))
-                count += 1
-
-        self.sampling = sampling
-        self.A_shape = xx.shape
-        self.A = np.hstack(acts)
-        self.maps = maps
-        self.layout = np.sum(np.dstack(maps), axis=2)
-        self.pattern = np.hstack(index)
-        self.index = np.sum(np.hstack(index), axis=1)
-        self.patvis = np.hstack(patvis)
-        self.mappatvis = np.invert(self.layout.astype(np.bool)).ravel()
+    def rotate(self, b):
+        self.txs[2] = b
+        self.update_txs()
 
     def size(self):
-        return self.A.shape[1]
+        return self.locations[0]
 
-    def compute_gauss(self, u):
-        pat = np.dot(self.A, u)
-        return pat.reshape(self.A_shape)
+    def update_pattern(self, u):
+        cols = np.floor(len(self.cmap) * (u + 1) / 2)
+        for i in range(len(self.arts)):
+            self.arts[i].set_facecolor(cols[i])
 
-    def compute_pattern(self, u):
-        pat = np.dot(self.patvis, u)
-        pat[self.mappatvis] = self.floor
-        return pat.reshape(self.A_shape)
+    def setup_pattern(self, ax):
+        for a in self.arts:
+            a.remove()
+        self.arts.clear()
+        for xy in self.xys():
+            self.arts.append(
+                ax.fill(xy[:, 0], xy[:, 1], color=self.cmap.colors[-1])[0])
 
     def index_actuator(self, x, y):
-        return self.index[int(y) * self.sampling + int(x)] - 1
+        rhos = np.sqrt(
+            np.sum(np.square(self.locations - np.array([x, y]).reshape(1, -1)),
+                   axis=1))
+        ind = rhos.argmin()
+        m1 = rhos[ind]
+        if m1 < self.scale_shapes:
+            return ind
+        else:
+            return -1
 
     def install_select_callback(self, ax, u, parent, write=None):
         def f(e):
@@ -124,12 +114,11 @@ class DMPlot():
                                                      -1., 1., 4)
                     if ok:
                         u[ind] = val
-                        self.draw(ax, u)
-                        ax.figure.canvas.draw()
+                        self.update(u)
                         if write:
                             write(u)
 
         ax.figure.canvas.callbacks.connect('button_press_event', f)
 
-    def draw(self, ax, u):
-        return ax.imshow(self.compute_pattern(u), vmin=self.floor, vmax=1)
+    def update(self, u):
+        self.update_pattern(u)
