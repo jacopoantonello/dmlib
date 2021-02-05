@@ -39,6 +39,7 @@ class DMPlot():
         self.arts = []
         self.make_xys()
         self.cmap = get_cmap()
+        self.txs = [0, 0, 0]
 
         if self.locations.shape[0] != self.loc2ind.size:
             raise ValueError('locations.shape[0] != loc2ind.size')
@@ -57,8 +58,12 @@ class DMPlot():
             self.xys.append(self.scale_shapes * self.shapes[self.loc2ind[i]] +
                             off)
 
-    def update_txs(self, txs):
+    def update_txs(self, txs=None):
         self.make_xys()
+        if txs is None:
+            txs = self.txs
+        else:
+            self.txs[:] = txs[:]
 
         alpha = txs[2]
         if abs(alpha) > 0:
@@ -73,6 +78,7 @@ class DMPlot():
             T = np.array([[1, 0], [0, -1]]).dot(T)
 
         self.xys = [(T.dot(xy.T)).T for xy in self.xys]
+        self.setup_pattern(self.ax)
 
     def flipx(self, b):
         self.txs[0] = b
@@ -102,6 +108,7 @@ class DMPlot():
         ax.axis('off')
         for a in self.arts:
             a.remove()
+            del a
         self.arts.clear()
         for xy in self.xys:
             self.arts.append(
@@ -110,6 +117,7 @@ class DMPlot():
                         color=self.cmap.colors[-1],
                         edgecolor=None)[0])
         self.ax = ax
+        self.ax.figure.canvas.draw()
 
     def index_actuator(self, x, y):
         rhos = np.sqrt(

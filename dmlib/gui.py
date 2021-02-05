@@ -140,7 +140,7 @@ class Control(QMainWindow):
         self.shared.make_static()
         self.cam_name = cam_name
         self.dm_name = dm_name
-        self.dmplot = dmplot
+        self.dmplot_tool = dmplot
 
         self.setWindowTitle('DM calibration ' + __version__)
         QShortcut(QKeySequence("Ctrl+Q"), self, self.close)
@@ -246,13 +246,13 @@ class Control(QMainWindow):
 
         self.toolbox.addItem(tool_cam, 'cam: ' + self.cam_name)
 
-    def update_dm_gui(self):
-        self.dmplot.update(self.shared.u)
+    def update_tool_dm(self):
+        self.dmplot_tool.update(self.shared.u)
 
     def write_dm(self, u=None):
         if u is not None:
             self.shared.u[:] = u[:]
-        self.update_dm_gui()
+        self.update_tool_dm()
         self.shared.iq.put(('write', ))
         self.shared.oq.get()
 
@@ -263,16 +263,16 @@ class Control(QMainWindow):
 
         self.dm_fig = FigureCanvas(Figure(figsize=(3, 2)))
         self.dm_ax = self.dm_fig.figure.add_subplot(1, 1, 1)
-        self.dmplot.setup_pattern(self.dm_ax)
-        central.addWidget(self.dm_fig)
-        self.dmplot.install_select_callback(self.dm_ax, self.shared.u, self,
-                                            self.write_dm)
+        self.dmplot_tool.setup_pattern(self.dm_ax)
+        self.dmplot_tool.install_select_callback(self.dm_ax, self.shared.u,
+                                                 self, self.write_dm)
         self.dm_fig.figure.subplots_adjust(left=.125,
                                            right=.9,
                                            bottom=.1,
                                            top=.9,
                                            wspace=0.45,
                                            hspace=0.45)
+        central.addWidget(self.dm_fig)
 
         g1 = QGroupBox('Plot transforms')
         gl1 = QGridLayout()
@@ -364,22 +364,22 @@ class Control(QMainWindow):
 
             def f():
                 ind[0] += sign * np.pi / 2
-                self.dmplot.rotate(ind[0])
-                self.update_dm_gui()
+                self.dmplot_tool.rotate(ind[0])
+                self.update_tool_dm()
 
             return f
 
         def f4(cb, b):
             def f():
                 cb(b.isChecked())
-                self.update_dm_gui()
+                self.update_tool_dm()
 
             return f
 
         flipx.setCheckable(True)
         flipy.setCheckable(True)
-        flipx.clicked.connect(f4(self.dmplot.flipx, flipx))
-        flipy.clicked.connect(f4(self.dmplot.flipy, flipy))
+        flipx.clicked.connect(f4(self.dmplot_tool.flipx, flipx))
+        flipy.clicked.connect(f4(self.dmplot_tool.flipy, flipy))
         rotate1.clicked.connect(f3(1))
         rotate2.clicked.connect(f3(-1))
 
@@ -599,7 +599,7 @@ class Control(QMainWindow):
                     a6.set_title('unwrapped phi')
 
                 a6.figure.canvas.draw()
-                self.update_dm_gui()
+                self.update_tool_dm()
                 if listener.repeat:
                     if result[0] == 'OK':
                         status.setText('Working...')
@@ -690,7 +690,7 @@ class Control(QMainWindow):
         lastind = []
         centre = [None]
         radius = [.0]
-        listener = DataAcqListener(self.shared, wavelength, self.dmplot)
+        listener = DataAcqListener(self.shared, wavelength, self.dmplot_tool)
 
         def clearup(clear_status=False):
             wavelength.clear()
@@ -829,7 +829,7 @@ class Control(QMainWindow):
                     clearup()
                     return
                 else:
-                    self.dmplot.update_txs(ndata[1])
+                    self.dmplot_tool.update_txs(ndata[1])
 
                 if offset is None or not lastind:
                     val, ok = QInputDialog.getInt(
@@ -876,7 +876,7 @@ class Control(QMainWindow):
                 data = self.shared.get_phase()
                 wrapped, unwrapped = data[2:]
 
-                self.dmplot.setup_pattern(a2)
+                # self.dmplot.setup_pattern(a2)
                 a2.set_title('dm')
 
                 a3.imshow(wrapped, extent=self.shared.mag_ext, origin='lower')
@@ -898,7 +898,6 @@ class Control(QMainWindow):
 
                 a4.figure.canvas.draw()
 
-                # self.update_dm_gui()
                 status.setText('{} {}/{}'.format(dataset[0], val,
                                                  ndata[0] - 1))
 
@@ -1332,7 +1331,7 @@ class Control(QMainWindow):
                     arts[1][0].set_data(what)
                     arts[1][0].set_clim(m1, m2)
 
-                self.update_dm_gui()
+                self.update_tool_dm()
 
                 ax1.figure.canvas.draw()
 
@@ -1555,31 +1554,30 @@ class Shared:
         self.oq = Queue()
 
     def make_static(self):
-        self.u = np.frombuffer(self.dm, np.float64)
-        self.z_sp = np.frombuffer(self.z_sp_buf, np.float64)
-        self.z_ms = np.frombuffer(self.z_ms_buf, np.float64)
-        self.z_er = np.frombuffer(self.z_er_buf, np.float64)
+        self.u = np.frombuffer(self.dm, float)
+        self.z_sp = np.frombuffer(self.z_sp_buf, float)
+        self.z_ms = np.frombuffer(self.z_ms_buf, float)
+        self.z_er = np.frombuffer(self.z_er_buf, float)
         self.cam = np.frombuffer(self.cam_buf,
                                  self.cam_dtype).reshape(self.cam_shape)
-        self.ft = np.frombuffer(self.ft_buf,
-                                np.float64).reshape(self.cam_shape)
+        self.ft = np.frombuffer(self.ft_buf, float).reshape(self.cam_shape)
 
     def get_phase(self):
         nsum1 = self.fstord_shape[0] * self.fstord_shape[1]
-        fstord = np.frombuffer(self.fstord_buf, np.float,
+        fstord = np.frombuffer(self.fstord_buf, float,
                                count=nsum1).reshape(self.fstord_shape)
         nsum2 = self.mag_shape[0] * self.mag_shape[1]
-        mag = np.frombuffer(self.mag_buf, np.float,
+        mag = np.frombuffer(self.mag_buf, float,
                             count=nsum2).reshape(self.mag_shape)
-        wrapped = np.frombuffer(self.wrapped_buf, np.float,
+        wrapped = np.frombuffer(self.wrapped_buf, float,
                                 count=nsum2).reshape(self.mag_shape)
-        unwrapped = np.frombuffer(self.unwrapped_buf, np.float,
+        unwrapped = np.frombuffer(self.unwrapped_buf, float,
                                   count=nsum2).reshape(self.mag_shape)
         return fstord, mag, wrapped, unwrapped
 
     def get_cl_data(self):
         nsum2 = self.mag_shape[0] * self.mag_shape[1]
-        phi_err = np.frombuffer(self.phi_err_buf, np.float,
+        phi_err = np.frombuffer(self.phi_err_buf, float,
                                 count=nsum2).reshape(self.mag_shape)
         return phi_err,
 
