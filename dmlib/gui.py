@@ -298,7 +298,7 @@ class Control(QMainWindow):
         gl1.addWidget(flipx, 0, 0)
         flipy = QPushButton('flipy')
         gl1.addWidget(flipy, 0, 1)
-        rotate1 = QPushButton('rotate cw')
+        rotate1 = QPushButton('rotate')
         gl1.addWidget(rotate1, 1, 0)
         rotate2 = QPushButton('rotate acw')
         gl1.addWidget(rotate2, 1, 1)
@@ -377,13 +377,17 @@ class Control(QMainWindow):
         setall.clicked.connect(f3())
         loadflat.clicked.connect(f4())
 
-        def f3(sign):
-            ind = [0]
+        def f3():
+            prev = [.0]
 
             def f():
-                ind[0] += sign * np.pi / 2
-                self.dmplot.rotate(ind[0])
-                self.update_tool_dm()
+                val, ok = QInputDialog.getDouble(
+                    self, 'Rotate actuators plot',
+                    'Rotate actuators plot [deg]', np.pi / 180 * prev[0])
+                if ok:
+                    prev[0] = 180 / np.pi * val
+                    self.dmplot.rotate(prev[0])
+                    self.update_tool_dm()
 
             return f
 
@@ -398,8 +402,8 @@ class Control(QMainWindow):
         flipy.setCheckable(True)
         flipx.clicked.connect(f4(self.dmplot.flipx, flipx))
         flipy.clicked.connect(f4(self.dmplot.flipy, flipy))
-        rotate1.clicked.connect(f3(1))
-        rotate2.clicked.connect(f3(-1))
+        rotate1.clicked.connect(f3())
+        rotate2.clicked.connect(f3())
 
         tool_dm.setLayout(layout)
         layout.addWidget(central)
