@@ -4,6 +4,8 @@
 import hashlib
 import logging
 import os
+import platform
+import subprocess
 import sys
 from datetime import datetime
 
@@ -470,6 +472,16 @@ def add_log_parameters(parser):
         '--log-level',
         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
         default='ERROR')
+
+
+# https://stackoverflow.com/questions/6631299/
+def spawn_file(path):
+    if platform.system() == 'Windows':
+        subprocess.Popen(['explorer', '/select,', path])
+    elif platform.system() == 'Darwin':
+        subprocess.Popen(['open', '-a', 'Finder', path])
+    else:
+        subprocess.Popen(['xdg-open', path])
 
 
 def setup_logging(args):

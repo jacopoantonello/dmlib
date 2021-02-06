@@ -35,7 +35,7 @@ from dmlib.control import ZernikeControl, get_noll_indices
 from dmlib.core import (add_cam_parameters, add_dm_parameters,
                         add_log_parameters, h5_read_str, h5_store_str,
                         hash_file, open_cam, open_dm, setup_logging,
-                        write_h5_header)
+                        spawn_file, write_h5_header)
 from dmlib.interf import FringeAnalysis
 from dmlib.version import __version__
 from dmlib.zpanel import MyQIntValidator, ZernikePanel
@@ -208,8 +208,7 @@ class Control(QMainWindow):
 
         def up(l1, s, txt, r, v):
             rg = r()
-            l1.setText('min: {}<br>max: {}<br>step: {}'.format(
-                rg[0], rg[1], rg[2]))
+            l1.setText(f'min: {rg[0]}<br>max: {rg[1]}<br>step: {rg[2]}')
             s.setRange(rg[0], rg[1])
             s.setSingleStep(rg[2])
             s.blockSignals(True)
@@ -868,7 +867,8 @@ class Control(QMainWindow):
                 if offset is None or not lastind:
                     val, ok = QInputDialog.getInt(
                         self, 'Select an index to plot',
-                        'time step [0, {ndata[0] - 1}]', last, 0, ndata[0] - 1)
+                        f'time step [0, {ndata[0] - 1}]', last, 0,
+                        ndata[0] - 1)
                     if not ok:
                         return
                 else:
@@ -903,8 +903,8 @@ class Control(QMainWindow):
                 if self.shared.cam_sat.value:
                     a1.set_title('cam SAT')
                 else:
-                    a1.set_title('cam {: 3d} {: 3d}'.format(
-                        self.shared.cam.min(), self.shared.cam.max()))
+                    a1.set_title(f'cam {self.shared.cam.min(): 3d} ' +
+                                 f'{self.shared.cam.max(): 3d}')
 
                 data = self.shared.get_phase()
                 wrapped, unwrapped = data[2:]
@@ -912,7 +912,7 @@ class Control(QMainWindow):
                 a2.clear()
                 a2.plot(self.shared.u)
                 a2.set_title(f'acts [{self.shared.u.min():+.1f}, ' +
-                             f'{self.shared.u.max():+.1f}')
+                             f'{self.shared.u.max():+.1f}]')
                 a2.set_ylim([-1, 1])
 
                 a3.imshow(wrapped, extent=self.shared.mag_ext, origin='lower')
@@ -988,6 +988,11 @@ class Control(QMainWindow):
             def f(reply):
                 status.setText(reply[1])
                 if reply[0] == 'OK' or reply[0] == 'ERR':
+                    if reply[0] == 'OK':
+                        try:
+                            spawn_file(path.abspath(reply[2]))
+                        except Exception:
+                            pass
                     enable()
                     bstop.setEnabled(True)
 
@@ -1037,8 +1042,8 @@ class Control(QMainWindow):
                 if self.shared.cam_sat.value:
                     a1.set_title('cam SAT')
                 else:
-                    a1.set_title('cam {: 3d} {: 3d}'.format(
-                        self.shared.cam.min(), self.shared.cam.max()))
+                    a1.set_title(f'cam {self.shared.cam.min(): 3d} ' +
+                                 f'{self.shared.cam.max(): 3d}')
 
                 a2 = self.dataacq_axes[0, 1]
                 a2.clear()
@@ -1055,9 +1060,12 @@ class Control(QMainWindow):
                     else:
                         dataset.append(msg[1])
                     status.setText('Saved calibration data file ' + msg[1])
-                    QMessageBox.information(self,
-                                            'Saved calibration data file',
-                                            path.abspath(msg[1]))
+                    try:
+                        spawn_file(path.abspath(msg[1]))
+                    except Exception:
+                        QMessageBox.information(self,
+                                                'Saved calibration data file',
+                                                path.abspath(msg[1]))
                     status.setToolTip(path.abspath(msg[1]))
                     enable()
                 else:
@@ -1838,8 +1846,8 @@ class Worker:
             hash1 = hash_file(dname)
 
             def make_notify():
-                def f(m, cmd='UP'):
-                    self.shared.oq.put((cmd, m))
+                def f(m, cmd='UP', m2=None):
+                    self.shared.oq.put((cmd, m, m2))
 
                 return f
 
@@ -1864,7 +1872,7 @@ class Worker:
             h5fn = path.join(
                 path.dirname(dname),
                 path.basename(dname).rstrip('.h5') +
-                '-{:.3f}mm'.format(radius / 1000) + '.h5')
+                f'-{radius / 1000:.3f}mm' + '.h5')
 
             notify_fun(f'Saving {h5fn} ...')
             with h5py.File(h5fn, 'w', libver=libver) as h5f:
@@ -1872,7 +1880,8 @@ class Worker:
                 calib.save_h5py(h5f)
 
             notify_fun(f'Saved {h5fn}; Quality {calib.mvaf.mean():.2f}%',
-                       cmd='OK')
+                       cmd='OK',
+                       m2=h5fn)
         except Exception as e:
             self.log.error('run_calibrate', exc_info=True)
             self.shared.oq.put(('ERR', 'Error: ' + str(e)))
@@ -1948,8 +1957,7 @@ class Worker:
         t1 = self.dset['align/U'].shape[1]
         t2 = self.dset['data/U'].shape[1]
         if ind < 0 or ind > t1 + t2:
-            self.shared.oq.put(
-                ('index must be within {} and {}'.format(0, t1 + t2 - 1), ))
+            self.shared.oq.put((f'index must be within 0 and {t1 + t2 - 1}', ))
         if ind < t1:
             addr = 'align'
         else:
