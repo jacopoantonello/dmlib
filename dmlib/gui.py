@@ -141,7 +141,7 @@ class Control(QMainWindow):
         self.shared.make_static()
         self.cam_name = cam_name
         self.dm_name = dm_name
-        self.dmplot_tool = dmplot
+        self.dmplot = dmplot
 
         self.setWindowTitle('DM calibration ' + __version__)
         QShortcut(QKeySequence("Ctrl+Q"), self, self.close)
@@ -265,7 +265,7 @@ class Control(QMainWindow):
         self.toolbox.addItem(self.tool_cam, self.tool_cam_name)
 
     def update_tool_dm(self):
-        self.dmplot_tool.update(self.shared.u)
+        self.dmplot.update(self.shared.u)
 
     def write_dm(self, u=None):
         if u is not None:
@@ -281,9 +281,9 @@ class Control(QMainWindow):
 
         self.dm_fig = FigureCanvas(Figure(figsize=(3, 2)))
         self.dm_ax = self.dm_fig.figure.add_subplot(1, 1, 1)
-        self.dmplot_tool.setup_pattern(self.dm_ax)
-        self.dmplot_tool.install_select_callback(self.dm_ax, self.shared.u,
-                                                 self, self.write_dm)
+        self.dmplot.setup_pattern(self.dm_ax)
+        self.dmplot.install_select_callback(self.dm_ax, self.shared.u, self,
+                                            self.write_dm)
         self.dm_fig.figure.subplots_adjust(left=.125,
                                            right=.9,
                                            bottom=.1,
@@ -382,7 +382,7 @@ class Control(QMainWindow):
 
             def f():
                 ind[0] += sign * np.pi / 2
-                self.dmplot_tool.rotate(ind[0])
+                self.dmplot.rotate(ind[0])
                 self.update_tool_dm()
 
             return f
@@ -396,8 +396,8 @@ class Control(QMainWindow):
 
         flipx.setCheckable(True)
         flipy.setCheckable(True)
-        flipx.clicked.connect(f4(self.dmplot_tool.flipx, flipx))
-        flipy.clicked.connect(f4(self.dmplot_tool.flipy, flipy))
+        flipx.clicked.connect(f4(self.dmplot.flipx, flipx))
+        flipy.clicked.connect(f4(self.dmplot.flipy, flipy))
         rotate1.clicked.connect(f3(1))
         rotate2.clicked.connect(f3(-1))
 
@@ -645,7 +645,6 @@ class Control(QMainWindow):
         frame = QFrame()
         self.dataacq_fig = FigureCanvas(Figure(figsize=(7, 5)))
         self.dataacq_nav = NavigationToolbar2QT(self.dataacq_fig, frame)
-        self.dmplot_da = self.dmplot_tool.clone()
         layout = QGridLayout()
         frame.setLayout(layout)
         layout.addWidget(self.dataacq_nav, 0, 0, 1, 0)
@@ -711,8 +710,7 @@ class Control(QMainWindow):
         lastind = []
         centre = [None]
         radius = [.0]
-        listener = DataAcqListener(self.shared, wavelength,
-                                   self.dmplot_tool.txs)
+        listener = DataAcqListener(self.shared, wavelength, self.dmplot.txs)
 
         def clearup(clear_status=False):
             wavelength.clear()
@@ -728,8 +726,7 @@ class Control(QMainWindow):
                 self.dataacq_axes[0, 1].clear()
                 self.dataacq_axes[1, 0].clear()
                 self.dataacq_axes[1, 1].clear()
-                self.dmplot_da.ax = None
-                self.dataacq_axes[1, 1].figure.canvas.draw()
+                self.dataacq_fig.figure.canvas.draw()
 
         def disable():
             self.can_close = False
@@ -779,8 +776,7 @@ class Control(QMainWindow):
                 self.dataacq_axes[0, 1].clear()
                 self.dataacq_axes[1, 0].clear()
                 self.dataacq_axes[1, 1].clear()
-                self.dmplot_da.ax = None
-                self.dataacq_axes[1, 1].figure.canvas.draw()
+                self.dataacq_fig.figure.canvas.draw()
                 disable()
 
                 listener.run = True
@@ -853,7 +849,7 @@ class Control(QMainWindow):
                     clearup()
                     return
                 else:
-                    self.dmplot_da.update_txs(ndata[1])
+                    self.dmplot.update_txs(ndata[1])
 
                 if offset is None or not lastind:
                     val, ok = QInputDialog.getInt(
@@ -899,10 +895,11 @@ class Control(QMainWindow):
                 data = self.shared.get_phase()
                 wrapped, unwrapped = data[2:]
 
-                a2.set_title('dm')
-                if self.dmplot_da.ax is None:
-                    self.dmplot_da.setup_pattern(a2)
-                self.dmplot_da.update(self.shared.u)
+                a2.clear()
+                a2.plot(self.shared.u)
+                a2.set_title(f'acts [{self.shared.u.min():+.1f}, ' +
+                             f'{self.shared.u.max():+.1f}')
+                a2.set_ylim([-1, 1])
 
                 a3.imshow(wrapped, extent=self.shared.mag_ext, origin='lower')
                 a3.set_xlabel('mm')
@@ -1029,11 +1026,14 @@ class Control(QMainWindow):
                     a1.set_title('cam {: 3d} {: 3d}'.format(
                         self.shared.cam.min(), self.shared.cam.max()))
 
-                if self.dmplot_da.ax is None:
-                    self.dmplot_da.setup_pattern(self.dataacq_axes[0, 1])
+                a2 = self.dataacq_axes[0, 1]
+                a2.clear()
+                a2.set_title('acts')
+                a2.plot(self.shared.u)
+                a2.set_ylim([-1, 1])
 
                 if msg[0] == 'OK':
-                    status.setText('{}/{}'.format(msg[1] + 1, msg[2]))
+                    status.setText(f'{msg[1] + 1}/{msg[2]}')
                 elif msg[0] == 'finished':
                     if dataset:
                         dataset[0] = msg[1]
@@ -1049,7 +1049,6 @@ class Control(QMainWindow):
                     status.setText(msg[0])
                     enable()
 
-                self.dmplot_da.update(self.shared.u)
                 a1.figure.canvas.draw()
                 listener.busy = False
 
@@ -1161,7 +1160,7 @@ class Control(QMainWindow):
                 status.setText('')
                 for ax in self.test_axes:
                     ax.clear()
-                self.test_axes[1, 1].figure.canvas.draw()
+                self.test_fig.figure.canvas.draw()
 
         def disable():
             self.can_close = False
@@ -1247,7 +1246,7 @@ class Control(QMainWindow):
                     enable()
                     return False
                 else:
-                    self.dmplot_tool.update_txs(ndata[3])
+                    self.dmplot.update_txs(ndata[3])
                     if self.zernikePanel:
                         self.zernikePanel.close()
                     self.zernikePanel = ZernikePanel(ndata[0],
