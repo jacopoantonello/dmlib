@@ -463,13 +463,13 @@ def open_dm(app, args, dm_transform=None):
 
 
 def add_log_parameters(parser):
-    parser.add_argument('--no-file-log',
-                        action='store_true',
-                        help='Disable logging to a file')
+    parser.add_argument('--file-log', dest='file_log', action='store_true')
+    parser.add_argument('--no-file-log', dest='file_log', action='store_false')
+    parser.set_defaults(file_log=False)
     parser.add_argument(
         '--log-level',
         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-        default='DEBUG')
+        default='ERROR')
 
 
 def setup_logging(args):
@@ -486,7 +486,7 @@ def setup_logging(args):
     else:
         raise NotImplementedError(f'Unknown logging level {args.log_level}')
 
-    if not args.no_file_log:
+    if args.file_log:
         fn = datetime.now().strftime('%Y%m%d-%H%M%S-' + str(os.getpid()) +
                                      '.log')
         logging.basicConfig(filename=fn, level=level)
