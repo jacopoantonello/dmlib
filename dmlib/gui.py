@@ -156,6 +156,21 @@ class Control(QMainWindow):
         self.make_panel_align()
         self.make_panel_dataacq()
         self.make_panel_test()
+
+        def change_tab():
+            def f(ind):
+                if ind == 0 and self.toolbox.count() == 1:
+                    self.toolbox.addItem(self.tool_cam, self.tool_cam_name)
+                    for g in self.tool_dm_toggle:
+                        g.setEnabled(1)
+                elif self.toolbox.count() == 2:
+                    self.toolbox.removeItem(1)
+                    for g in self.tool_dm_toggle:
+                        g.setEnabled(0)
+
+            return f
+
+        self.tabs.currentChanged.connect(change_tab())
         central.addWidget(self.tabs)
 
         self.setCentralWidget(central)
@@ -169,8 +184,8 @@ class Control(QMainWindow):
             event.ignore()
 
     def make_toolbox(self):
-        self.make_tool_cam()
         self.make_tool_dm()
+        self.make_tool_cam()
 
     def make_tool_cam(self):
         tool_cam = QFrame()
@@ -245,7 +260,9 @@ class Control(QMainWindow):
             f1(cam_set('set_framerate'), s2, l1, s1, 'exposure',
                cam_get('get_exposure_range'), cam_get('get_exposure')))
 
-        self.toolbox.addItem(tool_cam, 'cam: ' + self.cam_name)
+        self.tool_cam = tool_cam
+        self.tool_cam_name = 'cam: ' + self.cam_name
+        self.toolbox.addItem(self.tool_cam, self.tool_cam_name)
 
     def update_tool_dm(self):
         self.dmplot_tool.update(self.shared.u)
@@ -389,7 +406,10 @@ class Control(QMainWindow):
 
         self.write_dm(None)
 
-        self.toolbox.addItem(tool_dm, 'dm: ' + self.dm_name)
+        self.tool_dm = tool_dm
+        self.tool_dm_name = 'dm: ' + self.dm_name
+        self.tool_dm_toggle = (g1, g2)
+        self.toolbox.addItem(self.tool_dm, self.tool_dm_name)
 
     def make_panel_align(self):
         frame = QFrame()
