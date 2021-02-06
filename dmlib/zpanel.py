@@ -989,6 +989,7 @@ class DMWindow(QMainWindow):
         layout.addWidget(calibname, 2, 0, 1, 4)
 
         bplot = QPushButton('plot')
+        bactcmap = QPushButton('act cmap')
 
         bcalib = QPushButton('load calib')
         bsave = QPushButton('save params')
@@ -1010,6 +1011,7 @@ class DMWindow(QMainWindow):
         l1.addWidget(QLabel('rotate'), 0, 3)
         l1.addWidget(lerotate, 0, 4)
         l1.addWidget(bplot, 0, 5)
+        l1.addWidget(bactcmap, 0, 6)
         g1.setLayout(l1)
         layout.addWidget(g1, 3, 0, 1, 4)
 
@@ -1027,6 +1029,18 @@ class DMWindow(QMainWindow):
         bsaveflat.clicked.connect(hand_save(True))
         bload.clicked.connect(hand_load())
         bflat.stateChanged.connect(hand_flat())
+
+        def actcmapf():
+            prev = [self.dmplot.abs_cmap]
+
+            def f():
+                prev[0] = not prev[0]
+                self.dmplot.set_abs_cmap(prev[0])
+                self.dmplot.update(self.zcontrol.u)
+
+            return f
+
+        bactcmap.clicked.connect(actcmapf())
 
         def plotf():
             def f():
