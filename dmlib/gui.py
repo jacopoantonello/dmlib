@@ -14,6 +14,7 @@ from multiprocessing import Array, Process, Queue, Value
 from os import path
 
 import h5py
+import matplotlib.gridspec as gridspec
 import numpy as np
 from matplotlib import ticker
 from matplotlib.backends.backend_qt5agg import (FigureCanvas,
@@ -411,7 +412,7 @@ class Control(QMainWindow):
                                               top=.9,
                                               wspace=0.45,
                                               hspace=0.45)
-        self.align_axes[0, 0].set_title('camera')
+        self.align_axes[0, 0].set_title('cam')
         self.align_axes[0, 1].set_title('FT')
         self.align_axes[0, 2].set_title('1st order')
         self.align_axes[1, 0].set_title('magnitude')
@@ -552,8 +553,8 @@ class Control(QMainWindow):
                     if self.shared.cam_sat.value:
                         a1.set_title('cam SAT')
                     else:
-                        a1.set_title('cam {: 3d} {: 3d}'.format(
-                            self.shared.cam.min(), self.shared.cam.max()))
+                        a1.set_title(f'cam {self.shared.cam.min(): 3d} ' +
+                                     f'{self.shared.cam.max(): 3d}')
 
                 if listener.unwrap and result[0] not in ('ERR1', 'ERR2'):
                     a2.imshow(self.shared.ft,
@@ -642,8 +643,7 @@ class Control(QMainWindow):
                                                 top=.9,
                                                 wspace=0.45,
                                                 hspace=0.45)
-        self.dataacq_axes[0, 0].set_title('camera')
-        self.dataacq_axes[0, 1].set_title('dm')
+        self.dataacq_axes[0, 0].set_title('cam')
         self.dataacq_axes[1, 0].set_title('wrapped phi')
         self.dataacq_axes[1, 1].set_title('unwrapped phi')
 
@@ -1066,17 +1066,20 @@ class Control(QMainWindow):
         self.tabs.setTabToolTip(
             2, ('Test a calibration file interferometrically'))
 
-        self.test_axes = self.test_fig.figure.subplots(2, 2)
+        gs = gridspec.GridSpec(2, 2)
+        self.test_axes = [
+            self.test_fig.figure.add_subplot(gs[0, :]),
+            self.test_fig.figure.add_subplot(gs[1, 0]),
+            self.test_fig.figure.add_subplot(gs[1, 1]),
+        ]
         self.test_fig.figure.subplots_adjust(left=.125,
                                              right=.9,
                                              bottom=.1,
                                              top=.9,
                                              wspace=0.45,
                                              hspace=0.45)
-        self.test_axes[0, 0].set_title('dm')
-        self.test_axes[0, 1].set_title('Zernike')
-        self.test_axes[1, 0].set_title('phi meas')
-        self.test_axes[1, 1].set_title('phi err')
+        self.test_axes[1].set_title('phi meas')
+        self.test_axes[2].set_title('phi err')
 
         brun = QPushButton('run')
         bstop = QPushButton('stop')
@@ -1101,17 +1104,14 @@ class Control(QMainWindow):
 
         bflat = QCheckBox('flat')
         bnoflat = QPushButton('exclude flat')
-        bnoflat.setToolTip('Exclude some Zernike modes from the flattening')
+        bnoflat.setToolTip('Exclude some Zernike modes from the DM flattening')
         bflat.setChecked(True)
-        bflat.setToolTip('Apply the flat value computed at calibration time')
+        bflat.setToolTip(
+            'Enable or disable the flattening computed at calibration time')
         layout.addWidget(bflat, 4, 1)
-        layout.addWidget(bnoflat, 5, 1)
-        bloop = QCheckBox('closed-loop')
-        bloop.setChecked(False)
-        bloop.setEnabled(False)
-        layout.addWidget(bloop, 4, 2)
+        layout.addWidget(bnoflat, 4, 2)
         bclear = QPushButton('clear')
-        layout.addWidget(bclear, 5, 3)
+        layout.addWidget(bclear, 4, 3)
 
         disables = [
             self.toolbox, brun, bflat, bnoflat, bzernike, bclear,
@@ -1139,11 +1139,8 @@ class Control(QMainWindow):
 
             if clear_status:
                 status.setText('')
-                self.test_axes[0, 0].clear()
-                self.test_axes[0, 1].clear()
-                self.test_axes[1, 0].clear()
-                self.test_axes[1, 1].clear()
-                self.dmplot_da.ax = None
+                for ax in self.test_axes:
+                    ax.clear()
                 self.test_axes[1, 1].figure.canvas.draw()
 
         def disable():
@@ -1230,8 +1227,7 @@ class Control(QMainWindow):
                     enable()
                     return False
                 else:
-                    self.dmplot_da.update_txs(ndata[3])
-                    self.dmplot_da.ax = None
+                    self.dmplot_tool.update_txs(ndata[3])
                     if self.zernikePanel:
                         self.zernikePanel.close()
                     self.zernikePanel = ZernikePanel(ndata[0],
@@ -1264,7 +1260,6 @@ class Control(QMainWindow):
                 llistener.calib = calib[0]
                 llistener.flat = bflat.isChecked()
                 llistener.noflat_index = noflat_index[0]
-                llistener.closed_loop = bloop.isChecked()
                 llistener.start()
 
             return f
@@ -1279,28 +1274,21 @@ class Control(QMainWindow):
                 noll_inds = noll_inds[keep_inds]
                 zx = noll_inds + 1
 
-                ax1 = self.test_axes[0, 0]
-                if self.dmplot_da.ax is None:
-                    self.dmplot_da.setup_pattern(ax1)
-                self.dmplot_da.update(self.shared.u)
-
-                if self.shared.dm_sat:
-                    ax1.set_title('dm SAT')
-                else:
-                    ax1.set_title('dm')
-
-                ax2 = self.test_axes[0, 1]
+                ax2 = self.test_axes[0]
                 ax2.clear()
                 noll_sp = self.shared.z_sp[noll_inds]
                 noll_ms = self.shared.z_ms[noll_inds]
                 ax2.plot(zx, noll_sp, zx, noll_ms, marker='.')
-                ax2.set_title(f'res rms {norm(noll_sp - noll_ms):.2f} [rad]')
+                txt = f'rms={norm(noll_sp - noll_ms):.2f} [rad]; '
+                if self.shared.dm_sat:
+                    txt += 'DM SAT'
+                ax2.set_title(txt)
 
                 phi_ms = self.shared.get_phase()[-1]
                 phi_er = self.shared.get_cl_data()[0]
 
                 if len(arts) != 2:
-                    ax3 = self.test_axes[1, 0]
+                    ax3 = self.test_axes[1]
                     im = ax3.imshow(phi_ms,
                                     extent=self.shared.mag_ext,
                                     origin='lower')
@@ -1318,7 +1306,7 @@ class Control(QMainWindow):
                     arts[0][0].set_clim(m1, m2)
 
                 if len(arts) != 2:
-                    ax4 = self.test_axes[1, 1]
+                    ax4 = self.test_axes[2]
                     im = ax4.imshow(phi_er,
                                     extent=self.shared.mag_ext,
                                     origin='lower')
@@ -1337,7 +1325,7 @@ class Control(QMainWindow):
 
                 self.update_tool_dm()
 
-                ax1.figure.canvas.draw()
+                self.test_fig.figure.canvas.draw()
 
                 llistener.busy = False
 
@@ -1374,8 +1362,8 @@ class Control(QMainWindow):
         def f5():
             def f():
                 val, ok = QInputDialog.getInt(
-                    self, 'Exclude Noll',
-                    'Exclude Noll indices from flattening up to (inclusive):',
+                    self, 'Exclude Noll indices',
+                    'Noll indices to exclude from the flattening (inclusive):',
                     noflat_index[0], 0, self.shared.z_sp.size)
                 if not ok:
                     return
