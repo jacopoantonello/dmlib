@@ -624,6 +624,7 @@ class Control(QMainWindow):
         frame = QFrame()
         self.dataacq_fig = FigureCanvas(Figure(figsize=(7, 5)))
         self.dataacq_nav = NavigationToolbar2QT(self.dataacq_fig, frame)
+        self.dmplot_da = self.dmplot_tool.clone()
         layout = QGridLayout()
         frame.setLayout(layout)
         layout.addWidget(self.dataacq_nav, 0, 0, 1, 0)
@@ -690,7 +691,8 @@ class Control(QMainWindow):
         lastind = []
         centre = [None]
         radius = [.0]
-        listener = DataAcqListener(self.shared, wavelength, self.dmplot_tool)
+        listener = DataAcqListener(self.shared, wavelength,
+                                   self.dmplot_tool.txs)
 
         def clearup(clear_status=False):
             wavelength.clear()
@@ -706,6 +708,7 @@ class Control(QMainWindow):
                 self.dataacq_axes[0, 1].clear()
                 self.dataacq_axes[1, 0].clear()
                 self.dataacq_axes[1, 1].clear()
+                self.dmplot_da.ax = None
                 self.dataacq_axes[1, 1].figure.canvas.draw()
 
         def disable():
@@ -756,6 +759,7 @@ class Control(QMainWindow):
                 self.dataacq_axes[0, 1].clear()
                 self.dataacq_axes[1, 0].clear()
                 self.dataacq_axes[1, 1].clear()
+                self.dmplot_da.ax = None
                 self.dataacq_axes[1, 1].figure.canvas.draw()
                 disable()
 
@@ -829,7 +833,7 @@ class Control(QMainWindow):
                     clearup()
                     return
                 else:
-                    self.dmplot_tool.update_txs(ndata[1])
+                    self.dmplot_da.update_txs(ndata[1])
 
                 if offset is None or not lastind:
                     val, ok = QInputDialog.getInt(
@@ -859,7 +863,6 @@ class Control(QMainWindow):
                 a4 = self.dataacq_axes[1, 1]
 
                 a1.clear()
-                a2.clear()
                 a3.clear()
                 a4.clear()
 
@@ -876,8 +879,10 @@ class Control(QMainWindow):
                 data = self.shared.get_phase()
                 wrapped, unwrapped = data[2:]
 
-                # self.dmplot.setup_pattern(a2)
                 a2.set_title('dm')
+                if self.dmplot_da.ax is None:
+                    self.dmplot_da.setup_pattern(a2)
+                self.dmplot_da.update(self.shared.u)
 
                 a3.imshow(wrapped, extent=self.shared.mag_ext, origin='lower')
                 a3.set_xlabel('mm')
@@ -898,8 +903,7 @@ class Control(QMainWindow):
 
                 a4.figure.canvas.draw()
 
-                status.setText('{} {}/{}'.format(dataset[0], val,
-                                                 ndata[0] - 1))
+                status.setText(f'{dataset[0]} {val}/{ndata[0] - 1}')
 
             return f
 
@@ -994,10 +998,7 @@ class Control(QMainWindow):
                 listener.busy = True
 
                 a1 = self.dataacq_axes[0, 0]
-                a2 = self.dataacq_axes[0, 1]
-
                 a1.clear()
-
                 a1.imshow(self.shared.cam,
                           extent=self.shared.cam_ext,
                           origin='lower')
@@ -1007,6 +1008,9 @@ class Control(QMainWindow):
                 else:
                     a1.set_title('cam {: 3d} {: 3d}'.format(
                         self.shared.cam.min(), self.shared.cam.max()))
+
+                if self.dmplot_da.ax is None:
+                    self.dmplot_da.setup_pattern(self.dataacq_axes[0, 1])
 
                 if msg[0] == 'OK':
                     status.setText('{}/{}'.format(msg[1] + 1, msg[2]))
@@ -1025,11 +1029,8 @@ class Control(QMainWindow):
                     status.setText(msg[0])
                     enable()
 
-                self.dmplot.update(a2, self.shared.u)
-                a2.axis('off')
-                a2.set_title('dm')
-                a2.figure.canvas.draw()
-
+                self.dmplot_da.update(self.shared.u)
+                a1.figure.canvas.draw()
                 listener.busy = False
 
             return f
@@ -1142,6 +1143,7 @@ class Control(QMainWindow):
                 self.test_axes[0, 1].clear()
                 self.test_axes[1, 0].clear()
                 self.test_axes[1, 1].clear()
+                self.dmplot_da.ax = None
                 self.test_axes[1, 1].figure.canvas.draw()
 
         def disable():
@@ -1228,15 +1230,15 @@ class Control(QMainWindow):
                     enable()
                     return False
                 else:
-                    self.dmplot.update_txs(ndata[3])
+                    self.dmplot_da.update_txs(ndata[3])
+                    self.dmplot_da.ax = None
                     if self.zernikePanel:
                         self.zernikePanel.close()
                     self.zernikePanel = ZernikePanel(ndata[0],
                                                      ndata[1],
                                                      callback=cb)
                     self.zernikePanel.show()
-                    status.setText('{} {:.3f} mm'.format(
-                        calib[0], ndata[2] / 1000))
+                    status.setText(f'{calib[0]} {ndata[2] / 1000:.3f} mm')
                     enable()
                     return True
 
@@ -1278,8 +1280,10 @@ class Control(QMainWindow):
                 zx = noll_inds + 1
 
                 ax1 = self.test_axes[0, 0]
-                ax1.imshow(self.dmplot.compute_gauss(self.shared.u))
-                ax1.axis('off')
+                if self.dmplot_da.ax is None:
+                    self.dmplot_da.setup_pattern(ax1)
+                self.dmplot_da.update(self.shared.u)
+
                 if self.shared.dm_sat:
                     ax1.set_title('dm SAT')
                 else:
@@ -1446,17 +1450,17 @@ class DataAcqListener(QThread):
 
     sig_update = pyqtSignal(tuple)
 
-    def __init__(self, shared, wavelength, dmplot):
+    def __init__(self, shared, wavelength, dmplot_txs):
         super().__init__()
         self.busy = False
         self.run = True
         self.shared = shared
         self.wavelength = wavelength
-        self.dmplot = dmplot
+        self.dmplot_txs = dmplot_txs
         self.log = logging.getLogger('DataAcqListener')
 
     def run(self):
-        self.shared.iq.put(('dataacq', self.wavelength[0], self.dmplot.txs))
+        self.shared.iq.put(('dataacq', self.wavelength[0], self.dmplot_txs))
         while True:
             result = self.shared.oq.get()
             if result[0] == 'OK':

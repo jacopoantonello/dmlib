@@ -26,15 +26,22 @@ def get_layouts():
 
 
 def make_DMPlot(name):
-    return DMPlot(**load_layout(name))
+    d = load_layout(name)
+    locations = np.array(d['locations'], dtype=float)
+    loc2ind = np.array(d['loc2ind']).ravel()
+    scale_shapes = d['scale_shapes']
+    shapes = [np.array(s) for s in d['shapes']]
+    return DMPlot(locations, loc2ind, scale_shapes, shapes)
 
 
 class DMPlot():
     def __init__(self, locations, loc2ind, scale_shapes, shapes):
-        self.locations = np.array(locations, dtype=float)
-        self.loc2ind = np.array(loc2ind).ravel()
+        self.locations = locations
+        self.loc2ind = loc2ind
         self.scale_shapes = scale_shapes
-        self.shapes = [np.array(s) for s in shapes]
+        self.shapes = shapes
+        self.ax = None
+
         self.T = np.eye(2)
         self.arts = []
         self.make_xys()
@@ -50,6 +57,12 @@ class DMPlot():
         for i, s in enumerate(self.shapes):
             if s.ndim != 2:
                 raise ValueError(f'shapes[{i}].ndim != 2')
+
+    def clone(self):
+        d = DMPlot(self.locations.copy(), self.loc2ind.copy(),
+                   self.scale_shapes, [d.copy() for d in self.shapes])
+        d.update_txs(self.txs)
+        return d
 
     def make_xys(self):
         self.xys = []
@@ -78,7 +91,8 @@ class DMPlot():
             T = np.array([[1, 0], [0, -1]]).dot(T)
 
         self.xys = [(T.dot(xy.T)).T for xy in self.xys]
-        self.setup_pattern(self.ax)
+        if self.ax:
+            self.setup_pattern(self.ax)
 
     def flipx(self, b):
         self.txs[0] = b
