@@ -761,8 +761,9 @@ class DMWindow(QMainWindow):
                     ind = self.dmplot.index_actuator(e.xdata, e.ydata)
                     if ind != -1:
                         val, ok = QInputDialog.getDouble(
-                            self, f'Actuator {ind} ' + str(ind),
-                            'range [-1, 1]', self.zcontrol.u[ind], -1., 1., 4)
+                            self, f'Actuator {ind}',
+                            f'Actuator {ind}; Range [-1, 1]',
+                            self.zcontrol.u[ind], -1., 1., 4)
                         if ok:
                             self.zcontrol.u[ind] = val
                             self.zpanel.z[:] = self.zcontrol.u2z()

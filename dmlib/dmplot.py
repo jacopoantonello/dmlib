@@ -149,10 +149,9 @@ class DMPlot():
             if e.inaxes is not None:
                 ind = self.index_actuator(e.xdata, e.ydata)
                 if ind != -1:
-                    val, ok = QInputDialog.getDouble(parent,
-                                                     'Actuator ' + str(ind),
-                                                     'range [-1, 1]', u[ind],
-                                                     -1., 1., 4)
+                    val, ok = QInputDialog.getDouble(
+                        parent, f'Actuator {ind}',
+                        f'Actuator {ind}; Range [-1, 1]', u[ind], -1., 1., 4)
                     if ok:
                         u[ind] = val
                         self.update(u)

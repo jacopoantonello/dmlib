@@ -328,9 +328,9 @@ class Control(QMainWindow):
 
         def f3():
             def f():
-                val, ok = QInputDialog.getDouble(self, 'Set all actuators',
-                                                 'range [-1, 1]', 0., -1., 1.,
-                                                 4)
+                val, ok = QInputDialog.getDouble(
+                    self, 'Set all actuators',
+                    'Set all actuators; Range [-1, 1]', 0., -1., 1., 4)
                 if ok:
                     self.shared.u[:] = val
                     self.write_dm()
