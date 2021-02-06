@@ -1044,6 +1044,7 @@ class Control(QMainWindow):
                 a2.clear()
                 a2.set_title('acts')
                 a2.plot(self.shared.u)
+                self.dmplot.update(self.shared.u)
                 a2.set_ylim([-1, 1])
 
                 if msg[0] == 'OK':
