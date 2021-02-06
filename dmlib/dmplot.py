@@ -47,6 +47,7 @@ class DMPlot():
         self.make_xys()
         self.cmap = get_cmap()
         self.txs = [0, 0, 0]
+        self.abs_cmap = 1
 
         if self.locations.shape[0] != self.loc2ind.size:
             raise ValueError('locations.shape[0] != loc2ind.size')
@@ -109,12 +110,27 @@ class DMPlot():
     def size(self):
         return self.locations.shape[0]
 
+    def set_abs_cmap(self, b):
+        self.abs_cmap = b
+
     def update_pattern(self, u):
-        inds = np.round((len(self.cmap.colors) - 1) * (u + 1) / 2).astype(int)
+
+        m1 = u.min()
+        m2 = u.max()
+        if self.abs_cmap or m1 == m2:
+            inds = np.round(
+                (len(self.cmap.colors) - 1) * (u + 1) / 2).astype(int)
+        else:
+            inds = u - u.min()
+            inds /= inds.max()
+            inds = np.round((len(self.cmap.colors) - 1) * inds).astype(int)
+
         np.clip(inds, 0, len(self.cmap.colors) - 1, inds)
+
         for i in range(len(self.arts)):
             col = self.cmap.colors[inds[i]]
             self.arts[i].set_facecolor(col)
+
         self.ax.figure.canvas.draw()
 
     def setup_pattern(self, ax):
@@ -128,7 +144,7 @@ class DMPlot():
             self.arts.append(
                 ax.fill(xy[:, 0],
                         xy[:, 1],
-                        color=self.cmap.colors[-1],
+                        color=self.cmap.colors[0],
                         edgecolor=None)[0])
         self.ax = ax
         self.ax.figure.canvas.draw()

@@ -298,10 +298,10 @@ class Control(QMainWindow):
         gl1.addWidget(flipx, 0, 0)
         flipy = QPushButton('flipy')
         gl1.addWidget(flipy, 0, 1)
-        rotate1 = QPushButton('rotate')
-        gl1.addWidget(rotate1, 1, 0)
-        rotate2 = QPushButton('rotate acw')
-        gl1.addWidget(rotate2, 1, 1)
+        brotate = QPushButton('rotate')
+        gl1.addWidget(brotate, 1, 0)
+        bcmap = QPushButton('cmap')
+        gl1.addWidget(bcmap, 1, 1)
         g1.setLayout(gl1)
         central.addWidget(g1)
 
@@ -398,12 +398,22 @@ class Control(QMainWindow):
 
             return f
 
+        def fcmap():
+            prev = [True]
+
+            def f():
+                prev[0] = not prev[0]
+                self.dmplot.set_abs_cmap(prev[0])
+                self.update_tool_dm()
+
+            return f
+
         flipx.setCheckable(True)
         flipy.setCheckable(True)
         flipx.clicked.connect(f4(self.dmplot.flipx, flipx))
         flipy.clicked.connect(f4(self.dmplot.flipy, flipy))
-        rotate1.clicked.connect(f3())
-        rotate2.clicked.connect(f3())
+        brotate.clicked.connect(f3())
+        bcmap.clicked.connect(fcmap())
 
         tool_dm.setLayout(layout)
         layout.addWidget(central)
