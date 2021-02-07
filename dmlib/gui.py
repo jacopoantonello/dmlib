@@ -799,7 +799,7 @@ class Control(QMainWindow):
 
         def check_err():
             reply = self.shared.oq.get()
-            if reply[0].startswith('Camera must be'):
+            if reply[0].startswith('Configuration mismatch;'):
                 try:
                     newinst = path.join(path.dirname(path.abspath(__file__)),
                                         'gui.py')
@@ -1203,7 +1203,7 @@ class Control(QMainWindow):
 
         def check_err():
             reply = self.shared.oq.get()
-            if reply[0].startswith('Camera must be'):
+            if reply[0].startswith('Configuration mismatch;'):
                 try:
                     newinst = path.join(path.dirname(path.abspath(__file__)),
                                         'gui.py')
@@ -1799,15 +1799,16 @@ class Worker:
                 shape2 = img.shape
                 pxsize1 = self.cam.get_pixel_size()
                 pxsize2 = self.dset['cam/pixel_size'][()]
+                dm1 = self.dm.shape()
+                dm2 = self.dset['RegLSCalib/H'][()]
                 self.log.info(f'open_dset shape1 {shape1}')
                 self.log.info(f'open_dset shape2 {shape2}')
                 self.log.info(f'open_dset pxsize1 {pxsize1}')
                 self.log.info(f'open_dset pxsize2 {pxsize2}')
                 if (shape1[0] != shape2[0] or shape1[1] != shape2[1]
-                        or pxsize1[0] != pxsize2[0]
-                        or pxsize1[1] != pxsize2[1]):
-                    estr = (f'Camera must be {shape2} {pxsize2} um; ' +
-                            'Spawning new instance...')
+                        or pxsize1[0] != pxsize2[0] or pxsize1[1] != pxsize2[1]
+                        or dm1 != dm2):
+                    estr = 'Configuration mismatch; Spawn new instance...'
                 self.fringe.analyse(img,
                                     auto_find_orders=True,
                                     do_unwrap=True,
@@ -1817,7 +1818,7 @@ class Worker:
                 if estr is None:
                     self.shared.oq.put(('Failed to detect first orders', ))
                 else:
-                    self.shared.oq.put((estr, shape2, pxsize2))
+                    self.shared.oq.put((estr, shape2, pxsize2, dm2))
                 self.dfname = None
                 return -1
             return 0
@@ -1899,6 +1900,8 @@ class Worker:
                     shape2 = f['RegLSCalib/fringe/FringeAnalysis/shape'][()]
                     pxsize1 = self.cam.get_pixel_size()
                     pxsize2 = f['RegLSCalib/cam_pixel_size'][()]
+                    dm1 = self.dm.shape()
+                    dm2 = f['RegLSCalib/H'][()]
                     self.log.info(f'open_dset shape1 {shape1}')
                     self.log.info(f'open_dset shape2 {shape2}')
                     self.log.info(f'open_dset pxsize1 {pxsize1}')
@@ -1906,10 +1909,10 @@ class Worker:
 
                     if (shape1[0] != shape2[0] or shape1[1] != shape2[1]
                             or pxsize1[0] != pxsize2[0]
-                            or pxsize1[1] != pxsize2[1]):
+                            or pxsize1[1] != pxsize2[1] or dm1 != dm2):
                         self.shared.oq.put(
-                            (f'Camera must be {shape2} {pxsize2} um; ' +
-                             'Spawning new instance...', shape2, pxsize2))
+                            ('Configuration mismatch; Spawn new instance...',
+                             shape2, pxsize2, dm2))
                         return -1
                     self.calib = RegLSCalib.load_h5py(f)
                     self.calib_name = dname
