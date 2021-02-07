@@ -5,9 +5,9 @@ __pycache__/
 build/
 dist/
 /dmlib/*.h5
-*.json
 /dmlib/version.py
 /.eggs
 /examples/*.h5
 /examples/*.log
 *.log
+/examples/*.json

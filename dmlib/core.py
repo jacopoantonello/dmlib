@@ -15,7 +15,7 @@ from numpy.linalg import norm
 from PyQt5.QtWidgets import QErrorMessage, QInputDialog
 
 import dmlib.test
-from dmlib.dmplot import get_layouts, make_DMPlot
+from dmlib.dmplot import dmplot_from_layout
 from dmlib.version import __commit__, __date__, __version__
 
 LOG = logging.getLogger('core')
@@ -160,6 +160,8 @@ class FakeDM():
         self.log = logging.getLogger(self.__class__.__name__)
         self.name = None
         self.transform = None
+        self.size = 140
+        self.presets = {}
 
     def open(self, name=''):
         self.name = name
@@ -172,7 +174,7 @@ class FakeDM():
         return ['simdm0', 'simdm1']
 
     def size(self):
-        return 140
+        return self.size
 
     def write(self, v):
         if self.transform:
@@ -187,94 +189,12 @@ class FakeDM():
     def get_serial_number(self):
         return self.name
 
+    def from_dmplot(self, dmplot):
+        self.size = dmplot.size()
+        self.presets = dmplot.presets
+
     def preset(self, name, mag=0.7):
-        u = np.zeros((140, ))
-        if name == 'centre':
-            u[63:65] = mag
-            u[75:77] = mag
-        elif name == 'cross':
-            u[58:82] = mag
-            u[4:6] = mag
-            u[134:136] = mag
-            for i in range(10):
-                off = 15 + 12 * i
-                u[off:(off + 2)] = mag
-        elif name == 'x':
-            inds = np.array([
-                11, 24, 37, 50, 63, 76, 89, 102, 115, 128, 20, 31, 42, 53, 64,
-                75, 86, 97, 108, 119
-            ])
-            u[inds] = mag
-        elif name == 'rim':
-            u[0:10] = mag
-            u[130:140] = mag
-            for i in range(10):
-                u[10 + 12 * i] = mag
-                u[21 + 12 * i] = mag
-        elif name == 'checker':
-            c = 0
-            s = mag
-            for i in range(10):
-                u[c] = s
-                c += 1
-                s *= -1
-            for j in range(10):
-                for i in range(12):
-                    u[c] = s
-                    c += 1
-                    s *= -1
-                s *= -1
-            s *= -1
-            for i in range(10):
-                u[c] = s
-                c += 1
-                s *= -1
-        elif name == 'arrows':
-            inds = np.array([
-                20,
-                31,
-                42,
-                53,
-                64,
-                75,
-                86,
-                97,
-                108,
-                119,
-                16,
-                17,
-                18,
-                19,
-                29,
-                30,
-                32,
-                44,
-                56,
-                68,
-                43,
-                55,
-                34,
-                23,
-                12,
-                25,
-                38,
-                24,
-                36,
-                48,
-                60,
-                89,
-                102,
-                115,
-                128,
-                101,
-                113,
-                90,
-                91,
-            ])
-            u[inds] = mag
-        else:
-            raise NotImplementedError(name)
-        return u
+        return mag * self.presets[name]
 
 
 def choose_device(app, args, dev, name, def1, set1):
@@ -377,14 +297,67 @@ def open_cam(app, args):
     return cam
 
 
+def get_suitable_dmplot(args, dm, calib=None):
+    if args.dm_driver == 'sim':
+        if calib is not None:
+            if calib.dmplot is not None:
+                dmplot = dm.from_dmplot(calib.dmplot)
+            elif args.dm_layout is not None:
+                dmplot = dmplot_from_layout(args.dm_layout)
+            elif calib.nactuators() == 140:
+                dmplot = dmplot_from_layout('multidm140')
+            elif calib.nactuators() == 69:
+                dmplot = dmplot_from_layout('alpao69')
+            elif calib.nactuators() == 52:
+                dmplot = dmplot_from_layout('mirao52e')
+            else:
+                raise ValueError(
+                    f'Unknown DMPlot for {calib.size()} actuators')
+            dm.from_dmplot(calib.dmplot)
+            return dmplot
+        else:
+            if args.dm_layout is None:
+                args.dm_layout = 'multidm140'
+            dmplot = dmplot_from_layout(args.dm_layout)
+            dm.from_dmplot(dmplot.size())
+            return dmplot
+    else:
+        if calib is not None:
+            if calib.nactuators() != dm.size():
+                raise ValueError(f'Calibration has {calib.size()} actuators ' +
+                                 f'but DM has {dm.size()}')
+            elif calib.dmplot is not None:
+                return calib.dmplot
+            elif args.dm_layout is not None:
+                dmplot = dmplot_from_layout(args.dm_layout)
+                if dmplot.size() != dm.size():
+                    raise ValueError(
+                        f'Calibration has {calib.size()} actuators ' +
+                        f'but {args.dm_layout} has {dmplot.size()}')
+                else:
+                    return dmplot
+            else:
+                raise ValueError('Cannot find suitable DMPlot')
+        else:
+            if args.dm_layout is None:
+                raise ValueError('Cannot find suitable DMPlot')
+            else:
+                dmplot = dmplot_from_layout(args.dm_layout)
+                if dmplot.size() != dm.size():
+                    raise ValueError(
+                        f'DM layout has {dmplot.size()} actuators ' +
+                        f'but DM has {dm.size()}')
+                return dmplot
+
+    raise RuntimeError()
+
+
 def open_dm(app, args, dm_transform=None):
 
-    # choose a driver
+    # choose a driver & adjust DM layout and transform if not set
     try:
         if args.dm_driver == 'sim':
             dm = FakeDM()
-            if args.dm_layout is None:
-                args.dm_layout = 'multidm140'
             if dm_transform is None:
                 dm_transform = SquareRoot.name
         elif args.dm_driver == 'bmc':
@@ -428,17 +401,6 @@ def open_dm(app, args, dm_transform=None):
         else:
             sys.exit()
 
-    # lookup a DM layout for the GUI
-    try:
-        dmplot = make_DMPlot(args.dm_layout)
-    except FileNotFoundError as e:
-        exit_exception(
-            app, f'Could not load DM layout {args.dm_layout}; ' +
-            f'Available layouts are {",".join(get_layouts())}', e)
-    except Exception as e:
-        exit_exception(app, f'Error creating DMPlot layout: {args.dm_layout}',
-                       e)
-
     # choose device
     def set_dm(t):
         args.dm_name = t
@@ -448,11 +410,6 @@ def open_dm(app, args, dm_transform=None):
     # open device
     attempt_open(app, dm, args.dm_name, 'dm')
 
-    nact1 = dm.size()
-    nact2 = dmplot.size()
-    if nact1 != nact2:
-        exit_exception(app, f'DM has {nact1} actuators but DMPlot has {nact2}')
-
     # choose a driver
     if dm_transform == 'v = u':
         pass
@@ -461,7 +418,7 @@ def open_dm(app, args, dm_transform=None):
     else:
         exit_exception(app, 'DM transform not set')
 
-    return dm, dmplot
+    return dm
 
 
 def add_log_parameters(parser):

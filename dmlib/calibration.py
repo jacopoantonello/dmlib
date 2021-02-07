@@ -14,6 +14,7 @@ from skimage.restoration import unwrap_phase
 from zernike import RZern
 
 from dmlib.core import SquareRoot, h5_read_str, h5_store_str
+from dmlib.dmplot import DMPlot
 from dmlib.interf import FringeAnalysis
 
 LOG = logging.getLogger('calibration')
@@ -127,13 +128,16 @@ class RegLSCalib:
                   cam_serial='',
                   dname='',
                   dm_serial='',
-                  dmplot_txs=(0, 0, 0),
+                  dmplot=None,
                   dm_transform=SquareRoot.name,
                   hash1='',
                   n_radial=25,
                   alpha=.75,
                   lambda1=5e-3,
                   status_cb=False):
+
+        if dmplot is not None and U.shape[0] != dmplot.size():
+            raise ValueError('U.shape[0] != dmplot.size()')
 
         if status_cb:
             status_cb('Computing Zernike polynomials ...')
@@ -276,11 +280,14 @@ class RegLSCalib:
         self.dm_transform = dm_transform
         self.cam_pixel_size = cam_pixel_size
         self.cam_serial = cam_serial
-        self.dmplot_txs = dmplot_txs
+        self.dmplot = dmplot
         self.dname = dname
         self.hash1 = hash1
 
         LOG.info(f'calibrate(): Applying regularisation {time() - t1:.1f}')
+
+    def nactuators(self):
+        return self.H.shape[1]
 
     def reflatten(self, exclude_zernike_noll=4):
         tmp = self.z0.copy()
@@ -327,7 +334,6 @@ class RegLSCalib:
                 return (
                     h5_read_str(f, 'RegLSCalib/dm_serial'),
                     h5_read_str(f, 'RegLSCalib/dm_transform'),
-                    f['RegLSCalib/dmplot_txs'][()],
                     f['RegLSCalib/H'].shape,
                 )
 
@@ -362,7 +368,6 @@ class RegLSCalib:
         z.dm_transform = h5_read_str(f, prefix + 'dm_transform')
         z.cam_pixel_size = f[prefix + 'cam_pixel_size'][()]
         z.cam_serial = h5_read_str(f, prefix + 'cam_serial')
-        z.dmplot_txs = f[prefix + 'dmplot_txs'][()]
         z.dname = h5_read_str(f, prefix + 'dname')
         z.hash1 = h5_read_str(f, prefix + 'hash1')
 
@@ -372,6 +377,11 @@ class RegLSCalib:
 
         z.zfA1TzfA1 = None
         z.chzfA1TzfA1 = None
+
+        try:
+            z.dmplot = DMPlot.load_h5py(f, prefix + 'dmplot/')
+        except KeyError:
+            z.dmplot = None
 
         return z
 
@@ -417,6 +427,8 @@ class RegLSCalib:
         h5_store_str(f, prefix + 'dm_transform', self.dm_transform)
         f[prefix + 'cam_pixel_size'] = self.cam_pixel_size
         h5_store_str(f, prefix + 'cam_serial', self.cam_serial)
-        f[prefix + 'dmplot_txs'] = self.dmplot_txs
         h5_store_str(f, prefix + 'dname', self.dname)
         h5_store_str(f, prefix + 'hash1', self.hash1)
+
+        if self.dmplot is not None:
+            self.dmplot.save_h5py(f, prefix + 'dmplot/', params=HDF5_options)

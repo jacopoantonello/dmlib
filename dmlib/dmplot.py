@@ -25,21 +25,24 @@ def get_layouts():
     return [path.basename(g).replace('.json', '') for g in glob(base)]
 
 
-def make_DMPlot(name):
+def dmplot_from_layout(name):
     d = load_layout(name)
     locations = np.array(d['locations'], dtype=float)
     loc2ind = np.array(d['loc2ind']).ravel()
     scale_shapes = d['scale_shapes']
     shapes = [np.array(s) for s in d['shapes']]
-    return DMPlot(locations, loc2ind, scale_shapes, shapes)
+    presets = d['names']
+    return DMPlot(locations, loc2ind, scale_shapes, shapes, presets)
 
 
 class DMPlot():
-    def __init__(self, locations, loc2ind, scale_shapes, shapes):
+    def __init__(self, locations, loc2ind, scale_shapes, shapes, presets):
         self.locations = locations
         self.loc2ind = loc2ind
         self.scale_shapes = scale_shapes
         self.shapes = shapes
+        self.presets = presets
+
         self.ax = None
 
         self.T = np.eye(2)
@@ -178,3 +181,59 @@ class DMPlot():
 
     def update(self, u):
         self.update_pattern(u)
+
+    @classmethod
+    def load_h5py(cls, f, prepend=None, lazy_cart_grid=False):
+        """Load object contents from an opened HDF5 file object."""
+        z = cls()
+
+        prefix = cls.__name__ + '/'
+
+        if prepend is not None:
+            prefix = prepend + prefix
+
+        if prefix not in f:
+            raise ValueError('No DMPlot information')
+
+        z.locations = f[prefix + 'locations'][()]
+        z.loc2ind = f[prefix + 'loc2ind'][()]
+        z.scale_shapes = f[prefix + 'scale_shapes'][()]
+
+        nshapes = f[prefix + 'nshapes'][()]
+        shapes = []
+        for i in range(nshapes):
+            shapes.append(f[prefix + f'shapes/{i}'][()])
+        z.shapes = shapes
+        z.txs = f[prefix + 'txs'][()]
+
+        d = {}
+        for k in f[prefix + 'presets']:
+            d[k] = f[prefix + 'presets/' + k][()]
+        z.presets = d
+
+        return z
+
+    def save_h5py(self, f, prepend=None, params={}):
+        """Dump object contents into an opened HDF5 file object."""
+        prefix = self.__class__.__name__ + '/'
+
+        if prepend is not None:
+            prefix = prepend + prefix
+
+        params['data'] = self.locations
+        f.create_dataset(prefix + 'locations', **params)
+
+        params['data'] = self.loc2ind
+        f.create_dataset(prefix + 'loc2ind', **params)
+
+        f[prefix + 'scale_shapes'] = self.scale_shapes
+        nshapes = len(self.nshapes)
+        f[prefix + 'nshapes'] = nshapes
+        for i in range(nshapes):
+            params['data'] = self.shapes[i]
+            f.create_dataset(prefix + f'shapes/{i}', **params)
+        f[prefix + 'txs'] = self.txs
+
+        for k, v in self.presets:
+            params['data'] = v
+            f.create_dataset(prefix + f'presets/{i}', **params)
