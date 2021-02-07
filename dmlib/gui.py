@@ -1793,7 +1793,8 @@ class Worker:
             self.dfname = dname
 
             if 'data/images' not in self.dset:
-                self.shared.oq.put((dname + ' does not look like a dataset', ))
+                self.shared.oq.put(
+                    (path.basename(dname) + ' does not look like a dataset', ))
                 self.dset.close()
                 self.dfname = None
                 self.dset = None
@@ -1884,12 +1885,13 @@ class Worker:
                 path.basename(dname).rstrip('.h5') +
                 f'-{radius / 1000:.3f}mm' + '.h5')
 
-            notify_fun(f'Saving {h5fn} ...')
+            notify_fun(f'Saving {path.basename(h5fn)} ...')
             with h5py.File(h5fn, 'w', libver=libver) as h5f:
                 write_h5_header(h5f, libver, now)
                 calib.save_h5py(h5f)
 
-            notify_fun(f'Saved {h5fn}; Quality {calib.mvaf.mean():.2f}%',
+            notify_fun(f'Saved {path.basename(h5fn)}; ' +
+                       f'Quality {calib.mvaf.mean():.2f}%',
                        cmd='OK',
                        m2=h5fn)
         except Exception as e:
@@ -1900,8 +1902,8 @@ class Worker:
         if self.calib_name is None or self.calib_name != dname:
             with h5py.File(dname, 'r') as f:
                 if 'RegLSCalib' not in f:
-                    self.shared.oq.put(
-                        (dname + ' does not look like a calibration', ))
+                    self.shared.oq.put((path.basename(dname) +
+                                        ' does not look like a calibration', ))
                     return -1
                 else:
                     shape1 = self.cam.shape()
@@ -2024,7 +2026,7 @@ class Worker:
 
         libver = 'latest'
         now = datetime.now(timezone.utc)
-        h5fn = now.astimezone().strftime('%Y%m%d_%H%M%S.h5')
+        h5fn = now.astimezone().strftime('%Y%m%d_%H%M%S.h5').replace('#', 'p')
         dmsn = dm.get_serial_number()
         if dmsn:
             h5fn = dmsn + '_' + h5fn

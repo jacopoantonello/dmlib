@@ -70,11 +70,7 @@ class DMPlot():
             if s.ndim != 2:
                 raise ValueError(f'shapes[{i}].ndim != 2')
 
-    def clone(self):
-        d = DMPlot(self.locations.copy(), self.loc2ind.copy(),
-                   self.scale_shapes, [d.copy() for d in self.shapes])
-        d.update_txs(self.txs)
-        return d
+        self.update_txs()
 
     def make_xys(self):
         self.xys = []

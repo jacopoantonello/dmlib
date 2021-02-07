@@ -301,7 +301,7 @@ def get_suitable_dmplot(args, dm, calib=None):
     if args.dm_driver == 'sim':
         if calib is not None:
             if calib.dmplot is not None:
-                dmplot = dm.from_dmplot(calib.dmplot)
+                dmplot = calib.dmplot
             elif args.dm_layout is not None:
                 dmplot = dmplot_from_layout(args.dm_layout)
             elif calib.nactuators() == 140:
