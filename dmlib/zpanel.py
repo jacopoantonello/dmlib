@@ -30,8 +30,8 @@ from zernike import RZern
 from dmlib import control
 from dmlib.calibration import RegLSCalib
 from dmlib.control import ZernikeControl, get_noll_indices
-from dmlib.core import (add_dm_parameters, add_log_parameters, open_dm,
-                        setup_logging)
+from dmlib.core import (add_dm_parameters, add_log_parameters,
+                        get_suitable_dmplot, open_dm, setup_logging)
 from dmlib.version import __version__
 
 
@@ -703,7 +703,6 @@ class DMWindow(QMainWindow):
         QShortcut(QKeySequence("Ctrl+Q"), self, self.close)
 
         self.dmplot = dmplot
-        self.dmplot.update_txs(self.zcontrol.calib.dmplot_txs)
         dmstatus = QLabel()
 
         def make_figs():
@@ -921,9 +920,9 @@ class DMWindow(QMainWindow):
                             self.zpanel.load_parameters(
                                 self.pars['ZernikePanel'])
                     except Exception as ex:
-                        self.log.error(f'error loading parameters {str(ex)}')
+                        self.log.error(f'Error loading parameters {str(ex)}')
                         QMessageBox.information(self,
-                                                'error loading parameters',
+                                                'Error loading parameters',
                                                 str(ex))
                 release()
 
@@ -946,9 +945,9 @@ class DMWindow(QMainWindow):
                             self.zpanel.load_parameters(
                                 self.pars['ZernikePanel'])
                     except Exception as ex:
-                        self.log.error(f'error loading calibration {str(ex)}')
+                        self.log.error(f'Error loading calibration {str(ex)}')
                         QMessageBox.information(self,
-                                                'error loading calibration',
+                                                'Error loading calibration',
                                                 str(ex))
                 release()
 
@@ -1236,13 +1235,15 @@ def new_zernike_window(app, args, pars={}):
 
     if args.dm_name is None:
         args.dm_name = calib_dm_name
-    dm, dmplot = open_dm(app, args, calib_dm_transform)
+    dm = open_dm(app, args, calib_dm_transform)
 
     try:
         with File(calib_file, 'r') as f:
             calib = RegLSCalib.load_h5py(f, lazy_cart_grid=True)
     except Exception as e:
-        quit(f'error loading calibration {pars["calibration"]}: {str(e)}')
+        quit(f'Error loading calibration {pars["calibration"]}: {str(e)}')
+
+    dmplot = get_suitable_dmplot(args, dm, calib)
 
     zwindow = DMWindow(None, dm, dmplot, calib, pars)
     zwindow.show()
@@ -1272,13 +1273,15 @@ def main():
 
     if args.dm_name is None:
         args.dm_name = calib_dm_name
-    dm, dmplot = open_dm(app, args, calib_dm_transform)
+    dm = open_dm(app, args, calib_dm_transform)
 
     try:
         with File(pars['calibration'], 'r') as f:
             calib = RegLSCalib.load_h5py(f, lazy_cart_grid=True)
     except Exception as e:
-        quit(f'error loading calibration {pars["calibration"]}: {str(e)}')
+        quit(f'Error loading calibration {pars["calibration"]}: {str(e)}')
+
+    dmplot = get_suitable_dmplot(args, dm, calib)
 
     zwindow = DMWindow(app, dm, dmplot, calib, pars)
     zwindow.show()

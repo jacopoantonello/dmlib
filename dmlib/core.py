@@ -313,7 +313,7 @@ def get_suitable_dmplot(args, dm, calib=None):
             else:
                 raise ValueError(
                     f'Unknown DMPlot for {calib.size()} actuators')
-            dm.from_dmplot(calib.dmplot)
+            dm.from_dmplot(dmplot)
             return dmplot
         else:
             if args.dm_layout is None:

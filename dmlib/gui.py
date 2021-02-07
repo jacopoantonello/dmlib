@@ -33,9 +33,9 @@ from PyQt5.QtWidgets import (QApplication, QCheckBox, QDialog, QDoubleSpinBox,
 from dmlib.calibration import RegLSCalib, make_normalised_input_matrix
 from dmlib.control import ZernikeControl, get_noll_indices
 from dmlib.core import (add_cam_parameters, add_dm_parameters,
-                        add_log_parameters, h5_read_str, h5_store_str,
-                        hash_file, open_cam, open_dm, setup_logging,
-                        spawn_file, write_h5_header)
+                        add_log_parameters, get_suitable_dmplot, h5_read_str,
+                        h5_store_str, hash_file, open_cam, open_dm,
+                        setup_logging, spawn_file, write_h5_header)
 from dmlib.interf import FringeAnalysis
 from dmlib.version import __version__
 from dmlib.zpanel import MyQIntValidator, ZernikePanel
@@ -1634,6 +1634,7 @@ class Worker:
 
         self.log = logging.getLogger('Worker')
         dm, _ = open_dm(None, args)
+        get_suitable_dmplot(args, dm)
         cam = open_cam(None, args)
         cam.set_exposure(cam.get_exposure_range()[0])
 
@@ -2200,7 +2201,7 @@ def main():
     args = parser.parse_args(args[1:])
     setup_logging(args)
 
-    dm, dmplot = open_dm(app, args)
+    dm = open_dm(app, args)
     cam = open_cam(app, args)
     cam_name = cam.get_serial_number()
     dm_name = dm.get_serial_number()
@@ -2212,6 +2213,7 @@ def main():
     p = Process(name='worker', target=run_worker, args=(shared, args))
     p.start()
 
+    dmplot = get_suitable_dmplot(args, dm)
     control = Control(p, shared, cam_name, dm_name, dmplot)
     control.show()
 

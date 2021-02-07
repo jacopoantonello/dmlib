@@ -380,7 +380,7 @@ class RegLSCalib:
 
         try:
             z.dmplot = DMPlot.load_h5py(f, prefix + 'dmplot/')
-        except KeyError:
+        except ValueError:
             z.dmplot = None
 
         return z

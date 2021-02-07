@@ -31,12 +31,18 @@ def dmplot_from_layout(name):
     loc2ind = np.array(d['loc2ind']).ravel()
     scale_shapes = d['scale_shapes']
     shapes = [np.array(s) for s in d['shapes']]
-    presets = d['names']
+    presets = d['presets']
     return DMPlot(locations, loc2ind, scale_shapes, shapes, presets)
 
 
 class DMPlot():
-    def __init__(self, locations, loc2ind, scale_shapes, shapes, presets):
+    def __init__(self,
+                 locations,
+                 loc2ind,
+                 scale_shapes,
+                 shapes,
+                 presets,
+                 txs=[0, 0, 0]):
         self.locations = locations
         self.loc2ind = loc2ind
         self.scale_shapes = scale_shapes
@@ -49,7 +55,7 @@ class DMPlot():
         self.arts = []
         self.make_xys()
         self.cmap = get_cmap()
-        self.txs = [0, 0, 0]
+        self.txs = txs
         self.abs_cmap = 1
 
         if self.locations.shape[0] != self.loc2ind.size:
@@ -185,7 +191,6 @@ class DMPlot():
     @classmethod
     def load_h5py(cls, f, prepend=None, lazy_cart_grid=False):
         """Load object contents from an opened HDF5 file object."""
-        z = cls()
 
         prefix = cls.__name__ + '/'
 
@@ -195,22 +200,23 @@ class DMPlot():
         if prefix not in f:
             raise ValueError('No DMPlot information')
 
-        z.locations = f[prefix + 'locations'][()]
-        z.loc2ind = f[prefix + 'loc2ind'][()]
-        z.scale_shapes = f[prefix + 'scale_shapes'][()]
+        locations = f[prefix + 'locations'][()]
+        loc2ind = f[prefix + 'loc2ind'][()]
+        scale_shapes = f[prefix + 'scale_shapes'][()]
 
         nshapes = f[prefix + 'nshapes'][()]
         shapes = []
         for i in range(nshapes):
             shapes.append(f[prefix + f'shapes/{i}'][()])
-        z.shapes = shapes
-        z.txs = f[prefix + 'txs'][()]
+        shapes = shapes
+        txs = f[prefix + 'txs'][()]
 
         d = {}
         for k in f[prefix + 'presets']:
             d[k] = f[prefix + 'presets/' + k][()]
-        z.presets = d
+        presets = d
 
+        z = cls(locations, loc2ind, scale_shapes, shapes, presets, txs)
         return z
 
     def save_h5py(self, f, prepend=None, params={}):
