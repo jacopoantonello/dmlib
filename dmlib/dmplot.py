@@ -235,13 +235,15 @@ class DMPlot():
         f.create_dataset(prefix + 'loc2ind', **params)
 
         f[prefix + 'scale_shapes'] = self.scale_shapes
-        nshapes = len(self.nshapes)
+        nshapes = len(self.shapes)
         f[prefix + 'nshapes'] = nshapes
         for i in range(nshapes):
             params['data'] = self.shapes[i]
             f.create_dataset(prefix + f'shapes/{i}', **params)
         f[prefix + 'txs'] = self.txs
 
-        for k, v in self.presets:
+        count = 0
+        for k, v in self.presets.items():
             params['data'] = v
-            f.create_dataset(prefix + f'presets/{i}', **params)
+            f.create_dataset(prefix + f'presets/{count}', **params)
+            count += 1

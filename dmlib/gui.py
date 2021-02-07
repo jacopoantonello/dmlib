@@ -856,10 +856,16 @@ class Control(QMainWindow):
                 else:
                     last = 0
                 self.shared.iq.put(('query', dataset[0]))
-
                 ndata = check_err()
                 if ndata == -1:
                     clearup()
+                    return
+                elif ndata[0] != self.shared.u.size:
+                    tmp = path.basename(dataset[0])
+                    clearup()
+                    status.setText(
+                        f'{tmp} has {ndata[0]} ' +
+                        f'actuators but instance has {self.shared.u.size}')
                     return
                 else:
                     self.dmplot.update_txs(ndata[1])
@@ -1260,7 +1266,7 @@ class Control(QMainWindow):
                     if not bootstrap():
                         enable()
                         return False
-                status.setText(f'loading {calib[0]} ...')
+                status.setText(f'Loading {calib[0]} ...')
                 status.repaint()
                 self.shared.iq.put(('query_calib', calib[0]))
                 ndata = check_err()
@@ -1634,7 +1640,7 @@ class Worker:
 
         self.log = logging.getLogger('Worker')
         dm = open_dm(None, args)
-        get_suitable_dmplot(args, dm)
+        self.dmplot = get_suitable_dmplot(args, dm)
         cam = open_cam(None, args)
         cam.set_exposure(cam.get_exposure_range()[0])
 
@@ -1799,12 +1805,14 @@ class Worker:
                 shape2 = img.shape
                 pxsize1 = self.cam.get_pixel_size()
                 pxsize2 = self.dset['cam/pixel_size'][()]
-                dm1 = self.dm.shape()
-                dm2 = self.dset['RegLSCalib/H'][()]
+                dm1 = self.dm.size()
+                dm2 = self.dset['/data/U'].shape[0]
                 self.log.info(f'open_dset shape1 {shape1}')
                 self.log.info(f'open_dset shape2 {shape2}')
                 self.log.info(f'open_dset pxsize1 {pxsize1}')
                 self.log.info(f'open_dset pxsize2 {pxsize2}')
+                self.log.info(f'open_dset dm1 {dm1}')
+                self.log.info(f'open_dset dm2 {dm2}')
                 if (shape1[0] != shape2[0] or shape1[1] != shape2[1]
                         or pxsize1[0] != pxsize2[0] or pxsize1[1] != pxsize2[1]
                         or dm1 != dm2):
@@ -1831,8 +1839,7 @@ class Worker:
 
         dmplot_txs = self.dset['dmplot/txs'][()].tolist()
 
-        self.shared.oq.put(('OK', self.dset['align/U'].shape[1] +
-                            self.dset['data/U'].shape[1], dmplot_txs))
+        self.shared.oq.put(('OK', self.dset['data/U'].shape[0], dmplot_txs))
 
     def run_calibrate(self, dname, radius):
         if self.open_dset(dname):
@@ -1855,6 +1862,7 @@ class Worker:
 
             notify_fun = make_notify()
 
+            self.dmplot.txs = dmplot_txs
             calib = RegLSCalib()
             calib.calibrate(U=self.dset['data/U'][()],
                             images=self.dset['data/images'],
@@ -1864,7 +1872,7 @@ class Worker:
                             dm_transform=dm_transform,
                             cam_pixel_size=cam_pixel_size,
                             cam_serial=cam_serial,
-                            dmplot_txs=dmplot_txs,
+                            dmplot=self.dmplot,
                             dname=dname,
                             hash1=hash1,
                             status_cb=notify_fun)
@@ -1900,12 +1908,14 @@ class Worker:
                     shape2 = f['RegLSCalib/fringe/FringeAnalysis/shape'][()]
                     pxsize1 = self.cam.get_pixel_size()
                     pxsize2 = f['RegLSCalib/cam_pixel_size'][()]
-                    dm1 = self.dm.shape()
-                    dm2 = f['RegLSCalib/H'][()]
-                    self.log.info(f'open_dset shape1 {shape1}')
-                    self.log.info(f'open_dset shape2 {shape2}')
-                    self.log.info(f'open_dset pxsize1 {pxsize1}')
-                    self.log.info(f'open_dset pxsize2 {pxsize2}')
+                    dm1 = self.dm.size()
+                    dm2 = f['RegLSCalib/H'].shape[1]
+                    self.log.info(f'open_calib shape1 {shape1}')
+                    self.log.info(f'open_calib shape2 {shape2}')
+                    self.log.info(f'open_calib pxsize1 {pxsize1}')
+                    self.log.info(f'open_calib pxsize2 {pxsize2}')
+                    self.log.info(f'open_calib dm1 {dm1}')
+                    self.log.info(f'open_calib dm2 {dm2}')
 
                     if (shape1[0] != shape2[0] or shape1[1] != shape2[1]
                             or pxsize1[0] != pxsize2[0]
@@ -1916,6 +1926,8 @@ class Worker:
                         return -1
                     self.calib = RegLSCalib.load_h5py(f)
                     self.calib_name = dname
+                    if self.calib.dmplot is None:
+                        self.calib.dmplot = self.dmplot
                     return 0
         else:
             return 0
@@ -1926,7 +1938,7 @@ class Worker:
 
         self.shared.oq.put(
             ('OK', self.calib.wavelength, self.calib.get_rzern().n,
-             self.calib.get_radius(), self.calib.dmplot_txs))
+             self.calib.get_radius(), self.calib.dmplot.txs))
 
     def run_aperture(self, dname, radius):
         if self.open_dset(dname):
