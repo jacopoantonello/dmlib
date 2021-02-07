@@ -15,7 +15,7 @@ from numpy.linalg import norm
 from PyQt5.QtWidgets import QErrorMessage, QInputDialog
 
 import dmlib.test
-from dmlib.dmplot import dmplot_from_layout
+from dmlib.dmplot import dmplot_from_layout, get_layouts
 from dmlib.version import __commit__, __date__, __version__
 
 LOG = logging.getLogger('core')
@@ -401,6 +401,17 @@ def open_dm(app, args, dm_transform=None):
         else:
             sys.exit()
 
+    if args.dm_list_layouts:
+        lays = get_layouts()
+        str1 = ', '.join(lays)
+        LOG.info(f'layouts: {str1}')
+        if app:
+            e = QErrorMessage()
+            e.showMessage(f'Detected dms are: {str1}')
+            sys.exit(e.exec_())
+        else:
+            sys.exit()
+
     # choose device
     def set_dm(t):
         args.dm_name = t
@@ -474,10 +485,13 @@ def add_dm_parameters(parser):
                         ],
                         default='sim')
     parser.add_argument('--dm-name', type=str, default=None, metavar='SERIAL')
+    parser.add_argument('--dm-list-layouts',
+                        action='store_true',
+                        help='List included layouts')
     parser.add_argument('--dm-layout',
                         type=str,
                         default=None,
-                        metavar='Layout name or JSON file')
+                        metavar='Layout name or external JSON file')
     parser.add_argument('--dm-list',
                         action='store_true',
                         help='List detected devices')
