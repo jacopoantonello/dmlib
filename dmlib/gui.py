@@ -2205,6 +2205,7 @@ def main():
     cam = open_cam(app, args)
     cam_name = cam.get_serial_number()
     dm_name = dm.get_serial_number()
+    dmplot = get_suitable_dmplot(args, dm)
 
     shared = Shared(cam, dm)
     dm.close()
@@ -2213,7 +2214,6 @@ def main():
     p = Process(name='worker', target=run_worker, args=(shared, args))
     p.start()
 
-    dmplot = get_suitable_dmplot(args, dm)
     control = Control(p, shared, cam_name, dm_name, dmplot)
     control.show()
 
