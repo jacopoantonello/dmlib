@@ -376,15 +376,15 @@ class Control(QMainWindow):
         setall.clicked.connect(f3())
         loadflat.clicked.connect(f4())
 
-        def f3():
+        def fbrotate():
             prev = [.0]
 
             def f():
                 val, ok = QInputDialog.getDouble(
                     self, 'Rotate actuators plot',
-                    'Rotate actuators plot [deg]', np.pi / 180 * prev[0])
+                    'Rotate actuators plot [deg]', 180 / np.pi * prev[0])
                 if ok:
-                    prev[0] = 180 / np.pi * val
+                    prev[0] = np.pi / 180 * val
                     self.dmplot.rotate(prev[0])
                     self.update_tool_dm()
 
@@ -411,7 +411,7 @@ class Control(QMainWindow):
         flipy.setCheckable(True)
         flipx.clicked.connect(f4(self.dmplot.flipx, flipx))
         flipy.clicked.connect(f4(self.dmplot.flipy, flipy))
-        brotate.clicked.connect(f3())
+        brotate.clicked.connect(fbrotate())
         bcmap.clicked.connect(fcmap())
 
         tool_dm.setLayout(layout)
