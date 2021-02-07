@@ -160,7 +160,7 @@ class FakeDM():
         self.log = logging.getLogger(self.__class__.__name__)
         self.name = None
         self.transform = None
-        self.size = 140
+        self._size = 140
         self.presets = {}
 
     def open(self, name=''):
@@ -174,7 +174,7 @@ class FakeDM():
         return ['simdm0', 'simdm1']
 
     def size(self):
-        return self.size
+        return self._size
 
     def write(self, v):
         if self.transform:
@@ -190,7 +190,7 @@ class FakeDM():
         return self.name
 
     def from_dmplot(self, dmplot):
-        self.size = dmplot.size()
+        self._size = dmplot.size()
         self.presets = dmplot.presets
 
     def preset(self, name, mag=0.7):
@@ -319,7 +319,7 @@ def get_suitable_dmplot(args, dm, calib=None):
             if args.dm_layout is None:
                 args.dm_layout = 'multidm140'
             dmplot = dmplot_from_layout(args.dm_layout)
-            dm.from_dmplot(dmplot.size())
+            dm.from_dmplot(dmplot)
             return dmplot
     else:
         if calib is not None:

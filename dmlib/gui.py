@@ -1633,7 +1633,7 @@ class Worker:
         self.run_align_state = [0]
 
         self.log = logging.getLogger('Worker')
-        dm, _ = open_dm(None, args)
+        dm = open_dm(None, args)
         get_suitable_dmplot(args, dm)
         cam = open_cam(None, args)
         cam.set_exposure(cam.get_exposure_range()[0])

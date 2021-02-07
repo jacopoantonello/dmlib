@@ -31,7 +31,9 @@ def dmplot_from_layout(name):
     loc2ind = np.array(d['loc2ind']).ravel()
     scale_shapes = d['scale_shapes']
     shapes = [np.array(s) for s in d['shapes']]
-    presets = d['presets']
+    presets = {}
+    for k, v in d['presets'].items():
+        presets[k] = np.array(v)
     return DMPlot(locations, loc2ind, scale_shapes, shapes, presets)
 
 
