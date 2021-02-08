@@ -64,7 +64,7 @@ setup(name='dmlib',
            'GNU General Public License v3 or later (GPLv3+)'),
           'Programming Language :: Python :: 3',
       ],
-      packages=['dmlib', 'dmlib.test'],
+      packages=['dmlib', 'dmlib.test', 'dmlib.dmlayouts'],
       package_data={
           'dmlib.test': ['*.tif'],
           'dmlib.dmlayouts': ['*.json']
