@@ -8,6 +8,7 @@ import platform
 import subprocess
 import sys
 from datetime import datetime
+from os import path
 
 import h5py
 import numpy as np
@@ -445,13 +446,13 @@ def add_log_parameters(parser):
 
 
 # https://stackoverflow.com/questions/6631299/
-def spawn_file(path):
+def spawn_file(p):
     if platform.system() == 'Windows':
-        subprocess.Popen(['explorer', '/select,', path])
+        subprocess.Popen(['explorer', '/select,', p])
     elif platform.system() == 'Darwin':
-        subprocess.Popen(['open', '-a', 'Finder', path])
+        subprocess.Popen(['open', '-a', 'Finder', p])
     else:
-        subprocess.Popen(['xdg-open', path])
+        subprocess.Popen(['xdg-open', path.dirname(p)])
 
 
 def setup_logging(args):
