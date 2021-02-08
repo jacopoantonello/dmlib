@@ -97,8 +97,8 @@ class FakeCam():
         self.exp = 0.06675 + 5 * 0.06675
         self.fps = 4
         self.name = None
-        assert(len(shape) == 2)
-        assert(len(pxsize) == 2)
+        assert (len(shape) == 2)
+        assert (len(pxsize) == 2)
         self._shape = shape
         self._pxsize = pxsize
 
@@ -377,20 +377,16 @@ def open_dm(app, args, dm_transform=None):
             dm = ASDK()
             if args.dm_layout is None:
                 args.dm_layout = 'alpao69'
-            if dm_transform is None:
-                dm_transform == 'v = u'
+            dm_transform = None
         elif args.dm_driver == 'mirao52e':
             from devwraps.mirao52e import Mirao52e
             dm = Mirao52e()
             if args.dm_layout is None:
                 args.dm_layout = 'mirao52e'
-            if dm_transform is None:
-                dm_transform == 'v = u'
+            dm_transform = None
         elif args.dm_driver == 'custom':
             from customdm import CustomDM
             dm = CustomDM()
-            if dm_transform is None:
-                dm_transform == 'v = u'
         else:
             exit_exception(app, NotImplementedError(args.dm_driver))
     except Exception as e:
@@ -427,12 +423,10 @@ def open_dm(app, args, dm_transform=None):
     attempt_open(app, dm, args.dm_name, 'dm')
 
     # choose a driver
-    if dm_transform == 'v = u':
+    if dm_transform is None:
         pass
     elif dm_transform == SquareRoot.name:
         dm.set_transform(SquareRoot())
-    else:
-        exit_exception(app, 'DM transform not set')
 
     return dm
 
