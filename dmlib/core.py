@@ -92,11 +92,13 @@ class SquareRoot:
 
 
 class FakeCam():
-    def __init__(self, shape=(1024, 1280), pxsize=7.4):
+    def __init__(self, shape=(1024, 1280), pxsize=(7.4, 7.4)):
         self.log = logging.getLogger(self.__class__.__name__)
         self.exp = 0.06675 + 5 * 0.06675
         self.fps = 4
         self.name = None
+        assert(len(shape) == 2)
+        assert(len(pxsize) == 2)
         self._shape = shape
         self._pxsize = pxsize
 

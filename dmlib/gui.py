@@ -44,7 +44,7 @@ from dmlib.zpanel import MyQIntValidator, ZernikePanel
 
 def conf_mismatch_spawn(h5):
     thisfile = path.join(path.dirname(path.abspath(__file__)), 'gui.py')
-    subprocess.Popen([
+    cmds = [
         sys.executable,
         thisfile,
         '--config-like',
@@ -57,7 +57,9 @@ def conf_mismatch_spawn(h5):
         'sim',
         '--cam-name',
         'simcam0',
-    ])
+    ]
+    logging.getLogger('conf_mismatch_spawn').info(' '.join(cmds))
+    subprocess.Popen(cmds)
 
 
 class GetNollIndices(QDialog):
@@ -1536,6 +1538,7 @@ class Shared:
         dbl_dtsize = np.dtype('float').itemsize
         cam_dtsize = np.dtype(cam.get_image_dtype()).itemsize
         cam_shape = cam.shape()
+        cam_shape = (int(cam_shape[0]), int(cam_shape[1]))
         totpixs = cam_shape[0] * cam_shape[1]
 
         self.cam_buf = Array('c', cam_dtsize * totpixs, lock=False)
@@ -1563,9 +1566,8 @@ class Shared:
         self.totpixs = totpixs
         self.cam_dtype = cam.get_image_dtype()
         self.cam_shape = cam_shape
-        self.dm_size = dm.size()
 
-        self.dm = Array('d', dm.size(), lock=False)
+        self.dm = Array('d', int(dm.size()), lock=False)
         self.z_sp_buf = Array('d', 1024, lock=False)
         self.z_ms_buf = Array('d', 1024, lock=False)
         self.z_er_buf = Array('d', 1024, lock=False)
@@ -1620,12 +1622,15 @@ class Worker:
         self.log = logging.getLogger('Worker')
         dm = open_dm(None, args)
         cam = open_cam(None, args)
+        get_suitable_dmplot(args, dm)
         cam.set_exposure(cam.get_exposure_range()[0])
 
         shared.make_static()
         shared.fxcfyc[0] = 0.
         shared.fxcfyc[1] = 0.
 
+        self.log.info(f'cam.shape() {cam.shape()}')
+        self.log.info(f'cam.get_pixel_size() {cam.get_pixel_size()}')
         fringe = FringeAnalysis(cam.shape(), cam.get_pixel_size())
         for i in range(4):
             shared.cam_ext[i] = fringe.cam_grid[2][i] / 1000
@@ -1803,6 +1808,14 @@ class Worker:
                                     auto_find_orders=True,
                                     do_unwrap=True,
                                     use_mask=False)
+                try:
+                    self.dmplot_txs = self.dset['dmplot/DMPlot/txs'][(
+                    )].tolist()
+                    self.log.info(f'open_dset txs: {str(self.dmplot_txs)}')
+                except KeyError:
+                    self.dmplot_txs = [0, 0, 0]
+                    self.log.info('open_dset txs: zero')
+                return 0
             except Exception:
                 self.log.info('open_dset failed fringe.analyse', exc_info=True)
                 if estr is None:
@@ -1819,7 +1832,8 @@ class Worker:
         if self.open_dset(dname):
             return
 
-        self.shared.oq.put(('OK', self.dset['data/U'].shape[0]))
+        self.shared.oq.put(
+            ('OK', self.dset['data/U'].shape[0], self.dmplot_txs))
 
     def run_calibrate(self, dname, radius, dmplot):
         if self.open_dset(dname):
@@ -2015,7 +2029,7 @@ class Worker:
         with h5py.File(h5fn, 'w', libver=libver) as h5f:
             write_h5_header(h5f, libver, now)
 
-            dmplot.save_h5py(h5f, 'dmplot')
+            dmplot.save_h5py(h5f, 'dmplot/')
 
             h5_store_str(h5f, 'cam/serial', cam.get_serial_number())
             h5_store_str(h5f, 'cam/settings', cam.get_settings())
@@ -2177,15 +2191,23 @@ class Worker:
 
 
 def config_like(args, h5):
+    log = logging.getLogger('config_like')
     with h5py.File(h5, 'r') as h5:
-        args.sim_cam_shape = h5['data/images'][0, ...].shape
-        args.sim_cam_pix_size = h5['cam/pixel_size'][()].shape
-
         if 'dmplot/DMPlot' in h5:
-            return DMPlot.load_h5py('dmplot')
+            args.sim_cam_shape = h5['data/images'][0, ...].shape
+            args.sim_cam_pix_size = h5['cam/pixel_size'][()]
+            log.info(
+                f'dmplot/DMPlot {args.sim_cam_shape} {args.sim_cam_pix_size}')
+            return DMPlot.load_h5py(h5, 'dmplot/')
         elif 'RegLSCalib/dmplot/DMPlot' in h5:
-            return DMPlot.load_h5py('RegLSCalib/dmplot')
+            args.sim_cam_shape = h5['RegLSCalib/fringe/FringeAnalysis/shape'][(
+            )]
+            args.sim_cam_pix_size = h5['/RegLSCalib/cam_pixel_size'][()]
+            log.info(
+                f'dmplot/DMPlot {args.sim_cam_shape} {args.sim_cam_pix_size}')
+            return DMPlot.load_h5py(h5, 'RegLSCalib/dmplot/')
         else:
+            log.info('None')
             return None
 
 
@@ -2215,8 +2237,8 @@ def main():
     setup_logging(args)
 
     if args.config_like is not None:
-        args.config_like = args.config_like.name
         args.config_like.close()
+        args.config_like = args.config_like.name
         dmplot = config_like(args, args.config_like)
     else:
         dmplot = None
