@@ -187,7 +187,7 @@ class DMPlot():
         self.update_pattern(u)
 
     @classmethod
-    def load_h5py(cls, f, prepend=None, lazy_cart_grid=False):
+    def load_h5py(cls, f, prepend=None):
         """Load object contents from an opened HDF5 file object."""
 
         prefix = cls.__name__ + '/'

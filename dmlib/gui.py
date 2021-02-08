@@ -1818,7 +1818,10 @@ class Worker:
                 if (shape1[0] != shape2[0] or shape1[1] != shape2[1]
                         or pxsize1[0] != pxsize2[0] or pxsize1[1] != pxsize2[1]
                         or dm1 != dm2):
-                    estr = 'Configuration mismatch; Spawn new instance...'
+                    self.shared.oq.put(
+                        ('Configuration mismatch; Spawn new instance...',
+                         shape2, pxsize2, dm2))
+                    return -1
                 self.fringe.analyse(img,
                                     auto_find_orders=True,
                                     do_unwrap=True,
