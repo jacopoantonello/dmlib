@@ -920,6 +920,7 @@ class Control(QMainWindow):
                 a2.set_title(f'acts [{self.shared.u.min():+.1f}, ' +
                              f'{self.shared.u.max():+.1f}]')
                 a2.set_ylim([-1, 1])
+                self.dmplot.update(self.shared.u)
 
                 a3.imshow(wrapped, extent=self.shared.mag_ext, origin='lower')
                 a3.set_xlabel('mm')
