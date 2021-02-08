@@ -36,9 +36,28 @@ from dmlib.core import (add_cam_parameters, add_dm_parameters,
                         add_log_parameters, get_suitable_dmplot, h5_read_str,
                         h5_store_str, hash_file, open_cam, open_dm,
                         setup_logging, spawn_file, write_h5_header)
+from dmlib.dmplot import DMPlot
 from dmlib.interf import FringeAnalysis
 from dmlib.version import __version__
 from dmlib.zpanel import MyQIntValidator, ZernikePanel
+
+
+def conf_mismatch_spawn(h5):
+    thisfile = path.join(path.dirname(path.abspath(__file__)), 'gui.py')
+    subprocess.Popen([
+        sys.executable,
+        thisfile,
+        '--config-like',
+        h5,
+        '--dm-driver',
+        'sim',
+        '--dm-name',
+        'simdm0',
+        '--cam-driver',
+        'sim',
+        '--cam-name',
+        'simcam0',
+    ])
 
 
 class GetNollIndices(QDialog):
@@ -723,7 +742,7 @@ class Control(QMainWindow):
         lastind = []
         centre = [None]
         radius = [.0]
-        listener = DataAcqListener(self.shared, wavelength, self.dmplot.txs)
+        listener = DataAcqListener(self.shared, wavelength, self.dmplot)
 
         def clearup(clear_status=False):
             wavelength.clear()
@@ -801,26 +820,7 @@ class Control(QMainWindow):
             reply = self.shared.oq.get()
             if reply[0].startswith('Configuration mismatch;'):
                 try:
-                    newinst = path.join(path.dirname(path.abspath(__file__)),
-                                        'gui.py')
-                    subprocess.Popen([
-                        sys.executable,
-                        newinst,
-                        '--cam-driver',
-                        'sim',
-                        '--cam-name',
-                        'simcam0',
-                        '--dm-driver',
-                        'sim',
-                        '--dm-name',
-                        'simdm0',
-                        '--sim-cam-shape',
-                        str(reply[1][0]),
-                        str(reply[1][1]),
-                        '--sim-cam-pix-size',
-                        str(reply[2][0]),
-                        str(reply[2][1]),
-                    ])
+                    conf_mismatch_spawn(reply[1])
                 except Exception as e:
                     self.log.error(str(e))
                 status.setText(reply[0])
@@ -859,13 +859,6 @@ class Control(QMainWindow):
                 ndata = check_err()
                 if ndata == -1:
                     clearup()
-                    return
-                elif ndata[0] != self.shared.u.size:
-                    tmp = path.basename(dataset[0])
-                    clearup()
-                    status.setText(
-                        f'{tmp} has {ndata[0]} ' +
-                        f'actuators but instance has {self.shared.u.size}')
                     return
                 else:
                     self.dmplot.update_txs(ndata[1])
@@ -989,7 +982,8 @@ class Control(QMainWindow):
 
             return f
 
-        clistener = CalibListener(self.shared, dataset, centre, radius)
+        clistener = CalibListener(self.shared, dataset, centre, radius,
+                                  self.dmplot)
 
         def f6():
             def f(reply):
@@ -1212,26 +1206,7 @@ class Control(QMainWindow):
             reply = self.shared.oq.get()
             if reply[0].startswith('Configuration mismatch;'):
                 try:
-                    newinst = path.join(path.dirname(path.abspath(__file__)),
-                                        'gui.py')
-                    subprocess.Popen([
-                        sys.executable,
-                        newinst,
-                        '--cam-driver',
-                        'sim',
-                        '--cam-name',
-                        'simcam0',
-                        '--dm-driver',
-                        'sim',
-                        '--dm-name',
-                        'simdm0',
-                        '--sim-cam-shape',
-                        str(reply[1][0]),
-                        str(reply[1][1]),
-                        '--sim-cam-pix-size',
-                        str(reply[2][0]),
-                        str(reply[2][1]),
-                    ])
+                    conf_mismatch_spawn(reply[1])
                 except Exception as e:
                     self.log.error(str(e))
                 status.setText(reply[0])
@@ -1467,15 +1442,17 @@ class CalibListener(QThread):
 
     sig_update = pyqtSignal(tuple)
 
-    def __init__(self, shared, dset, centre, radius):
+    def __init__(self, shared, dset, centre, radius, dmplot):
         super().__init__()
         self.shared = shared
         self.dset = dset
         self.centre = centre
         self.radius = radius
+        self.dmplot = dmplot
 
     def run(self):
-        self.shared.iq.put(('calibrate', self.dset[0], self.radius[0]))
+        self.shared.iq.put(
+            ('calibrate', self.dset[0], self.radius[0], self.dmplot.clone()))
         while True:
             result = self.shared.oq.get()
             self.sig_update.emit(result)
@@ -1487,17 +1464,18 @@ class DataAcqListener(QThread):
 
     sig_update = pyqtSignal(tuple)
 
-    def __init__(self, shared, wavelength, dmplot_txs):
+    def __init__(self, shared, wavelength, dmplot):
         super().__init__()
         self.busy = False
         self.run = True
         self.shared = shared
         self.wavelength = wavelength
-        self.dmplot_txs = dmplot_txs
+        self.dmplot = dmplot
         self.log = logging.getLogger('DataAcqListener')
 
     def run(self):
-        self.shared.iq.put(('dataacq', self.wavelength[0], self.dmplot_txs))
+        self.shared.iq.put(
+            ('dataacq', self.wavelength[0], self.dmplot.clone()))
         while True:
             result = self.shared.oq.get()
             if result[0] == 'OK':
@@ -1641,7 +1619,6 @@ class Worker:
 
         self.log = logging.getLogger('Worker')
         dm = open_dm(None, args)
-        self.dmplot = get_suitable_dmplot(args, dm)
         cam = open_cam(None, args)
         cam.set_exposure(cam.get_exposure_range()[0])
 
@@ -1820,7 +1797,7 @@ class Worker:
                         or dm1 != dm2):
                     self.shared.oq.put(
                         ('Configuration mismatch; Spawn new instance...',
-                         shape2, pxsize2, dm2))
+                         dname))
                     return -1
                 self.fringe.analyse(img,
                                     auto_find_orders=True,
@@ -1842,11 +1819,9 @@ class Worker:
         if self.open_dset(dname):
             return
 
-        dmplot_txs = self.dset['dmplot/txs'][()].tolist()
+        self.shared.oq.put(('OK', self.dset['data/U'].shape[0]))
 
-        self.shared.oq.put(('OK', self.dset['data/U'].shape[0], dmplot_txs))
-
-    def run_calibrate(self, dname, radius):
+    def run_calibrate(self, dname, radius, dmplot):
         if self.open_dset(dname):
             return
 
@@ -1856,7 +1831,6 @@ class Worker:
             dm_transform = h5_read_str(self.dset, 'dm/transform')
             cam_pixel_size = self.dset['cam/pixel_size'][()]
             cam_serial = h5_read_str(self.dset, 'cam/serial')
-            dmplot_txs = self.dset['dmplot/txs'][()]
             hash1 = hash_file(dname)
 
             def make_notify():
@@ -1867,7 +1841,6 @@ class Worker:
 
             notify_fun = make_notify()
 
-            self.dmplot.txs = dmplot_txs
             calib = RegLSCalib()
             calib.calibrate(U=self.dset['data/U'][()],
                             images=self.dset['data/images'],
@@ -1877,7 +1850,7 @@ class Worker:
                             dm_transform=dm_transform,
                             cam_pixel_size=cam_pixel_size,
                             cam_serial=cam_serial,
-                            dmplot=self.dmplot,
+                            dmplot=dmplot,
                             dname=dname,
                             hash1=hash1,
                             status_cb=notify_fun)
@@ -1928,12 +1901,14 @@ class Worker:
                             or pxsize1[1] != pxsize2[1] or dm1 != dm2):
                         self.shared.oq.put(
                             ('Configuration mismatch; Spawn new instance...',
-                             shape2, pxsize2, dm2))
+                             dname))
                         return -1
                     self.calib = RegLSCalib.load_h5py(f)
-                    self.calib_name = dname
-                    if self.calib.dmplot is None:
-                        self.calib.dmplot = self.dmplot
+                    try:
+                        self.dmplot_txs = f['RegLSCalib/dmplot/DMPlot/txs'][(
+                        )].tolist()
+                    except KeyError:
+                        self.dmplot_txs = [0, 0, 0]
                     return 0
         else:
             return 0
@@ -1944,7 +1919,7 @@ class Worker:
 
         self.shared.oq.put(
             ('OK', self.calib.wavelength, self.calib.get_rzern().n,
-             self.calib.get_radius(), self.calib.dmplot.txs))
+             self.calib.get_radius(), self.dmplot_txs))
 
     def run_aperture(self, dname, radius):
         if self.open_dset(dname):
@@ -2010,7 +1985,7 @@ class Worker:
             self.log.error('run_plot', exc_info=True)
             self.shared.oq.put((str(e), ))
 
-    def run_dataacq(self, wavelength, dmplot_txs, sleep=.1):
+    def run_dataacq(self, wavelength, dmplot, sleep=.1):
         cam = self.cam
         dm = self.dm
         shared = self.shared
@@ -2040,7 +2015,7 @@ class Worker:
         with h5py.File(h5fn, 'w', libver=libver) as h5f:
             write_h5_header(h5f, libver, now)
 
-            h5f['dmplot/txs'] = dmplot_txs
+            dmplot.save_h5py(h5f, 'dmplot')
 
             h5_store_str(h5f, 'cam/serial', cam.get_serial_number())
             h5_store_str(h5f, 'cam/settings', cam.get_settings())
@@ -2201,6 +2176,19 @@ class Worker:
         shared.oq.put(('finished', ))
 
 
+def config_like(args, h5):
+    with h5py.File(h5, 'r') as h5:
+        args.sim_cam_shape = h5['data/images'][0, ...].shape
+        args.sim_cam_pix_size = h5['cam/pixel_size'][()].shape
+
+        if 'dmplot/DMPlot' in h5:
+            return DMPlot.load_h5py('dmplot')
+        elif 'RegLSCalib/dmplot/DMPlot' in h5:
+            return DMPlot.load_h5py('RegLSCalib/dmplot')
+        else:
+            return None
+
+
 def main():
     multiprocessing.freeze_support()
     multiprocessing.set_start_method('spawn')
@@ -2219,14 +2207,26 @@ def main():
     add_log_parameters(parser)
     add_dm_parameters(parser)
     add_cam_parameters(parser)
+    parser.add_argument('--config-like',
+                        type=argparse.FileType('rb'),
+                        default=None,
+                        metavar='HDF5')
     args = parser.parse_args(args[1:])
     setup_logging(args)
+
+    if args.config_like is not None:
+        args.config_like = args.config_like.name
+        args.config_like.close()
+        dmplot = config_like(args, args.config_like)
+    else:
+        dmplot = None
 
     dm = open_dm(app, args)
     cam = open_cam(app, args)
     cam_name = cam.get_serial_number()
     dm_name = dm.get_serial_number()
-    dmplot = get_suitable_dmplot(args, dm)
+
+    dmplot = get_suitable_dmplot(args, dm, dmplot=dmplot)
 
     shared = Shared(cam, dm)
     dm.close()

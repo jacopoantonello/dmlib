@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import json
+from copy import deepcopy
 from glob import glob
 from os import path
 
@@ -216,6 +217,12 @@ class DMPlot():
 
         z = cls(locations, loc2ind, scale_shapes, shapes, presets, txs)
         return z
+
+    def clone(self):
+        d = DMPlot(self.locations.copy(), self.loc2ind.copy(),
+                   self.scale_shapes, [d.copy() for d in self.shapes],
+                   deepcopy(self.presets), [t for t in self.txs])
+        return d
 
     def save_h5py(self, f, prepend=None, params={}):
         """Dump object contents into an opened HDF5 file object."""

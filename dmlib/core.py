@@ -297,7 +297,9 @@ def open_cam(app, args):
     return cam
 
 
-def get_suitable_dmplot(args, dm, calib=None):
+def get_suitable_dmplot(args, dm, calib=None, dmplot=None):
+    if dmplot is not None:
+        return dmplot
     if args.dm_driver == 'sim':
         if calib is not None:
             if calib.dmplot is not None:
