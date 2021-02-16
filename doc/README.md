@@ -162,7 +162,7 @@ correct transformations to obtain the desired shape of the DM.
   Use wavelength/(2pi) to convert to nm;
 - `u` [-1, 1]; control variable used by dmlib;
 - `v` [-1, 1]; linearised voltage used by dmlib;
-- `r` [rmin, rmax]; real voltage accepted by your DM driver;
+- `r` [rmin, rmax]; variable in the range defined by the DM manufacturer API
 - `dmtx` linearisation function;
 - `C` DM control matrix;
 
