@@ -172,7 +172,9 @@ applied voltage. This non-linearity can be approximately removed by using the
 square root of the voltage as the control variable `u`. So in this case `dmtx` is
 `dmtx(u) = 2*sqrt((u + 1)/2) - 1`.
 
-To compute the real voltage `r` to apply to the DM driver, use the equations below:
+To compute the variable `r`, which must be supplied to the DM's own software, use
+the equations below:
+
 - `u = uflat + C*z`
 - `v = dmtx(u)`
 - `r = rmin + (rmax - rmin)*(v + 1)/2`
