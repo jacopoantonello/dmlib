@@ -45,7 +45,7 @@ class DMPlot():
                  scale_shapes,
                  shapes,
                  presets,
-                 txs=[0, 0, 0]):
+                 txs=np.zeros(3)):
         self.locations = locations
         self.loc2ind = loc2ind
         self.scale_shapes = scale_shapes
@@ -216,6 +216,7 @@ class DMPlot():
         presets = d
 
         z = cls(locations, loc2ind, scale_shapes, shapes, presets, txs)
+        z.update_txs()
         return z
 
     def clone(self):
@@ -243,7 +244,7 @@ class DMPlot():
         for i in range(nshapes):
             params['data'] = self.shapes[i]
             f.create_dataset(prefix + f'shapes/{i}', **params)
-        f[prefix + 'txs'] = self.txs
+        f[prefix + 'txs'] = np.asarray(self.txs, dtype=float)
 
         count = 0
         for k, v in self.presets.items():
