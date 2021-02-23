@@ -99,6 +99,7 @@ class DMPlot():
         if txs[1]:
             T = np.array([[1, 0], [0, -1]]).dot(T)
 
+        self.T = T
         self.xys = [(T.dot(xy.T)).T for xy in self.xys]
         if self.ax:
             self.setup_pattern(self.ax)
@@ -159,7 +160,8 @@ class DMPlot():
 
     def index_actuator(self, x, y):
         rhos = np.sqrt(
-            np.sum(np.square(self.locations - np.array([x, y]).reshape(1, -1)),
+            np.sum(np.square(self.locations -
+                             self.T.T.dot((x, y)).reshape(1, -1)),
                    axis=1))
         ind = rhos.argmin()
         m1 = rhos[ind]
