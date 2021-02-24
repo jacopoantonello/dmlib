@@ -1200,7 +1200,7 @@ class Control(QMainWindow):
             self.toolbox, brun, bflat, bnoflat, bzernike, bclear,
             self.test_nav, bzernike, bsleep, bzsize
         ]
-        llistener = LoopListener(self.shared)
+        llistener = LoopListener(self.shared, status)
         calib = []
         noll_sel_pars = {
             'min': 1,
@@ -1314,6 +1314,7 @@ class Control(QMainWindow):
             redo = f2()
 
             def f():
+                status.setText('Computing grids...')
                 if not calib or len(calib) == 0:
                     if not redo():
                         return
@@ -1538,7 +1539,7 @@ class LoopListener(QThread):
 
     sig_update = pyqtSignal(tuple)
 
-    def __init__(self, shared):
+    def __init__(self, shared, status):
         super().__init__()
         self.sleep = .1
         self.busy = False
@@ -1549,12 +1550,14 @@ class LoopListener(QThread):
         self.closed_loop = True
         self.shared = shared
         self.log = logging.getLogger('LoopListener')
+        self.status = status
 
     def run(self):
         self.shared.iq.put(('loop', self.calib, self.flat, self.noflat_index,
                             self.closed_loop, self.sleep))
         while True:
             result = self.shared.oq.get()
+            self.status.setText('')
             if result[0] == 'OK':
                 self.shared.iq.put(('stopcmd', not self.run))
                 self.shared.oq.get()
