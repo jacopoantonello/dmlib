@@ -55,6 +55,8 @@ class DMPlot():
 
         self.ax = None
         self.ax2 = None
+        self.norm = None
+        self.cb = None
 
         self.T = np.eye(2)
         self.arts = []
@@ -105,7 +107,7 @@ class DMPlot():
         self.T = T
         self.xys = [(T.dot(xy.T)).T for xy in self.xys]
         if self.ax:
-            self.setup_pattern(self.ax)
+            self.setup_pattern(self.ax, self.ax2)
 
     def flipx(self, b):
         self.txs[0] = b
@@ -154,12 +156,14 @@ class DMPlot():
         self.ax.figure.canvas.draw()
 
     def setup_pattern(self, ax, ax2=None):
-        ax.axis('equal')
-        ax.axis('off')
         for a in self.arts:
             a.remove()
             del a
         self.arts.clear()
+        if self.ax is not None:
+            self.ax.clear()
+        ax.axis('equal')
+        ax.axis('off')
         for xy in self.xys:
             self.arts.append(
                 ax.fill(xy[:, 0],
@@ -167,11 +171,20 @@ class DMPlot():
                         color=self.cmap.colors[0],
                         edgecolor=None)[0])
         self.ax = ax
-        if ax2 is not None:
+
+        if ax2 is not None and ax2 != self.ax2:
+            try:
+                del self.norm
+                self.colorbar.remove()
+                del self.colorbar
+            except Exception:
+                pass
+
             self.norm = Normalize(-1, 1)
             mapb = ScalarMappable(self.norm, self.cmap)
             self.colorbar = ax.figure.colorbar(mapb, cax=ax2)
             self.ax2 = ax2
+
         self.ax.figure.canvas.draw()
 
     def index_actuator(self, x, y):

@@ -300,8 +300,9 @@ class Control(QMainWindow):
         layout = QVBoxLayout()
 
         self.dm_fig = FigureCanvas(Figure(figsize=(3, 2)))
-        self.dm_ax = self.dm_fig.figure.add_subplot(1, 1, 1)
-        self.dmplot.setup_pattern(self.dm_ax)
+        self.dm_ax = self.dm_fig.figure.add_axes([0.0, 0.0, 0.70, 1.0])
+        ax2 = self.dm_fig.figure.add_axes([0.70, 0.2, 0.05, 0.5])
+        self.dmplot.setup_pattern(self.dm_ax, ax2)
         self.dmplot.install_select_callback(self.dm_ax, self.shared.u, self,
                                             self.write_dm)
         self.dm_fig.figure.subplots_adjust(left=.125,
