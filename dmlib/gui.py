@@ -705,9 +705,12 @@ class Control(QMainWindow):
         bstop = QPushButton('stop')
         bwavelength = QPushButton('wavelength')
         bwavelength.setToolTip('Calibration laser wavelength')
+        bpoke = QPushButton('poke')
+        bpoke.setToolTip('Set a custom magnitude for the pokes')
         layout.addWidget(brun, 2, 0)
         layout.addWidget(bstop, 2, 1)
         layout.addWidget(bwavelength, 2, 2)
+        layout.addWidget(bpoke, 2, 3)
 
         status = QLabel('')
         status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -732,19 +735,30 @@ class Control(QMainWindow):
         bcalibrate.setToolTip('Compute a calibration file')
         layout.addWidget(bcalibrate, 5, 1)
         bclear = QPushButton('clear')
-        layout.addWidget(bclear, 5, 2)
+        layout.addWidget(bclear, 5, 3)
 
         disables = [
-            self.toolbox, brun, bwavelength, bplot, self.dataacq_nav, bprev,
-            bnext, baperture, bcalibrate, bclear
+            self.toolbox,
+            brun,
+            bwavelength,
+            bplot,
+            self.dataacq_nav,
+            bprev,
+            bnext,
+            baperture,
+            bcalibrate,
+            bclear,
+            bpoke,
         ]
 
         wavelength = []
+        pokemag = [.7]
         dataset = []
         lastind = []
         centre = [None]
         radius = [.0]
-        listener = DataAcqListener(self.shared, wavelength, self.dmplot)
+        listener = DataAcqListener(self.shared, wavelength, self.dmplot,
+                                   pokemag)
 
         def clearup(clear_status=False):
             wavelength.clear()
@@ -777,6 +791,21 @@ class Control(QMainWindow):
             for b in disables:
                 b.setEnabled(True)
             self.can_close = True
+
+        def fpoke():
+            def f():
+                val, ok = QInputDialog.getDouble(
+                    self,
+                    'Maximum poke amplitude',
+                    'Maximum poke amplitude [0, 1]',
+                    value=pokemag[0],
+                    min=0.,
+                    max=1.,
+                    decimals=1)
+                if ok:
+                    pokemag[0] = val
+
+            return f
 
         def f0():
             def f():
@@ -1089,6 +1118,7 @@ class Control(QMainWindow):
         brun.clicked.connect(f1())
         bstop.clicked.connect(f2())
         bwavelength.clicked.connect(f0())
+        bpoke.clicked.connect(fpoke())
         bplot.clicked.connect(f3())
         bnext.clicked.connect(f3(1))
         bprev.clicked.connect(f3(-1))
@@ -1466,7 +1496,7 @@ class DataAcqListener(QThread):
 
     sig_update = pyqtSignal(tuple)
 
-    def __init__(self, shared, wavelength, dmplot):
+    def __init__(self, shared, wavelength, dmplot, pokemag):
         super().__init__()
         self.busy = False
         self.run = True
@@ -1474,10 +1504,11 @@ class DataAcqListener(QThread):
         self.wavelength = wavelength
         self.dmplot = dmplot
         self.log = logging.getLogger('DataAcqListener')
+        self.pokemag = pokemag
 
     def run(self):
-        self.shared.iq.put(
-            ('dataacq', self.wavelength[0], self.dmplot.clone()))
+        self.shared.iq.put(('dataacq', self.wavelength[0], self.dmplot.clone(),
+                            self.pokemag[0]))
         while True:
             result = self.shared.oq.get()
             if result[0] == 'OK':
@@ -1999,7 +2030,7 @@ class Worker:
             self.log.error('run_plot', exc_info=True)
             self.shared.oq.put((str(e), ))
 
-    def run_dataacq(self, wavelength, dmplot, sleep=.1):
+    def run_dataacq(self, wavelength, dmplot, pokemag, sleep=.1):
         cam = self.cam
         dm = self.dm
         shared = self.shared
@@ -2008,7 +2039,7 @@ class Worker:
         align_names = []
         for name in ('centre', 'cross', 'x', 'rim', 'checker', 'arrows'):
             try:
-                Ualign.append(dm.preset(name, 0.7).reshape(-1, 1))
+                Ualign.append(dm.preset(name, pokemag).reshape(-1, 1))
                 align_names.append(name)
             except Exception:
                 pass
@@ -2024,7 +2055,7 @@ class Worker:
         if dmsn:
             h5fn = dmsn + '_' + h5fn
 
-        U = make_normalised_input_matrix(dm.size(), 5, .7)
+        U = make_normalised_input_matrix(dm.size(), 5, pokemag)
 
         with h5py.File(h5fn, 'w', libver=libver) as h5f:
             write_h5_header(h5f, libver, now)
