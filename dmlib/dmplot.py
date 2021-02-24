@@ -7,7 +7,8 @@ from glob import glob
 from os import path
 
 import numpy as np
-from matplotlib.cm import get_cmap
+from matplotlib.cm import ScalarMappable, get_cmap
+from matplotlib.colors import Normalize
 from PyQt5.QtWidgets import QInputDialog
 
 
@@ -53,6 +54,7 @@ class DMPlot():
         self.presets = presets
 
         self.ax = None
+        self.ax2 = None
 
         self.T = np.eye(2)
         self.arts = []
@@ -60,6 +62,7 @@ class DMPlot():
         self.cmap = get_cmap()
         self.txs = txs
         self.abs_cmap = 1
+        self.old_abs_cmap = 1
 
         if self.locations.shape[0] != self.loc2ind.size:
             raise ValueError('locations.shape[0] != loc2ind.size')
@@ -123,16 +126,24 @@ class DMPlot():
         self.abs_cmap = b
 
     def update_pattern(self, u):
-
         m1 = u.min()
         m2 = u.max()
         if self.abs_cmap or m1 == m2:
             inds = np.round(
                 (len(self.cmap.colors) - 1) * (u + 1) / 2).astype(int)
+            if self.ax2 is not None and self.abs_cmap != self.old_abs_cmap:
+                self.norm.vmin = -1.
+                self.norm.vmax = 1.
+                self.colorbar.update_normal(self.colorbar.mappable)
+                self.old_abs_cmap = self.abs_cmap
         else:
             inds = u - u.min()
             inds /= inds.max()
             inds = np.round((len(self.cmap.colors) - 1) * inds).astype(int)
+            self.norm.vmin = m1
+            self.norm.vmax = m2
+            self.colorbar.update_normal(self.colorbar.mappable)
+            self.old_abs_cmap = self.abs_cmap
 
         np.clip(inds, 0, len(self.cmap.colors) - 1, inds)
 
@@ -142,7 +153,7 @@ class DMPlot():
 
         self.ax.figure.canvas.draw()
 
-    def setup_pattern(self, ax):
+    def setup_pattern(self, ax, ax2=None):
         ax.axis('equal')
         ax.axis('off')
         for a in self.arts:
@@ -156,6 +167,11 @@ class DMPlot():
                         color=self.cmap.colors[0],
                         edgecolor=None)[0])
         self.ax = ax
+        if ax2 is not None:
+            self.norm = Normalize(-1, 1)
+            mapb = ScalarMappable(self.norm, self.cmap)
+            self.colorbar = ax.figure.colorbar(mapb, cax=ax2)
+            self.ax2 = ax2
         self.ax.figure.canvas.draw()
 
     def index_actuator(self, x, y):

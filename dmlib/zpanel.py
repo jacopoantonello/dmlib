@@ -707,8 +707,9 @@ class DMWindow(QMainWindow):
 
         def make_figs():
             figact = FigureCanvas(Figure(figsize=(2, 2)))
-            ax = figact.figure.subplots(1, 1)
-            self.dmplot.setup_pattern(ax)
+            ax = figact.figure.add_axes([0.0, 0.0, 0.70, 1.0])
+            ax2 = figact.figure.add_axes([0.70, 0.2, 0.05, 0.5])
+            self.dmplot.setup_pattern(ax, ax2=ax2)
 
             return ax, figact
 
