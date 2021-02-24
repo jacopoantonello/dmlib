@@ -481,32 +481,34 @@ class Control(QMainWindow):
         status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(status, 3, 0, 1, 2)
 
+        botrow = QFrame()
+        botlay = QGridLayout()
+        botrow.setLayout(botlay)
+
         bauto = QCheckBox('auto')
         bauto.setToolTip('Lock first order position automatically')
         bauto.setChecked(True)
         self.align_bauto = bauto
-        layout.addWidget(bauto, 4, 0)
+        botlay.addWidget(bauto, 0, 0)
         brepeat = QCheckBox('repeat')
         brepeat.setToolTip('Acquire data continuously or one time only')
-        layout.addWidget(brepeat, 4, 1)
+        botlay.addWidget(brepeat, 0, 2)
 
         listener = AlignListener(self.shared)
 
-        bpoke = QCheckBox('poke')
-        bpoke.setToolTip('Poke actuators when running continuously')
         bsleep = QPushButton('sleep')
         bsleep.setToolTip(
             'Interval between setting the DM and acquiring an image')
-        layout.addWidget(bpoke, 5, 0)
-        layout.addWidget(bsleep, 5, 1)
+        botlay.addWidget(bsleep, 1, 0)
         bunwrap = QCheckBox('unwrap')
         bunwrap.setChecked(True)
         bunwrap.setToolTip('Perform phase extraction & unwrapping')
-        layout.addWidget(bunwrap, 6, 0)
+        botlay.addWidget(bunwrap, 0, 1)
+
+        layout.addWidget(botrow, 4, 0, 1, 2)
 
         disables = [
-            self.toolbox, brun, bauto, brepeat, bpoke, bsleep, bunwrap,
-            self.align_nav
+            self.toolbox, brun, bauto, brepeat, bsleep, bunwrap, self.align_nav
         ]
 
         def disable():
@@ -538,12 +540,6 @@ class Control(QMainWindow):
 
             return f
 
-        def f2():
-            def f(p):
-                listener.poke = p
-
-            return f
-
         def f3():
             def f(p):
                 listener.unwrap = p
@@ -551,7 +547,6 @@ class Control(QMainWindow):
             return f
 
         bsleep.clicked.connect(f1())
-        bpoke.stateChanged.connect(f2())
         bunwrap.stateChanged.connect(f3())
 
         def f1():
