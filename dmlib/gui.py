@@ -329,7 +329,7 @@ class Control(QMainWindow):
             def f():
                 if self.align_bauto:
                     self.align_bauto.setChecked(False)
-                self.shared.iq.put(('preset', n, 0.8))
+                self.shared.iq.put(('preset', n, self.pokemag[0]))
                 self.shared.oq.get()
                 self.write_dm(None)
 
@@ -499,7 +499,10 @@ class Control(QMainWindow):
         bsleep = QPushButton('sleep')
         bsleep.setToolTip(
             'Interval between setting the DM and acquiring an image')
+        bpoke = QPushButton('poke')
+        bpoke.setToolTip('Set a custom magnitude for the pokes')
         botlay.addWidget(bsleep, 1, 0)
+        botlay.addWidget(bpoke, 1, 1)
         bunwrap = QCheckBox('unwrap')
         bunwrap.setChecked(True)
         bunwrap.setToolTip('Perform phase extraction & unwrapping')
@@ -508,8 +511,11 @@ class Control(QMainWindow):
         layout.addWidget(botrow, 4, 0, 1, 2)
 
         disables = [
-            self.toolbox, brun, bauto, brepeat, bsleep, bunwrap, self.align_nav
+            self.toolbox, brun, bauto, brepeat, bsleep, bunwrap,
+            self.align_nav, bpoke
         ]
+        pokemag = [.7]
+        self.pokemag = pokemag
 
         def disable():
             self.can_close = False
@@ -664,11 +670,27 @@ class Control(QMainWindow):
 
             return f
 
+        def fpoke():
+            def f():
+                val, ok = QInputDialog.getDouble(
+                    self,
+                    'Maximum poke amplitude',
+                    'Maximum poke amplitude [0, 1]',
+                    value=self.pokemag[0],
+                    min=0.,
+                    max=1.,
+                    decimals=2)
+                if ok:
+                    self.pokemag[0] = val
+
+            return f
+
         listener.sig_update.connect(f20())
         brun.clicked.connect(f1())
         bstop.clicked.connect(f4())
         bauto.stateChanged.connect(f2())
         brepeat.stateChanged.connect(f3())
+        bpoke.clicked.connect(fpoke())
 
     def make_panel_dataacq(self):
         frame = QFrame()
@@ -733,27 +755,17 @@ class Control(QMainWindow):
         layout.addWidget(bclear, 5, 3)
 
         disables = [
-            self.toolbox,
-            brun,
-            bwavelength,
-            bplot,
-            self.dataacq_nav,
-            bprev,
-            bnext,
-            baperture,
-            bcalibrate,
-            bclear,
-            bpoke,
+            self.toolbox, brun, bwavelength, bplot, self.dataacq_nav, bprev,
+            bnext, baperture, bcalibrate, bclear, bpoke
         ]
 
         wavelength = []
-        pokemag = [.7]
         dataset = []
         lastind = []
         centre = [None]
         radius = [.0]
         listener = DataAcqListener(self.shared, wavelength, self.dmplot,
-                                   pokemag)
+                                   self.pokemag)
 
         def clearup(clear_status=False):
             wavelength.clear()
@@ -793,12 +805,12 @@ class Control(QMainWindow):
                     self,
                     'Maximum poke amplitude',
                     'Maximum poke amplitude [0, 1]',
-                    value=pokemag[0],
+                    value=self.pokemag[0],
                     min=0.,
                     max=1.,
-                    decimals=1)
+                    decimals=2)
                 if ok:
-                    pokemag[0] = val
+                    self.pokemag[0] = val
 
             return f
 
