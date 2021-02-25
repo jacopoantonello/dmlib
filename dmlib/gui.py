@@ -149,10 +149,18 @@ class GetNollIndices(QDialog):
 
 
 class Control(QMainWindow):
-    def __init__(self, worker, shared, cam_name, dm_name, dmplot, parent=None):
+    def __init__(self,
+                 worker,
+                 shared,
+                 cam_name,
+                 dm_name,
+                 dmplot,
+                 min_delay,
+                 parent=None):
         super().__init__()
         self.log = logging.getLogger(self.__class__.__name__)
 
+        self.min_delay = min_delay
         self.align_bauto = None
         self.zernikePanel = None
         self.can_close = True
@@ -495,9 +503,7 @@ class Control(QMainWindow):
         brepeat.setToolTip('Acquire data continuously or one time only')
         botlay.addWidget(brepeat, 0, 2)
 
-        listener = AlignListener(self.shared)
-
-        bsleep = QPushButton('sleep')
+        bsleep = QPushButton('delay')
         bsleep.setToolTip(
             'Interval between setting the DM and acquiring an image')
         bpoke = QPushButton('poke')
@@ -517,6 +523,10 @@ class Control(QMainWindow):
         ]
         pokemag = [.7]
         self.pokemag = pokemag
+        sleepmag = [.5]
+        self.sleepmag = sleepmag
+
+        listener = AlignListener(self.shared, self.sleepmag)
 
         def disable():
             self.can_close = False
@@ -536,14 +546,15 @@ class Control(QMainWindow):
 
         def f1():
             def f():
-                val, ok = QInputDialog.getDouble(self,
-                                                 'Delay',
-                                                 'write/read delay [s]',
-                                                 listener.sleep,
-                                                 .5,
-                                                 decimals=4)
+                val, ok = QInputDialog.getDouble(
+                    self,
+                    'Delay between DM write and camera read',
+                    f'DM write / camera read delay [{self.min_delay} sec, ]',
+                    value=self.sleepmag[0],
+                    min=self.min_delay,
+                    decimals=4)
                 if ok:
-                    listener.sleep = val
+                    self.sleepmag[0] = val
 
             return f
 
@@ -725,10 +736,14 @@ class Control(QMainWindow):
         bwavelength.setToolTip('Calibration laser wavelength')
         bpoke = QPushButton('poke')
         bpoke.setToolTip('Set a custom magnitude for the pokes')
+        bsleep = QPushButton('delay')
+        bsleep.setToolTip(
+            'Interval between setting the DM and acquiring an image')
         layout.addWidget(brun, 2, 0)
         layout.addWidget(bstop, 2, 1)
         layout.addWidget(bwavelength, 2, 2)
         layout.addWidget(bpoke, 2, 3)
+        layout.addWidget(bsleep, 2, 4)
 
         status = QLabel('')
         status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -753,11 +768,11 @@ class Control(QMainWindow):
         bcalibrate.setToolTip('Compute a calibration file')
         layout.addWidget(bcalibrate, 5, 1)
         bclear = QPushButton('clear')
-        layout.addWidget(bclear, 5, 3)
+        layout.addWidget(bclear, 5, 4)
 
         disables = [
             self.toolbox, brun, bwavelength, bplot, self.dataacq_nav, bprev,
-            bnext, baperture, bcalibrate, bclear, bpoke
+            bnext, baperture, bcalibrate, bclear, bpoke, bsleep
         ]
 
         wavelength = []
@@ -766,7 +781,7 @@ class Control(QMainWindow):
         centre = [None]
         radius = [.0]
         listener = DataAcqListener(self.shared, wavelength, self.dmplot,
-                                   self.pokemag)
+                                   self.pokemag, self.sleepmag)
 
         def clearup(clear_status=False):
             wavelength.clear()
@@ -1123,6 +1138,20 @@ class Control(QMainWindow):
 
             return f
 
+        def fsleep():
+            def f():
+                val, ok = QInputDialog.getDouble(
+                    self,
+                    'Delay between DM write and camera read',
+                    f'DM write / camera read delay [{self.min_delay} sec, ]',
+                    value=self.sleepmag[0],
+                    min=self.min_delay,
+                    decimals=4)
+                if ok:
+                    self.sleepmag[0] = val
+
+            return f
+
         brun.clicked.connect(f1())
         bstop.clicked.connect(f2())
         bwavelength.clicked.connect(f0())
@@ -1133,6 +1162,7 @@ class Control(QMainWindow):
         baperture.clicked.connect(f4())
         bcalibrate.clicked.connect(f5())
         bclear.clicked.connect(f7())
+        bsleep.clicked.connect(fsleep())
 
         listener.sig_update.connect(f20())
 
@@ -1166,7 +1196,7 @@ class Control(QMainWindow):
 
         brun = QPushButton('run')
         bstop = QPushButton('stop')
-        bsleep = QPushButton('sleep')
+        bsleep = QPushButton('delay')
         bsleep.setToolTip(
             'Interval between setting the DM and acquiring an image')
         bzsize = QPushButton('# Zernike')
@@ -1200,7 +1230,7 @@ class Control(QMainWindow):
             self.toolbox, brun, bflat, bnoflat, bzernike, bclear,
             self.test_nav, bzernike, bsleep, bzsize
         ]
-        llistener = LoopListener(self.shared, status)
+        llistener = LoopListener(self.shared, status, self.sleepmag)
         calib = []
         noll_sel_pars = {
             'min': 1,
@@ -1407,13 +1437,15 @@ class Control(QMainWindow):
 
         def fs1():
             def f():
-                val, ok = QInputDialog.getDouble(self,
-                                                 'Delay',
-                                                 'write/read delay [s]',
-                                                 llistener.sleep,
-                                                 decimals=4)
+                val, ok = QInputDialog.getDouble(
+                    self,
+                    'Delay between DM write and camera read',
+                    f'DM write / camera read delay [{self.min_delay} sec, ]',
+                    value=self.sleepmag[0],
+                    min=self.min_delay,
+                    decimals=4)
                 if ok:
-                    llistener.sleep = val
+                    self.sleepmag[0] = val
 
             return f
 
@@ -1454,19 +1486,19 @@ class AlignListener(QThread):
 
     sig_update = pyqtSignal(tuple)
 
-    def __init__(self, shared):
+    def __init__(self, shared, sleepmag):
         super().__init__()
         self.auto = True
         self.repeat = False
         self.poke = False
-        self.sleep = .5
+        self.sleepmag = sleepmag
         self.unwrap = True
         self.shared = shared
         self.log = logging.getLogger('AlignListener')
 
     def run(self):
         self.shared.iq.put(('align', self.auto, self.repeat, self.poke,
-                            self.sleep, self.unwrap))
+                            self.sleepmag[0], self.unwrap))
         while True:
             result = self.shared.oq.get()
             self.sig_update.emit(result)
@@ -1505,7 +1537,7 @@ class DataAcqListener(QThread):
 
     sig_update = pyqtSignal(tuple)
 
-    def __init__(self, shared, wavelength, dmplot, pokemag):
+    def __init__(self, shared, wavelength, dmplot, pokemag, sleepmag):
         super().__init__()
         self.busy = False
         self.run = True
@@ -1514,10 +1546,11 @@ class DataAcqListener(QThread):
         self.dmplot = dmplot
         self.log = logging.getLogger('DataAcqListener')
         self.pokemag = pokemag
+        self.sleepmag = sleepmag
 
     def run(self):
         self.shared.iq.put(('dataacq', self.wavelength[0], self.dmplot.clone(),
-                            self.pokemag[0]))
+                            self.pokemag[0], self.sleepmag[0]))
         while True:
             result = self.shared.oq.get()
             if result[0] == 'OK':
@@ -1539,9 +1572,8 @@ class LoopListener(QThread):
 
     sig_update = pyqtSignal(tuple)
 
-    def __init__(self, shared, status):
+    def __init__(self, shared, status, sleepmag):
         super().__init__()
-        self.sleep = .1
         self.busy = False
         self.run = True
         self.calib = False
@@ -1551,10 +1583,11 @@ class LoopListener(QThread):
         self.shared = shared
         self.log = logging.getLogger('LoopListener')
         self.status = status
+        self.sleepmag = sleepmag
 
     def run(self):
         self.shared.iq.put(('loop', self.calib, self.flat, self.noflat_index,
-                            self.closed_loop, self.sleep))
+                            self.closed_loop, self.sleepmag[0]))
         while True:
             result = self.shared.oq.get()
             self.status.setText('')
@@ -1744,6 +1777,7 @@ class Worker:
 
         while True:
             state = ('OK', )
+            ts1 = time.time()
 
             if poke:
                 shared.u[:] = 0.
@@ -1764,10 +1798,7 @@ class Worker:
                 state = ('ERR1', 'STOP', 'Camera read error')
                 self.log.error(ex, exc_info=True)
 
-            if state[0] == 'OK' and not unwrap:
-                if not poke:
-                    time.sleep(sleep)
-            elif state[0] == 'OK' and unwrap:
+            if state[0] == 'OK' and unwrap:
                 try:
                     fringe.analyse(img,
                                    auto_find_orders=auto,
@@ -1777,6 +1808,7 @@ class Worker:
                                    store_wrapped=True,
                                    do_unwrap=unwrap,
                                    use_mask=False)
+                    elapsed = time.time() - ts1
                 except Exception:
                     state = ('ERR2', 'RETRY', 'Failed to detect first orders')
 
@@ -1807,7 +1839,12 @@ class Worker:
                     f'run_align stop, repeat {repeat:}, stopcmd {stopcmd:}')
                 break
             else:
-                self.log.debug('run_align continue')
+                elapsed = time.time() - ts1
+                if elapsed < sleep:
+                    self.log.debug(f'run_align repeat sleep={sleep - elapsed}')
+                    time.sleep(sleep - elapsed)
+                else:
+                    self.log.debug('run_align repeat')
 
     def open_dset(self, dname):
         estr = None
@@ -2041,7 +2078,7 @@ class Worker:
             self.log.error('run_plot', exc_info=True)
             self.shared.oq.put((str(e), ))
 
-    def run_dataacq(self, wavelength, dmplot, pokemag, sleep=.1):
+    def run_dataacq(self, wavelength, dmplot, pokemag, sleep):
         cam = self.cam
         dm = self.dm
         shared = self.shared
@@ -2275,6 +2312,7 @@ def main():
                         type=argparse.FileType('rb'),
                         default=None,
                         metavar='HDF5')
+    parser.add_argument('--min-delay', type=float, default=.2, metavar='SEC')
     args = parser.parse_args(args[1:])
     setup_logging(args)
 
@@ -2299,7 +2337,7 @@ def main():
     p = Process(name='worker', target=run_worker, args=(shared, args))
     p.start()
 
-    control = Control(p, shared, cam_name, dm_name, dmplot)
+    control = Control(p, shared, cam_name, dm_name, dmplot, args.min_delay)
     control.show()
 
     exit = app.exec_()
