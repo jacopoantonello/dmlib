@@ -1344,7 +1344,7 @@ class Control(QMainWindow):
             redo = f2()
 
             def f():
-                status.setText('Computing grids...')
+                status.setText('Starting...')
                 if not calib or len(calib) == 0:
                     if not redo():
                         return
@@ -1870,12 +1870,12 @@ class Worker:
                 pxsize2 = self.dset['cam/pixel_size'][()]
                 dm1 = self.dm.size()
                 dm2 = self.dset['/data/U'].shape[0]
-                self.log.info(f'open_dset shape1 {shape1}')
-                self.log.info(f'open_dset shape2 {shape2}')
-                self.log.info(f'open_dset pxsize1 {pxsize1}')
-                self.log.info(f'open_dset pxsize2 {pxsize2}')
-                self.log.info(f'open_dset dm1 {dm1}')
-                self.log.info(f'open_dset dm2 {dm2}')
+                self.log.info(f'open_dset() shape1 {shape1}')
+                self.log.info(f'open_dset() shape2 {shape2}')
+                self.log.info(f'open_dset() pxsize1 {pxsize1}')
+                self.log.info(f'open_dset() pxsize2 {pxsize2}')
+                self.log.info(f'open_dset() dm1 {dm1}')
+                self.log.info(f'open_dset() dm2 {dm2}')
                 if (shape1[0] != shape2[0] or shape1[1] != shape2[1]
                         or pxsize1[0] != pxsize2[0] or pxsize1[1] != pxsize2[1]
                         or dm1 != dm2):
@@ -1969,11 +1969,18 @@ class Worker:
             self.shared.oq.put(('ERR', 'Error: ' + str(e)))
 
     def open_calib(self, dname):
+        logging.debug(
+            f'open_calib() INIT calib_name={self.calib_name} dname={dname}')
         if self.calib_name is None or self.calib_name != dname:
             with h5py.File(dname, 'r') as f:
                 if 'RegLSCalib' not in f:
                     self.shared.oq.put((path.basename(dname) +
                                         ' does not look like a calibration', ))
+
+                    self.calib_name = None
+                    logging.debug(
+                        'open_calib() NOT-A-CALIB ' +
+                        f'calib_name={self.calib_name} dname={dname}')
                     return -1
                 else:
                     shape1 = self.cam.shape()
@@ -1982,12 +1989,12 @@ class Worker:
                     pxsize2 = f['RegLSCalib/cam_pixel_size'][()]
                     dm1 = self.dm.size()
                     dm2 = f['RegLSCalib/H'].shape[1]
-                    self.log.info(f'open_calib shape1 {shape1}')
-                    self.log.info(f'open_calib shape2 {shape2}')
-                    self.log.info(f'open_calib pxsize1 {pxsize1}')
-                    self.log.info(f'open_calib pxsize2 {pxsize2}')
-                    self.log.info(f'open_calib dm1 {dm1}')
-                    self.log.info(f'open_calib dm2 {dm2}')
+                    self.log.info(f'open_calib() shape1 {shape1}')
+                    self.log.info(f'open_calib() shape2 {shape2}')
+                    self.log.info(f'open_calib() pxsize1 {pxsize1}')
+                    self.log.info(f'open_calib() pxsize2 {pxsize2}')
+                    self.log.info(f'open_calib() dm1 {dm1}')
+                    self.log.info(f'open_calib() dm2 {dm2}')
 
                     if (shape1[0] != shape2[0] or shape1[1] != shape2[1]
                             or pxsize1[0] != pxsize2[0]
@@ -1995,15 +2002,28 @@ class Worker:
                         self.shared.oq.put(
                             ('Configuration mismatch; Spawn new instance...',
                              dname))
+
+                        self.calib_name = None
+                        logging.debug(
+                            'open_calib() MISMATCH ' +
+                            f'calib_name={self.calib_name} dname={dname}')
                         return -1
+
                     self.calib = RegLSCalib.load_h5py(f)
                     try:
                         self.dmplot_txs = f['RegLSCalib/dmplot/DMPlot/txs'][(
                         )].tolist()
                     except KeyError:
                         self.dmplot_txs = [0, 0, 0]
+
+                    self.calib_name = dname
+                    logging.debug(
+                        'open_calib() LOADED ' +
+                        f'calib_name={self.calib_name} dname={dname}')
                     return 0
         else:
+            logging.debug('open_calib() SAME ' +
+                          f'calib_name={self.calib_name} dname={dname}')
             return 0
 
     def run_query_calib(self, dname):
