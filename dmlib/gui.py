@@ -1912,7 +1912,7 @@ class Worker:
             return
 
         self.shared.oq.put(
-            ('OK', self.dset['data/U'].shape[0], self.dmplot_txs))
+            ('OK', self.dset['data/U'].shape[1], self.dmplot_txs))
 
     def run_calibrate(self, dname, radius, dmplot):
         if self.open_dset(dname):
