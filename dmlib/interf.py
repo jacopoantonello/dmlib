@@ -18,7 +18,7 @@ HDF5_options = {
 
 
 def mgcentroid(xx, yy, img, thr=0.0):
-    assert (img.dtype == np.float)
+    assert (img.dtype == float)
 
     if thr > 0.0:
         img = img.copy()

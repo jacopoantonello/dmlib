@@ -164,7 +164,7 @@ class ZernikeControl:
             d['u'] = self.u.tolist()
         return d
 
-    def h5_make_empty(self, name, shape, dtype=np.float):
+    def h5_make_empty(self, name, shape, dtype=float):
         if self.h5f:
             name = h5_prefix + self.__class__.__name__ + '/' + name
             if name in self.h5f:

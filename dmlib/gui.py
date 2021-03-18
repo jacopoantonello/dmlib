@@ -493,6 +493,7 @@ class Control(QMainWindow):
         botrow = QFrame()
         botlay = QGridLayout()
         botrow.setLayout(botlay)
+        botrow.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
 
         bauto = QCheckBox('auto')
         bauto.setToolTip('Lock first order position automatically')
