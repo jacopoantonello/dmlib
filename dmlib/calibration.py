@@ -305,13 +305,18 @@ class RegLSCalib:
 
     def zernike_fit(self, phi):
         if self.zfA2 is None:
+            t1 = time()
             self._make_zfAs()
+            LOG.debug(f'zernike_fit() _make_zfAs {time() - t1:.3f}')
 
+        t1 = time()
         Y = solve_triangular(self.chzfA1TzfA1,
                              np.dot(self.zfA1.T, phi[self.zfm]),
                              trans='T',
                              lower=False)
+        t2 = time()
         s2 = solve_triangular(self.chzfA1TzfA1, Y, trans='N', lower=False)
+        LOG.debug(f'zernike_fit() linalg {t2 - t1:.3f} {time() - t2:.3f}')
 
         return s2
 
