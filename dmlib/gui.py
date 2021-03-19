@@ -989,7 +989,8 @@ class Control(QMainWindow):
 
                 a4.figure.canvas.draw()
 
-                status.setText(f'{dataset[0]} {val}/{ndata[0] - 1}')
+                status.setText(
+                    path.basename(dataset[0]) + f'{val}/{ndata[0] - 1}')
 
             return f
 
@@ -1310,7 +1311,7 @@ class Control(QMainWindow):
                     if not bootstrap():
                         enable()
                         return False
-                status.setText(f'Loading {calib[0]} ...')
+                status.setText(f'Loading {path.basename(calib[0])} ...')
                 status.repaint()
                 self.shared.iq.put(('query_calib', calib[0]))
                 ndata = check_err()
@@ -1326,7 +1327,8 @@ class Control(QMainWindow):
                                                      ndata[1],
                                                      callback=cb)
                     self.zernikePanel.show()
-                    status.setText(f'{calib[0]} {ndata[2] / 1000:.3f} mm')
+                    status.setText(
+                        f'{path.basename(calib[0])} {ndata[2] / 1000:.3f} mm')
                     enable()
                     return True
 
