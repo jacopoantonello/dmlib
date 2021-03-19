@@ -649,7 +649,7 @@ class Control(QMainWindow):
                               extent=self.shared.fstord_ext,
                               origin='lower')
                     a3.set_xlabel('1/mm')
-                    a3.set_title('1st order')
+                    a3.set_title(f'1st order {fstord.shape}')
 
                     a4.imshow(mag, extent=self.shared.mag_ext, origin='lower')
                     a4.set_xlabel('mm')
