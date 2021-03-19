@@ -1180,11 +1180,10 @@ class Control(QMainWindow):
         self.tabs.setTabToolTip(
             2, ('Test a calibration file interferometrically'))
 
-        gs = gridspec.GridSpec(2, 2)
+        gs = gridspec.GridSpec(2, 1)
         self.test_axes = [
-            self.test_fig.figure.add_subplot(gs[0, :]),
-            self.test_fig.figure.add_subplot(gs[1, 0]),
-            self.test_fig.figure.add_subplot(gs[1, 1]),
+            self.test_fig.figure.add_subplot(gs[0]),
+            self.test_fig.figure.add_subplot(gs[1]),
         ]
         self.test_fig.figure.subplots_adjust(left=.125,
                                              right=.9,
@@ -1192,8 +1191,6 @@ class Control(QMainWindow):
                                              top=.9,
                                              wspace=0.45,
                                              hspace=0.45)
-        self.test_axes[1].set_title('phi meas')
-        self.test_axes[2].set_title('phi err')
 
         brun = QPushButton('run')
         bstop = QPushButton('stop')
@@ -1345,7 +1342,7 @@ class Control(QMainWindow):
             redo = f2()
 
             def f():
-                status.setText('Starting...')
+                status.setText('Starting (can take some minutes)...')
                 if not calib or len(calib) == 0:
                     if not redo():
                         return
@@ -1381,15 +1378,13 @@ class Control(QMainWindow):
                 ax2.set_title(txt)
 
                 phi_ms = self.shared.get_phase()[-1]
-                phi_er = self.shared.get_cl_data()[0]
 
-                if len(arts) != 2:
+                if len(arts) != 1:
                     ax3 = self.test_axes[1]
                     im = ax3.imshow(phi_ms,
                                     extent=self.shared.mag_ext,
                                     origin='lower')
-                    ax3.set_xlabel('mm')
-                    ax3.set_title('phi meas')
+                    ax3.axis('off')
                     cb = ax3.figure.colorbar(im, ax=ax3)
                     cb.locator = ticker.MaxNLocator(nbins=5)
                     cb.update_ticks()
@@ -1400,24 +1395,6 @@ class Control(QMainWindow):
                     m2 = what[np.isfinite(what)].max()
                     arts[0][0].set_data(what)
                     arts[0][0].set_clim(m1, m2)
-
-                if len(arts) != 2:
-                    ax4 = self.test_axes[2]
-                    im = ax4.imshow(phi_er,
-                                    extent=self.shared.mag_ext,
-                                    origin='lower')
-                    ax4.set_xlabel('mm')
-                    ax4.set_title('phi err')
-                    cb = ax4.figure.colorbar(im, ax=ax4)
-                    cb.locator = ticker.MaxNLocator(nbins=5)
-                    cb.update_ticks()
-                    arts.append((im, cb))
-                else:
-                    what = phi_er
-                    m1 = what[np.isfinite(what)].min()
-                    m2 = what[np.isfinite(what)].max()
-                    arts[1][0].set_data(what)
-                    arts[1][0].set_clim(m1, m2)
 
                 self.update_tool_dm()
 
@@ -1635,7 +1612,6 @@ class Shared:
         self.mag_buf = Array('c', dbl_dtsize * totpixs, lock=False)
         self.wrapped_buf = Array('c', dbl_dtsize * totpixs, lock=False)
         self.unwrapped_buf = Array('c', dbl_dtsize * totpixs, lock=False)
-        self.phi_err_buf = Array('c', dbl_dtsize * totpixs, lock=False)
         self.mag_ext = Array('d', 4, lock=False)
         self.mag_shape = Array('i', 2, lock=False)
 
@@ -1671,12 +1647,6 @@ class Shared:
         unwrapped = np.frombuffer(self.unwrapped_buf, float,
                                   count=nsum2).reshape(self.mag_shape)
         return fstord, mag, wrapped, unwrapped
-
-    def get_cl_data(self):
-        nsum2 = self.mag_shape[0] * self.mag_shape[1]
-        phi_err = np.frombuffer(self.phi_err_buf, float,
-                                count=nsum2).reshape(self.mag_shape)
-        return phi_err,
 
 
 def run_worker(shared, args):
@@ -2010,7 +1980,7 @@ class Worker:
                             f'calib_name={self.calib_name} dname={dname}')
                         return -1
 
-                    self.calib = RegLSCalib.load_h5py(f)
+                    self.calib = RegLSCalib.load_h5py(f, lazy_cart_grid=True)
                     try:
                         self.dmplot_txs = f['RegLSCalib/dmplot/DMPlot/txs'][(
                         )].tolist()
@@ -2218,11 +2188,15 @@ class Worker:
         calib = self.calib
         fringe = self.calib.fringe
         cam = self.cam
+        t1 = time.time()
         dm = ZernikeControl(self.dm, calib)
+        t2 = time.time()
+        self.log.debug(f'run_loop() ZernikeControl {t2 - t1:.3f}')
         shared = self.shared
         shared.z_size.value = dm.ndof
 
         calib.reflatten(noflat_index)
+        self.log.debug(f'run_loop() reflatten {noflat_index}')
         dm.flat_on = flat
 
         for i in range(4):
@@ -2249,44 +2223,31 @@ class Worker:
                 self.fill(shared.unwrapped_buf, unwrapped)
                 t4 = time.time()
 
-                t5 = time.time()
-                phi_sp = calib.zernike_eval(shared.z_sp[:dm.ndof])
-                t6 = time.time()
-
                 t7 = time.time()
                 shared.z_ms[:dm.ndof] = calib.zernike_fit(unwrapped)
                 shared.z_ms[0] = 0
                 t8 = time.time()
 
-                t9 = time.time()
-                phi_er = phi_sp - unwrapped
-                calib.apply_aperture_mask(phi_er)
-                self.fill(shared.phi_err_buf, phi_er)
-                t10 = time.time()
-
-                self.log.debug(
-                    f'run_loop s:{sleep:.3f} h:{t2 - t1:.3f} ' +
-                    f'u:{t4 - t3:.3f} p1:{t6 - t5:.3f} p2:{t8 - t7:.3f} ' +
-                    f'p3:{t10 - t9:.3f}')
+                self.log.debug(f'run_loop() s:{sleep:.3f} h:{t2 - t1:.3f} ' +
+                               f'u:{t4 - t3:.3f} p2:{t8 - t7:.3f}')
 
             except Exception as e:
-                self.log.info('run_loop', exc_info=True)
+                self.log.info('run_loop()', exc_info=True)
                 shared.oq.put((str(e), ))
                 return
 
             shared.oq.put(('OK', ))
-            self.log.debug('run_loop iteration')
 
             stopcmd = shared.iq.get()[1]
             shared.oq.put('')
 
             if stopcmd:
-                self.log.debug('run_loop stopcmd')
+                self.log.debug('run_loop() stopcmd')
                 return
             else:
-                self.log.debug('run_loop continue')
+                self.log.debug('run_loop() continue')
 
-        self.log.debug('run_loop finished')
+        self.log.debug('run_loop() finished')
         shared.oq.put(('finished', ))
 
 
