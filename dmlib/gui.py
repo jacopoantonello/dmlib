@@ -990,7 +990,7 @@ class Control(QMainWindow):
                 a4.figure.canvas.draw()
 
                 status.setText(
-                    path.basename(dataset[0]) + f'{val}/{ndata[0] - 1}')
+                    path.basename(dataset[0]) + f' {val}/{ndata[0] - 1}')
 
             return f
 
