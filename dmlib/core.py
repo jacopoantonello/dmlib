@@ -275,7 +275,7 @@ def open_cam(app, args):
         else:
             raise NotImplementedError(args.cam_driver)
     except Exception as e:
-        exit_exception(app, f'error loading camera {args.cam_driver} drivers',
+        exit_exception(app, f'Error loading camera {args.cam_driver} drivers',
                        e)
 
     if args.cam_list:
@@ -390,7 +390,7 @@ def open_dm(app, args, dm_transform=None):
         else:
             exit_exception(app, NotImplementedError(args.dm_driver))
     except Exception as e:
-        exit_exception(app, f'Error loading DM driver: {args.cam_driver}', e)
+        exit_exception(app, f'Error loading DM driver: {args.dm_driver}', e)
 
     if args.dm_list:
         devs = dm.get_devices()
