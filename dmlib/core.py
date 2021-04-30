@@ -315,6 +315,8 @@ def get_suitable_dmplot(args, dm, calib=None, dmplot=None):
                 dmplot = dmplot_from_layout('alpao69')
             elif calib.nactuators() == 52:
                 dmplot = dmplot_from_layout('mirao52e')
+            elif calib.nactuators() == 952:
+                dmplot = dmplot_from_layout('kilocsdm952')
             else:
                 raise ValueError(
                     f'Unknown DMPlot for {calib.size()} actuators')
@@ -369,8 +371,11 @@ def open_dm(app, args, dm_transform=None):
             from devwraps.bmc import BMC
             dm = BMC()
             if args.dm_layout is None:
-                args.dm_layout = 'multidm140'
-            if dm_transform is None:
+                if dm.size() == 952:
+                    args.dm_layout = 'kilocsdm952'
+                else:
+                    args.dm_layout = 'multidm140'
+            if dm_transform is None and args.dm_layout == 'multidm140':
                 dm_transform = SquareRoot.name
         elif args.dm_driver == 'asdk':
             from devwraps.asdk import ASDK
