@@ -66,6 +66,9 @@ To install `dmlib` in Windows, follow the steps below.
 
 ## Running dmlib GUIs
 
+### Query the available DM layouts
+Open an *Anaconda Prompt* and type `python -m dmlib.gui --dm-list-layouts`.
+
 ### DM calibration GUI (dmlib.gui)
 
 The calibration GUI `dmlib.gui` can be used to interferometrically calibrate
@@ -78,7 +81,7 @@ GUI again without the `--help` flag.
 For example
 
 ```bash
-python -m dmlib.gui --dm-driver bmc --dm-name DM_SERIAL_NUMBER --cam-driver thorcam --cam-name CAM_SERIAL_NUMBER
+python -m dmlib.gui --dm-driver bmc --dm-layout multidm140 --dm-name DM_SERIAL_NUMBER --cam-driver thorcam --cam-name CAM_SERIAL_NUMBER
 ```
 
 would run `dmlib.gui` using the Boston Multi-DM with serial number
