@@ -370,11 +370,6 @@ def open_dm(app, args, dm_transform=None):
         elif args.dm_driver == 'bmc':
             from devwraps.bmc import BMC
             dm = BMC()
-            if args.dm_layout is None:
-                if dm.size() == 952:
-                    args.dm_layout = 'kilocsdm952'
-                else:
-                    args.dm_layout = 'multidm140'
             if dm_transform is None and args.dm_layout == 'multidm140':
                 dm_transform = SquareRoot.name
         elif args.dm_driver == 'asdk':
