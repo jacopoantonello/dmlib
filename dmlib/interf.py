@@ -4,7 +4,10 @@
 import numpy as np
 from numpy.fft import fft, fftshift, ifft
 from numpy.linalg import norm
-from scipy.signal import tukey
+try:
+    from scipy.signal import tukey
+except ImportError:
+    from scipy.signal.windows import tukey
 from skimage import measure, morphology
 from skimage.restoration import unwrap_phase
 
