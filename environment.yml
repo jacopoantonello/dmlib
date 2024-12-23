@@ -1,12 +1,15 @@
 name: dmlib
 
 dependencies:
-  - python=3
-  - numpy
+  - python
+  - numpy<2
   - h5py
   - matplotlib
   - scikit-image
-  - cython
+  - cython<3
+  - pip:
+    - pyqt5
 
 channels:
+  - conda-forge
   - anaconda
