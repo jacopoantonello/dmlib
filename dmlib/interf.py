@@ -212,7 +212,11 @@ def repad_order(f3, fx, fy, pad=2, alpha=.25):
     offxb = offxa + f3.shape[1]
     offya = (y0 - f3.shape[0]) // 2
     offyb = offya + f3.shape[0]
-    f4 = np.zeros((y0, x0), dtype=np.complex)
+    try:
+        f4 = np.zeros((y0, x0), dtype=np.complex)
+    except AttributeError:
+        # np.complex deprecated for complex in 1.20
+        f4 = np.zeros((y0, x0), dtype=complex)
     f4[offya:offyb, offxa:offxb] = f3 * w
 
     yy = np.arange(-y0 // 2, y0 // 2, 1) / (pad * y0 * dfy)
@@ -274,12 +278,19 @@ def call_unwrap(phase, mask=None, seed=None):
     if mask is not None:
         assert (mask.shape == phase.shape)
         masked = np.ma.masked_array(phase, mask)
-        phi = np.array(unwrap_phase(masked, seed=seed))
+        try:
+            phi = np.array(unwrap_phase(masked, seed=seed))
+        except TypeError:
+            # keyword change
+            phi = np.array(unwrap_phase(masked, rng=seed))
         # phi[mask] = phi[np.invert(mask)].mean()
         phi[mask] = 0
         return phi
     else:
-        return np.array(unwrap_phase(phase, seed=seed))
+        try:
+            return np.array(unwrap_phase(phase, seed=seed))
+        except TypeError:
+            return np.array(unwrap_phase(phase, rng=seed))
 
 
 class FringeAnalysis:
